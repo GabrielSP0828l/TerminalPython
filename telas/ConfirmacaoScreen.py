@@ -1,8 +1,9 @@
 from PyQt5.QtCore import Qt, QTimer
 from PyQt5.QtWidgets import (
     QWidget, QVBoxLayout, QLabel,
-    QPushButton, QFrame, QProgressBar
+    QPushButton, QFrame, QProgressBar, QSizePolicy
 )
+from styles.theme import Theme
 
 
 class ConfirmacaoScreen(QWidget):
@@ -10,85 +11,10 @@ class ConfirmacaoScreen(QWidget):
     def __init__(self, parent=None):
         super().__init__(parent)
         self.parent_app = parent
-        self._countdown = 20
+        self._countdown = 5
 
-        self.setStyleSheet("""
-            QWidget {
-                background-color: #0d1117;
-            }
-
-            /* card central */
-            QFrame#card {
-                background-color: #161b22;
-                border: 1px solid #21262d;
-                border-radius: 24px;
-            }
-
-            /* ícone check */
-            QLabel#lbl_icon {
-                color: #00d084;
-                font-size: 96px;
-            }
-
-            /* título */
-            QLabel#lbl_sucesso {
-                color: #f0f6fc;
-                font-size: 32px;
-                font-weight: bold;
-                letter-spacing: 2px;
-            }
-
-            /* linha divisória */
-            QFrame#divider {
-                background-color: #21262d;
-                max-height: 1px;
-                border: none;
-            }
-
-            /* subtext */
-            QLabel#lbl_sub {
-                color: #8b949e;
-                font-size: 15px;
-            }
-
-            /* contador regressivo */
-            QLabel#lbl_timer {
-                color: #58a6ff;
-                font-size: 13px;
-                font-weight: bold;
-                letter-spacing: 1px;
-            }
-
-            /* barra de progresso */
-            QProgressBar {
-                background-color: #21262d;
-                border: none;
-                border-radius: 3px;
-                max-height: 6px;
-            }
-            QProgressBar::chunk {
-                background-color: #00d084;
-                border-radius: 3px;
-            }
-
-            /* botão principal */
-            QPushButton#btn_voltar {
-                background-color: #00d084;
-                color: #0d1117;
-                font-size: 15px;
-                font-weight: bold;
-                border-radius: 10px;
-                padding: 14px 32px;
-                border: none;
-                letter-spacing: 1px;
-            }
-            QPushButton#btn_voltar:hover {
-                background-color: #00e693;
-            }
-            QPushButton#btn_voltar:pressed {
-                background-color: #00b871;
-            }
-        """)
+        self.setObjectName("confirmationScreen")
+        self.setStyleSheet(Theme.confirmation_stylesheet())
 
         # Layout raiz centralizado
         root = QVBoxLayout(self)
@@ -97,8 +23,9 @@ class ConfirmacaoScreen(QWidget):
 
         # Card
         card = QFrame()
-        card.setObjectName("card")
-        card.setFixedWidth(560)
+        card.setObjectName("confirmationCard")
+        card.setMaximumWidth(700)
+        card.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)
 
         card_layout = QVBoxLayout(card)
         card_layout.setContentsMargins(48, 48, 48, 40)
@@ -107,7 +34,7 @@ class ConfirmacaoScreen(QWidget):
 
         # Ícone
         self.lbl_icon = QLabel("✓")
-        self.lbl_icon.setObjectName("lbl_icon")
+        self.lbl_icon.setObjectName("confirmationIcon")
         self.lbl_icon.setAlignment(Qt.AlignCenter)
         card_layout.addWidget(self.lbl_icon)
 
@@ -115,7 +42,7 @@ class ConfirmacaoScreen(QWidget):
 
         # Título
         self.lbl_sucesso = QLabel("PAGAMENTO APROVADO")
-        self.lbl_sucesso.setObjectName("lbl_sucesso")
+        self.lbl_sucesso.setObjectName("confirmationTitle")
         self.lbl_sucesso.setAlignment(Qt.AlignCenter)
         card_layout.addWidget(self.lbl_sucesso)
 
@@ -130,8 +57,8 @@ class ConfirmacaoScreen(QWidget):
         card_layout.addSpacing(24)
 
         # Subtext
-        self.lbl_subtext = QLabel("Imprimindo cupom fiscal...")
-        self.lbl_subtext.setObjectName("lbl_sub")
+        self.lbl_subtext = QLabel("Compra concluída com sucesso.")
+        self.lbl_subtext.setObjectName("confirmationSubtitle")
         self.lbl_subtext.setAlignment(Qt.AlignCenter)
         card_layout.addWidget(self.lbl_subtext)
 
@@ -139,16 +66,16 @@ class ConfirmacaoScreen(QWidget):
 
         # Barra de progresso
         self.progress = QProgressBar()
-        self.progress.setRange(0, 20)
-        self.progress.setValue(20)
+        self.progress.setRange(0, 5)
+        self.progress.setValue(5)
         self.progress.setTextVisible(False)
         card_layout.addWidget(self.progress)
 
         card_layout.addSpacing(8)
 
         # Contador
-        self.lbl_timer = QLabel("Avançando em 20s...")
-        self.lbl_timer.setObjectName("lbl_timer")
+        self.lbl_timer = QLabel("Liberando o terminal em 5s...")
+        self.lbl_timer.setObjectName("confirmationTimer")
         self.lbl_timer.setAlignment(Qt.AlignCenter)
         card_layout.addWidget(self.lbl_timer)
 
@@ -156,7 +83,7 @@ class ConfirmacaoScreen(QWidget):
 
         # Botão
         self.btn_voltar = QPushButton("AVANÇAR AGORA  ↵")
-        self.btn_voltar.setObjectName("btn_voltar")
+        self.btn_voltar.setProperty("variant", "primary")
         self.btn_voltar.setMinimumHeight(52)
         self.btn_voltar.clicked.connect(self.finalizar_e_voltar)
         card_layout.addWidget(self.btn_voltar)
@@ -172,18 +99,18 @@ class ConfirmacaoScreen(QWidget):
         self.timer_countdown.timeout.connect(self._tick)
 
     def mostrar_tela(self):
-        self._countdown = 20
-        self.progress.setValue(20)
-        self.lbl_timer.setText("Avançando em 20s...")
+        self._countdown = 5
+        self.progress.setValue(5)
+        self.lbl_timer.setText("Liberando o terminal em 5s...")
         self.btn_voltar.setFocus()
-        self.timer_auto_fechar.start(20000)
+        self.timer_auto_fechar.start(5000)
         self.timer_countdown.start(1000)
 
     def _tick(self):
         self._countdown -= 1
         self.progress.setValue(self._countdown)
         if self._countdown > 0:
-            self.lbl_timer.setText(f"Avançando em {self._countdown}s...")
+            self.lbl_timer.setText(f"Liberando o terminal em {self._countdown}s...")
         else:
             self.timer_countdown.stop()
 
@@ -191,7 +118,7 @@ class ConfirmacaoScreen(QWidget):
         self.timer_auto_fechar.stop()
         self.timer_countdown.stop()
         if self.parent_app:
-            self.parent_app.terminal.liberar_tela()
+            self.parent_app.reset_compra()
             self.parent_app.setCurrentWidget(self.parent_app.welcome)
 
     def keyPressEvent(self, event):

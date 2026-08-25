@@ -36,6 +36,7 @@ class TelaBemVindos(QWidget):
         self.logo = HoldToExitLabel(hold_time=2000)
         self.logo.setAlignment(Qt.AlignCenter)
         self.logo.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
+        self.logo.hold_completed.connect(self.parent.abrir_configuracoes)
 
         logo_pixmap = QPixmap("css/ima.png")
         self.logo_pixmap_original = logo_pixmap

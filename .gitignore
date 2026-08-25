@@ -1,11 +1,2 @@
 .venv/
 venv/
-
-__pycache__/
-*.pyc
-*.pyo
-
-db/*.db
-database/last_sync.txt
-
-temp_checkout.png
