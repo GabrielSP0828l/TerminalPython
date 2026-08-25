@@ -1,30 +1,30 @@
 import os
 
+from service.InternetMonitor import InternetMonitor
 from telas.OfflineOverlay import OfflineOverlay
 
 os.environ["QT_AUTO_SCREEN_SCALE_FACTOR"] = "0"
 os.environ["QT_SCALE_FACTOR"] = "1"
 
 import sys
-import logging
 
+from PyQt5.QtCore import Qt
 from PyQt5.QtWidgets import (
     QApplication, QMainWindow, QStackedWidget,
     QVBoxLayout, QWidget, QSizePolicy, QMessageBox
 )
 
 from model.Terminal import Terminal
-from model.CompraSession import CompraSession
 from service.SyncService import SyncService
 from service.TerminalSocket import TerminalSocket
-from service.FactoryResetService import FactoryResetService
 
 from telas.CadastroTerminalScreen import CadastroTerminalScreen
 from telas.ConfirmacaoScreen import ConfirmacaoScreen
-from telas.ConfiguracaoScreen import ConfiguracaoScreen
 from telas.app_payment_screen import AppPaymentScreen
 from telas.bemvindo import TelaBemVindos
+from telas.login_screen import LoginScreen
 from telas.pagamento import PagamentoScreen
+from telas.pix import PixScreen
 from telas.teclado import TecladoScreen
 from telas.terminal_screen import TerminalScreen
 
@@ -33,14 +33,8 @@ class MainWindow(QMainWindow):
 
     def __init__(self):
         super().__init__()
-        FactoryResetService().apply_pending()
         self.no_internet_popup = None
         self.is_offline = False
-        self._operacao_iniciada = False
-        self.sync_thread = None
-        self.sync_service = None
-        self.socket = None
-        self.compra_session = CompraSession(self)
 
         self.setWindowTitle("Terminal Inteligente")
 
@@ -74,7 +68,6 @@ class MainWindow(QMainWindow):
         self.welcome = TelaBemVindos(self)
         # self.login = LoginScreen(self)
         self.cadastro_terminal = CadastroTerminalScreen(self)
-        self.configuracao = ConfiguracaoScreen(self)
         self.offline_overlay = OfflineOverlay(self)
         self.offline_overlay.hide()
 
@@ -82,7 +75,6 @@ class MainWindow(QMainWindow):
         self.stacked_widget.addWidget(self.welcome)
         # self.stacked_widget.addWidget(self.login)
         self.stacked_widget.addWidget(self.cadastro_terminal)
-        self.stacked_widget.addWidget(self.configuracao)
 
         # -----------------------------
         # OUTRAS TELAS (lazy init)
@@ -91,6 +83,7 @@ class MainWindow(QMainWindow):
         self.pagamento = None
         self.teclado = None
         self.app_payment = None
+        self.pix = None
         self.confirmacao = None
 
         # self.internet_monitor = InternetMonitor(interval=3)
@@ -98,7 +91,16 @@ class MainWindow(QMainWindow):
         # self.internet_monitor.start()
 
         if Terminal.is_activated():
-            self.iniciar_operacao_terminal()
+            sync = SyncService()
+            sync.iniciar_sync_em_thread()
+
+            print("Aplicação continua executando...")
+
+            self.inicializar_terminal()
+
+            self.socket = TerminalSocket()
+            self.socket.start()
+
             self.stacked_widget.setCurrentWidget(self.welcome)
 
         else:
@@ -121,7 +123,8 @@ class MainWindow(QMainWindow):
             self.offline_overlay.raise_()
             self.offline_overlay.activateWindow()
 
-
+    # INICIALIZA TELAS PESADAS
+    # -----------------------------
     def inicializar_terminal(self):
 
         if self.terminal is not None:
@@ -131,6 +134,7 @@ class MainWindow(QMainWindow):
         self.pagamento = PagamentoScreen(self)
         self.teclado = TecladoScreen(self)
         self.app_payment = AppPaymentScreen(self)
+        self.pix = PixScreen(self)
         self.confirmacao = ConfirmacaoScreen(self)
 
         self.stacked_widget.addWidget(self.confirmacao)
@@ -138,40 +142,7 @@ class MainWindow(QMainWindow):
         self.stacked_widget.addWidget(self.teclado)
         self.stacked_widget.addWidget(self.terminal)
         self.stacked_widget.addWidget(self.pagamento)
-
-        self.compra_session.expired.connect(self.pagamento.tratar_timeout_global)
-
-    def iniciar_operacao_terminal(self):
-        if self._operacao_iniciada:
-            return
-
-        self.sync_service = SyncService()
-        self.inicializar_terminal()
-        self.sync_thread = self.sync_service.iniciar_sync_em_thread()
-        self.socket = TerminalSocket()
-        self.socket.start()
-        self._operacao_iniciada = True
-
-    def closeEvent(self, event):
-        if self.terminal is not None:
-            self.terminal.listener.stop()
-        if self.sync_service is not None:
-            self.sync_service.stop()
-        if self.socket is not None:
-            self.socket.stop()
-        super().closeEvent(event)
-
-    def abrir_configuracoes(self):
-        self.stacked_widget.setCurrentWidget(self.configuracao)
-
-    def reset_compra(self):
-        if self.pagamento is not None:
-            self.pagamento.parar_espera()
-        if self.app_payment is not None:
-            self.app_payment.parar_espera()
-        if self.terminal is not None:
-            self.terminal.liberar_tela()
-        self.compra_session.reset()
+        self.stacked_widget.addWidget(self.pix)
 
     # -----------------------------
     # HELPERS
@@ -210,18 +181,6 @@ class MainWindow(QMainWindow):
 # MAIN
 # -----------------------------
 if __name__ == "__main__":
-    logging.basicConfig(
-        level=logging.INFO,
-        format="%(asctime)s %(levelname)s %(name)s %(message)s",
-    )
-    from config import API_URL, DATABASE_PATH
-    logging.getLogger(__name__).info("[API] Backend: %s", API_URL or "não configurado")
-    logging.getLogger(__name__).info("[SYNC] SQLite path: %s", DATABASE_PATH.resolve())
-    activated_terminal = Terminal.load()
-    if activated_terminal is not None:
-        logging.getLogger(__name__).info(
-            "[TERMINAL] UUID carregado: %s", activated_terminal.terminalId
-        )
     app = QApplication(sys.argv)
     screen = app.primaryScreen()
     print("Screen size:", screen.size(), flush=True)
@@ -231,8 +190,12 @@ if __name__ == "__main__":
     # cursor oculto (modo terminal)
     #app.setOverrideCursor(Qt.BlankCursor)
 
-    window.setFixedSize(1024, 600)
+    #    window.setFixedSize(1024, 600)
 
     window.showFullScreen()
+    #  window.show()
+    # window.resize(800, 480)
+
+    window.show()
 
     sys.exit(app.exec_())

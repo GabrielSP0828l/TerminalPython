@@ -1,12 +1,12 @@
 {
-    "terminalId": "6bdaf9dc-4d83-4648-938b-aa0707b4b000",
-    "uuidTerminal": "6bdaf9dc-4d83-4648-938b-aa0707b4b000",
+    "terminalId": 1,
+    "uuidTerminal": "095a0e6c-47cf-4d94-a154-f8b46f1846dc",
     "serialNumber": "3db80189dd8e4231b1805a5ff061b098",
     "nome": "T01",
     "codigo": "3db80189dd8e4231b1805a5ff061b098",
     "status": "ONLINE",
     "ativo": true,
     "activated": true,
-    "condominioId": "aaeec488-a6c5-425b-9d1e-3c2325e45c79",
-    "condominioNome": "kakshs shsjsj"
+    "condominioId": 1,
+    "condominioNome": "Reserva buriti"
 }

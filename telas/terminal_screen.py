@@ -12,6 +12,40 @@ from model.Item import Item
 from model.Produtos import Produtos
 
 
+STYLE_BTN_MAIS = """
+    QPushButton {
+        background-color: #238636;
+        color: #ffffff;
+        font-size: 18px;
+        font-weight: bold;
+        border: none;
+        border-radius: 8px;
+        min-width: 40px;
+        max-width: 40px;
+        min-height: 36px;
+        max-height: 36px;
+    }
+    QPushButton:hover  { background-color: #2ea043; }
+    QPushButton:pressed { background-color: #196127; }
+"""
+
+STYLE_BTN_MENOS = """
+    QPushButton {
+        background-color: #1f3a5f;
+        color: #58a6ff;
+        font-size: 20px;
+        font-weight: bold;
+        border: 1px solid #58a6ff;
+        border-radius: 8px;
+        min-width: 40px;
+        max-width: 40px;
+        min-height: 36px;
+        max-height: 36px;
+    }
+    QPushButton:hover  { background-color: #264a75; }
+    QPushButton:pressed { background-color: #163050; }
+"""
+
 STYLE_BTN_REMOVER = """
     QPushButton {
         background-color: #3d1a1a;
@@ -54,14 +88,7 @@ class TerminalScreen(QWidget):
         self.linhas: dict = {}
 
         self.listener = PaymentListener(self)
-        self.listener.payment_status_signal.connect(self.processar_evento_pagamento, Qt.QueuedConnection)
-        self.listener.product_sync_required.connect(
-            self.processar_evento_produto, Qt.QueuedConnection
-        )
-        self.listener.sync_requested.connect(
-            self.solicitar_sync_produtos, Qt.QueuedConnection
-        )
-        self.listener.connected.connect(self.reconciliar_pagamento, Qt.QueuedConnection)
+        self.listener.pagamento_aprovado_signal.connect(self.pagamento_aprovado, Qt.QueuedConnection)
         self.listener.start()
 
         try:
@@ -216,21 +243,32 @@ class TerminalScreen(QWidget):
         _, _, id_linha = self.linhas[codigo]
         label.setText(self._texto_linha(id_linha, codigo, item))
 
-    def processar_evento_pagamento(self, data):
+    def aumentar_quantidade(self, codigo, label):
+        item = self.carrinho.buscar_item(codigo)
+        if not item:
+            return
+        item.quantidade += 1
+        self.peso_total_venda += 1.0
+        self.atualizar_interface()
+        self.atualizar_linha(codigo, label)
+
+    def diminuir_quantidade(self, codigo, widget, label):
+        item = self.carrinho.buscar_item(codigo)
+        if not item:
+            return
+        item.quantidade -= 1
+        self.peso_total_venda -= 1.0
+        if item.quantidade <= 0:
+            self.remover_produto(codigo, widget)
+        else:
+            self.atualizar_interface()
+            self.atualizar_linha(codigo, label)
+
+    def pagamento_aprovado(self, data):
+        print("Pagamento confirmado via Redis!")
         if self.parent_app:
-            self.parent_app.pagamento.processar_evento(data)
-
-    def processar_evento_produto(self, event):
-        self.solicitar_sync_produtos("WEBSOCKET_EVENT")
-
-    def solicitar_sync_produtos(self, origin):
-        sync_service = getattr(self.parent_app, "sync_service", None)
-        if sync_service is not None:
-            sync_service.request_sync(origin)
-
-    def reconciliar_pagamento(self):
-        if self.parent_app and self.parent_app.compra_session.payment_in_flight:
-            self.parent_app.pagamento.reconciliar_estado()
+            self.parent_app.setCurrentWidget(self.parent_app.confirmacao)
+            self.parent_app.confirmacao.mostrar_tela()
 
     def liberar_tela(self):
         print("Limpando a tela...")
@@ -262,9 +300,8 @@ class TerminalScreen(QWidget):
             )
             return
         if self.parent_app:
-            self.parent_app.pagamento.iniciar_pagamento(
-                self.carrinho.to_dict(), self.totalBox.text()
-            )
+            self.parent_app.pagamento.total_final.setText(self.totalBox.text())
+            self.parent_app.setCurrentWidget(self.parent_app.pagamento)
 
     def ir_para_app(self):
         if not self.linhas:
@@ -279,21 +316,20 @@ class TerminalScreen(QWidget):
             self.parent_app.setCurrentWidget(self.parent_app.app_payment)
 
     def cancelar_venda(self):
+        self.liberar_tela()
         if self.parent_app:
-            self.parent_app.reset_compra()
             self.parent_app.setCurrentWidget(self.parent_app.welcome)
 
     def remover_produto(self, codigo_produto, widget_linha):
         item = self.carrinho.buscar_item(codigo_produto)
         if not item:
             return
+        self.peso_total_venda -= item.quantidade * 1.0
         self.carrinho.remover_item(codigo_produto)
         self.linhas.pop(codigo_produto, None)
         self.totalBox.setText(self.carrinho.total_formatado())
         self.peso_display.setText(f"{self.peso_total_venda:.3f} KG")
         widget_linha.deleteLater()
-        if self.carrinho.vazio() and self.parent_app:
-            self.parent_app.compra_session.reset()
 
     # ================= LEITURA =================
     def readProduct(self):
@@ -312,11 +348,11 @@ class TerminalScreen(QWidget):
 
             produto = Produtos.from_tuple(tupla)
             codigo = produto.codigo
-            self.parent_app.compra_session.start_if_needed()
 
             if codigo in self.linhas:
                 item = self.carrinho.buscar_item(codigo)
                 item.quantidade += 1
+                self.peso_total_venda += 1.0
                 _, lbl_texto, _ = self.linhas[codigo]
                 self.atualizar_interface()
                 self.atualizar_linha(codigo, lbl_texto)
@@ -325,8 +361,9 @@ class TerminalScreen(QWidget):
                 return
 
             # Produto novo: cria linha no layout
-            novo_item = Item(produto=produto, quantidade=1, received_weight=None)
+            novo_item = Item(produto=produto, quantidade=1, received_weight=1.0)
             self.carrinho.adicionar_item(novo_item)
+            self.peso_total_venda += 1.0
 
             item = self.carrinho.buscar_item(codigo)
             id_linha = self.id_contador
@@ -337,16 +374,30 @@ class TerminalScreen(QWidget):
 
             lbl_texto = QLabel(self._texto_linha(id_linha, codigo, item))
 
+            btn_menos = QPushButton("-")
+            btn_mais = QPushButton("+")
             btn_remover = QPushButton("x")
 
+            btn_menos.setStyleSheet(STYLE_BTN_MENOS)
+            btn_mais.setStyleSheet(STYLE_BTN_MAIS)
             btn_remover.setStyleSheet(STYLE_BTN_REMOVER)
 
+            btn_menos.clicked.connect(
+                lambda _, c=codigo, w=linha_widget, l=lbl_texto:
+                self.diminuir_quantidade(c, w, l)
+            )
+            btn_mais.clicked.connect(
+                lambda _, c=codigo, l=lbl_texto:
+                self.aumentar_quantidade(c, l)
+            )
             btn_remover.clicked.connect(
                 lambda _, c=codigo, w=linha_widget:
                 self.remover_produto(c, w)
             )
 
             layout_linha.addWidget(lbl_texto, 1)
+            layout_linha.addWidget(btn_menos)
+            layout_linha.addWidget(btn_mais)
             layout_linha.addWidget(btn_remover)
 
             self.productsLayout.addWidget(linha_widget)

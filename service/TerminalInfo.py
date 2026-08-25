@@ -56,11 +56,13 @@ class TerminalInfo:
 
     @staticmethod
     def get_ip_address():
+
+        s = socket.socket(
+            socket.AF_INET,
+            socket.SOCK_DGRAM
+        )
+
         try:
-            s = socket.socket(
-                socket.AF_INET,
-                socket.SOCK_DGRAM
-            )
 
             s.connect(
                 ("8.8.8.8", 80)
@@ -73,8 +75,8 @@ class TerminalInfo:
             return "0.0.0.0"
 
         finally:
-            if "s" in locals():
-                s.close()
+
+            s.close()
 
     @classmethod
     def to_dict(cls):

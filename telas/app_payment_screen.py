@@ -1,4 +1,10 @@
-from PyQt5.QtCore import Qt
+import threading
+from io import BytesIO
+
+import requests
+from PIL import Image
+
+from PyQt5.QtCore import Qt, QTimer
 from PyQt5.QtGui import QPixmap
 from PyQt5.QtWidgets import (
     QWidget,
@@ -9,7 +15,7 @@ from PyQt5.QtWidgets import (
     QPushButton
 )
 
-from service.PurchaseApi import AppCheckoutWorker
+from config import API_URL
 
 
 class AppPaymentScreen(QWidget):
@@ -76,8 +82,14 @@ class AppPaymentScreen(QWidget):
             "font-size:28px;color:#8dd4ff;font-weight:bold;"
         )
 
-        self.checkout_worker = None
-        self.parent.compra_session.remaining_changed.connect(self.atualizar_contador)
+        self.remaining_seconds = 300
+
+        self.timeout_timer = QTimer(self)
+        self.timeout_timer.setSingleShot(True)
+        self.timeout_timer.timeout.connect(self.expirar_pagamento)
+
+        self.countdown_timer = QTimer(self)
+        self.countdown_timer.timeout.connect(self.atualizar_contador)
 
         self.loading = QLabel("Gerando QR Code...")
         self.loading.setAlignment(Qt.AlignCenter)
@@ -119,38 +131,71 @@ class AppPaymentScreen(QWidget):
         self.status.setText("Gerando checkout...")
         self.status.setStyleSheet("color:#62c8ff;")
 
-        self.atualizar_contador(self.parent.compra_session.remaining_seconds())
-        if self.checkout_worker and self.checkout_worker.isRunning():
-            return
-        self.checkout_worker = AppCheckoutWorker(
-            self.parent.terminal.carrinho.to_dict(), parent=self
-        )
-        self.checkout_worker.succeeded.connect(self._checkout_ready)
-        self.checkout_worker.failed.connect(self._checkout_failed)
-        self.checkout_worker.start()
+        # ✅ Reset do timer antes de iniciar
+        self.remaining_seconds = 300
+        self.timer_label.setText("05:00")
 
-    def _checkout_ready(self, data):
-        pixmap = QPixmap()
-        pixmap.loadFromData(data["image"])
-        self.loading.hide()
-        self.qr_label.setPixmap(
-            pixmap.scaled(320, 320, Qt.KeepAspectRatio, Qt.SmoothTransformation)
-        )
-        self.status.setText("Escaneie o QR Code com o aplicativo")
-        self.status.setProperty("state", "info")
+        self.timeout_timer.start(300000)
+        self.countdown_timer.start(1000)
 
-    def _checkout_failed(self, message):
-        self.loading.show()
-        self.loading.setText("Não foi possível gerar o pagamento no aplicativo.")
-        self.status.setText("O carrinho foi preservado. Tente novamente.")
+        threading.Thread(target=self.gerar_checkout, daemon=True).start()
 
-    def atualizar_contador(self, remaining_seconds):
-        minutos = remaining_seconds // 60
-        segundos = remaining_seconds % 60
+    def gerar_checkout(self):
+        print("gerar_checkout chamado")
+
+        try:
+            carrinho = self.parent.terminal.carrinho
+
+            response = requests.post(f"{API_URL}/carrinho", json=carrinho.to_dict())
+            print("STATUS:", response.status_code)
+            dados = response.json()
+            carrinho_id = dados["carrinhoId"]
+
+            response = requests.get(
+                f"{API_URL}/checkout/carrinho?idCarrinho=" + carrinho_id
+            )
+            dados = response.json()
+            session_id = dados["sessionId"]
+
+            response = requests.get(f"{API_URL}/checkout/qrcode?id=" + session_id)
+            imagem_bytes = response.content
+
+            imagem = Image.open(BytesIO(imagem_bytes))
+            imagem.save("temp_checkout.png")
+
+            pixmap = QPixmap("temp_checkout.png")
+            pixmap = pixmap.scaled(320, 320, Qt.KeepAspectRatio, Qt.SmoothTransformation)
+
+            self.loading.hide()
+            self.qr_label.setPixmap(pixmap)
+            self.status.setText(" Escaneie na Camera ou no aplicativo")
+            self.status.setStyleSheet("color:#62c8ff;")
+
+        except Exception as e:
+            import traceback
+            traceback.print_exc()
+
+    def atualizar_contador(self):
+        minutos = self.remaining_seconds // 60
+        segundos = self.remaining_seconds % 60
         self.timer_label.setText(f"{minutos:02}:{segundos:02}")
+        self.remaining_seconds -= 1
+
+        if self.remaining_seconds < 0:
+            self.countdown_timer.stop()
+            self.expirar_pagamento()
+
+    def expirar_pagamento(self):
+        self.countdown_timer.stop()
+        self.timeout_timer.stop()
+
+        self.status.setText("Pagamento expirado")
+        self.status.setStyleSheet("color:#ff4d4d;")
+        self.qr_label.clear()
+
+        self.parent.setCurrentWidget(self.parent.pagamento)
 
     def cancelar_pagamento(self):
-        self.parent.setCurrentWidget(self.parent.terminal)
-
-    def parar_espera(self):
-        self.qr_label.clear()
+        self.timeout_timer.stop()
+        self.countdown_timer.stop()
+        self.parent.setCurrentWidget(self.parent.pagamento)
