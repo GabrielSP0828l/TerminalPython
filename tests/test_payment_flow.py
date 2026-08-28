@@ -53,6 +53,9 @@ class PaymentFlowTest(unittest.TestCase):
             "terminalId": "terminal-a", "status": "WAITING_PAYMENT"
         })
 
+    def tearDown(self):
+        self.screen.parar_workers()
+
     def test_approved_event_is_correlated_and_opens_existing_success_screen(self):
         terminal = SimpleNamespace(terminalId="terminal-a")
         with patch("telas.pagamento.Terminal.load", return_value=terminal):
@@ -92,6 +95,36 @@ class PaymentFlowTest(unittest.TestCase):
         self.assertTrue(self.screen.timeout_pending)
         self.assertTrue(self.screen.final_recovery_timer.isActive())
         self.assertIs(self.screen.loading_page, self.screen.pages.currentWidget())
+
+    def test_timeout_while_point_request_has_no_ids_waits_for_safe_result(self):
+        self.parent.compra_session.reset()
+        attempt = self.parent.compra_session.begin_payment()
+        self.screen.current_attempt = attempt
+        self.screen.point_worker = SimpleNamespace(
+            isRunning=lambda: True,
+            requestInterruption=lambda: None,
+            wait=lambda _milliseconds: True,
+        )
+
+        self.screen.tratar_timeout_global(self.parent.compra_session.generation)
+
+        self.assertTrue(self.screen.timeout_pending)
+        self.assertEqual(0, self.parent.reset_calls)
+        self.assertIs(self.screen.loading_page, self.screen.pages.currentWidget())
+
+    def test_definitive_failure_after_global_timeout_resets_instead_of_retrying(self):
+        self.screen.timeout_pending = True
+        self.screen._apply_status("order-a", "REJECTED")
+
+        self.assertEqual(1, self.parent.reset_calls)
+        self.assertIs(self.parent.welcome, self.parent.current)
+
+    def test_old_order_event_cannot_replace_current_payment_id(self):
+        self.parent.compra_session.set_remote_ids(payment_id="payment-current")
+        self.screen._apply_status("order-old", "APPROVED", "payment-old")
+
+        self.assertEqual("payment-current", self.parent.compra_session.payment_id)
+        self.assertFalse(self.parent.confirmacao.shown)
 
     def test_reconnect_checks_backend_and_approved_opens_success(self):
         with patch.object(self.screen, "reconciliar_estado") as reconcile:

@@ -133,12 +133,12 @@ Voltar para [o índice](00-index.md).
 
 ### COM-014 — Cancelamento/timeout apenas local
 
-**Status: PARCIALMENTE RESOLVIDO.**
+**Status: PARCIALMENTE RESOLVIDO; expiração local central corrigida em 28 de agosto de 2026.**
 
 - **Terminal atual:** timers voltam de tela; cancelar não notifica backend.
 - **Backend atual:** estoque/reserva e estados pertencem ao backend.
 - **Impacto:** sessão/carrinho/Order podem continuar ativos após abandono local.
-- **Solução:** timeout consulta/reconcilia e não presume falha. Não existe endpoint operacional de cancelamento; a tela permanece bloqueada se o estado continuar incerto.
+- **Solução:** `CompraSession.expired` agora chega ao controlador central exatamente uma vez; lista/confirmação executam reset seguro e pagamento consulta/reconcilia sem presumir falha. Não existe endpoint operacional de cancelamento; a nova compra permanece bloqueada se o estado continuar incerto.
 
 ### COM-015 — Quantidade/peso calculados de modos distintos
 

@@ -6,6 +6,7 @@ Este é o ponto de entrada canônico solicitado para a arquitetura. O inventári
 
 ```text
 MainWindow (lifecycle da aplicação)
+├── expiração central de CompraSession / reset ou reconciliação
 ├── Terminal/ativação persistente
 ├── SyncService (thread)
 │   ├── execução imediata + 300 s
@@ -34,5 +35,7 @@ O backend continua sendo fonte de verdade para terminal, condomínio, empresa, c
 O design visual está centralizado em `styles/tokens.py` e `styles/theme.py`. A UI é portrait-first (`768x1360`), mas continua expansível em landscape. A rotação real é responsabilidade do compositor; `start.sh` oferece configuração opcional via `wlr-randr` sem hardcode de saída e não impede o startup se a ferramenta faltar.
 
 Os estados Point usam `PaymentStateWidget` fullscreen. `styles/svg_icons.py` resolve `icon/` pela raiz e recolore os SVGs em memória com `QSvgRenderer`, preservando os assets pretos. `CompraSession` guarda o último status interno para a mensagem humana e trata `APPROVED` duplicado de forma idempotente. O reset aprovado é exclusivamente disparado por `FINALIZAR`.
+
+O `QTimer` global pertence a `CompraSession` e não conhece widgets. Seu sinal `expired(generation)` é conectado a `MainWindow._checkout_session_expired`, que bloqueia todas as ações da compra e decide entre `reset_compra` e a reconciliação já existente em `PagamentoScreen`. A geração, a tentativa capturada e o `orderId` esperado invalidam signals/workers tardios; ao encerrar uma tentativa, as conexões locais desses workers também são removidas sem abortar uma requisição financeira incerta.
 
 O toque longo no logotipo continua sendo o acesso administrativo, agora roteado por `AdminAuthScreen`. `TERMINAL_ADMIN_PASSWORD` vem apenas do ambiente; autorização termina ao sair da `ConfiguracaoScreen`. O shutdown administrativo é centralizado em `MainWindow`, para timers, workers, sockets, sync e heartbeat, e não altera/cancela estado financeiro remoto.

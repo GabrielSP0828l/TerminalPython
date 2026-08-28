@@ -135,6 +135,7 @@ class TerminalScreen(QWidget):
         self.peso_total_venda = 0.0
         self._grid_columns = 3
         self._grid_card_width = self.GRID_MAX_CARD_WIDTH
+        self._checkout_interactions_enabled = True
 
         self.listener = PaymentListener(self)
         self.listener.payment_status_signal.connect(
@@ -351,6 +352,21 @@ class TerminalScreen(QWidget):
         self.peso_total_venda = 0.0
         self.atualizar_interface()
 
+    def set_checkout_interactions_enabled(self, enabled):
+        self._checkout_interactions_enabled = bool(enabled)
+        self.codigo_barras.setEnabled(enabled)
+        self.btn_finalizar.setEnabled(enabled)
+        self.btn_cancelar.setEnabled(enabled)
+        for card, _, _ in self.linhas.values():
+            card.setEnabled(enabled)
+
+    def _can_accept_checkout_action(self):
+        if not self._checkout_interactions_enabled:
+            return False
+        if self.parent_app.stacked_widget.currentWidget() is not self:
+            return False
+        return self.parent_app.compra_session.can_accept_checkout_actions()
+
     def garantir_foco(self):
         if self.parent and self.parent.stacked_widget.currentWidget() == self:
             if not self.codigo_barras.hasFocus():
@@ -358,6 +374,8 @@ class TerminalScreen(QWidget):
 
     def ir_para_pagamento(self):
         """Abre o resumo; nenhuma chamada remota é iniciada neste toque."""
+        if not self._can_accept_checkout_action():
+            return
         if not self.linhas:
             self.mostrar_aviso(
                 "Carrinho vazio", "Adicione pelo menos um produto antes de continuar."
@@ -369,17 +387,23 @@ class TerminalScreen(QWidget):
 
     def iniciar_pagamento_confirmado(self):
         """Único ponto visual que encaminha o carrinho atual ao fluxo Point."""
-        if self.parent_app and not self.carrinho.vazio():
+        if (
+            self.parent_app
+            and self._can_accept_checkout_action()
+            and not self.carrinho.vazio()
+        ):
             self.parent_app.pagamento.iniciar_pagamento(
                 self.carrinho.to_dict(), self.totalBox.text()
             )
 
     def cancelar_venda(self):
-        if self.parent_app:
+        if self.parent_app and self._can_accept_checkout_action():
             self.parent_app.reset_compra()
             self.parent_app.setCurrentWidget(self.parent_app.welcome)
 
     def remover_produto(self, codigo_produto, widget_linha):
+        if not self._can_accept_checkout_action():
+            return
         item = self.carrinho.buscar_item(codigo_produto)
         if not item:
             return
@@ -393,6 +417,9 @@ class TerminalScreen(QWidget):
             self._show_empty_state()
 
     def readProduct(self):
+        if not self._can_accept_checkout_action():
+            self.codigo_barras.clear()
+            return
         barcode = self.codigo_barras.text().strip()
         if not barcode:
             return
@@ -407,7 +434,9 @@ class TerminalScreen(QWidget):
 
             produto = Produtos.from_tuple(product_tuple)
             codigo = produto.codigo
-            self.parent_app.compra_session.start_if_needed()
+            if not self.parent_app.compra_session.start_if_needed():
+                self.codigo_barras.clear()
+                return
 
             if codigo in self.linhas:
                 item = self.carrinho.buscar_item(codigo)

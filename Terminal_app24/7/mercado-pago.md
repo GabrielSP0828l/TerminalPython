@@ -12,3 +12,9 @@ WebSocket é o canal de tempo real. Ao conectar/reconectar com `CompraSession.pa
 - indisponibilidade do backend/Mercado Pago: mostra confirmação/reconexão, sem inventar recusa.
 
 Uma nova tentativa só começa depois de falha definitiva. Oscilação de rede ou resposta ambígua preserva `cartId`/`orderId` e reutiliza a cobrança anterior; nenhuma chave de idempotência é criada no Python.
+
+## Deadline local durante cobrança
+
+O fim dos 10 minutos encerra a experiência local, mas não inventa um resultado financeiro. Se o POST Point ainda está em execução, o Terminal bloqueia a UI e aguarda seu callback delimitado. Com `orderId`, usa somente `GET /order/{orderId}/status?terminalId=...`; com resposta ambígua e apenas `cartId`, conserva o fluxo idempotente já existente do backend para recuperar a mesma Order. O timeout, sozinho, nunca inicia uma nova tentativa.
+
+`APPROVED` recebido durante a reconciliação prevalece e abre sucesso. `REJECTED`, `CANCELLED`, `FAILED`, `EXPIRED` e `REFUNDED` encerram e limpam a sessão expirada. Estado ainda intermediário após a janela de recuperação vira `RECONCILIATION_PENDING`: a tela inicial pode aparecer, mas uma nova compra continua bloqueada e o polling correlacionado prossegue.

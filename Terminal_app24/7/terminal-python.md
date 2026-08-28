@@ -19,6 +19,7 @@ O Terminal é cliente PyQt5 do backend Spring Boot. Mantém interface física, a
 | Concorrência | worker único com `sync_in_progress + sync_pending` |
 | Heartbeat | canal separado, ACK após persistência de `lastPing` |
 | Pagamento | `PAYMENT_STATUS` separado do evento de catálogo e correlacionado |
+| Timeout global | 600 s, evento único no `MainWindow`, reset/reconciliação central |
 | Interface | design system único, targets touch e portrait `768x1360` |
 | Confirmação | `Finalizar` abre resumo; Point somente em `Confirmar e pagar` |
 | Administração | toque longo → senha obrigatória → menu existente |
@@ -40,6 +41,8 @@ HTTP/SQLite não executam na thread da UI. O scanner consulta o SQLite em cada s
 `TerminalScreen -> ConfirmacaoCompraScreen -> PagamentoScreen -> ConfirmacaoScreen`. A confirmação pré-pagamento não duplica o carrinho. “Pagar no App” não aparece mais no carrinho; a classe legada foi preservada sem rota ativa.
 
 Todas as páginas usam o tema central. Total/ações permanecem fora do scroll e o display deve ser girado pelo sistema, não por widgets Qt. `start.sh` aceita `DISPLAY_ORIENTATION=vertical`, saída/transform opcionais e fallback seguro.
+
+O relógio da compra é responsabilidade exclusiva de `CompraSession`. Em `00:00`, a sessão fica inativa, o timer para e `MainWindow` bloqueia scanner/botões. Lista e confirmação são limpas pelo `reset_compra` existente; pagamento remoto é reconciliado antes de qualquer descarte. O reset restaura o deadline completo e a guarda de emissão para a próxima geração.
 
 ## Administração local
 

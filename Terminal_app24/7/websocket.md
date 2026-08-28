@@ -29,6 +29,8 @@ O Python só registra sucesso após validar tipo, UUID e presença de `lastPing`
 
 O backend publica `PaymentEvent` pós-commit. Ao conectar ou reconectar com compra ativa, `PagamentoScreen` mostra “Verificando pagamento” e consulta `GET /order/{orderId}/status?terminalId=...`; o backend consulta o Mercado Pago em estado não definitivo. Durante a espera existe polling HTTP de 10 segundos. Eventos e respostas só afetam a UI quando `terminalId`/`orderId` correspondem à compra ativa; apenas `APPROVED` libera sucesso.
 
+Após timeout/reset, `CompraSession.order_id` é limpo e `PagamentoScreen.current_attempt` é invalidado. Responses de status capturam o `orderId` esperado; callbacks de retomada capturam tentativa e `cartId`. Assim, evento ou worker da compra anterior não pode preencher `paymentId`, abrir sucesso ou alterar a nova tela.
+
 ## Notificação de catálogo
 
 O mesmo canal `/payment-socket/{terminalId}` também transporta:

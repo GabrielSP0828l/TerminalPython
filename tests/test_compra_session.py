@@ -4,6 +4,7 @@ import unittest
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 from PyQt5.QtWidgets import QApplication
+from PyQt5.QtTest import QTest
 
 from model.CompraSession import CompraSession
 
@@ -52,6 +53,52 @@ class CompraSessionTest(unittest.TestCase):
         self.assertEqual(0, short.remaining_seconds())
         self.assertEqual("TIMEOUT_CHECK", short.state)
         self.assertEqual([short.generation], expired)
+
+    def test_expiration_is_emitted_once_and_stops_checkout_actions(self):
+        short = CompraSession(clock=self.clock, duration_seconds=2)
+        expired = []
+        short.expired.connect(expired.append)
+        short.start_if_needed()
+        generation = short.generation
+
+        self.clock.value += 3
+        short._tick()
+        short._tick()
+
+        self.assertEqual([generation], expired)
+        self.assertFalse(short.active)
+        self.assertFalse(short._timer.isActive())
+        self.assertFalse(short.can_accept_checkout_actions())
+
+    def test_qtimer_reaches_zero_and_emits_without_manual_tick(self):
+        short = CompraSession(duration_seconds=2)
+        remaining = []
+        expired = []
+        short.remaining_changed.connect(remaining.append)
+        short.expired.connect(expired.append)
+        short.start_if_needed()
+        generation = short.generation
+
+        QTest.qWait(2300)
+
+        self.assertIn(1, remaining)
+        self.assertIn(0, remaining)
+        self.assertEqual([generation], expired)
+        self.assertFalse(short._timer.isActive())
+
+    def test_reset_starts_a_fresh_generation_with_full_deadline(self):
+        self.session.start_if_needed()
+        first_generation = self.session.generation
+        self.clock.value += 601
+        self.session._tick()
+        self.session.reset()
+
+        self.assertEqual(600, self.session.remaining_seconds())
+        self.assertFalse(self.session._expired_emitted)
+        self.assertTrue(self.session.start_if_needed())
+        self.assertNotEqual(first_generation, self.session.generation)
+        self.assertEqual(600, self.session.remaining_seconds())
+        self.assertTrue(self.session.active)
 
     def test_double_click_creates_only_one_active_attempt(self):
         first = self.session.begin_payment()

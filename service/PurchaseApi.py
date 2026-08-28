@@ -105,9 +105,11 @@ class PointCheckoutWorker(QThread):
             if not self.isInterruptionRequested():
                 self.succeeded.emit(result)
         except PurchaseApiError as error:
-            self.failed.emit(str(error), error.stage, error.ambiguous, error.context)
+            if not self.isInterruptionRequested():
+                self.failed.emit(str(error), error.stage, error.ambiguous, error.context)
         except Exception:
-            self.failed.emit("Não foi possível preparar o pagamento", "unknown", False, {})
+            if not self.isInterruptionRequested():
+                self.failed.emit("Não foi possível preparar o pagamento", "unknown", False, {})
 
 
 class OrderStatusWorker(QThread):
@@ -126,7 +128,8 @@ class OrderStatusWorker(QThread):
             if not self.isInterruptionRequested():
                 self.succeeded.emit(result)
         except PurchaseApiError as error:
-            self.failed.emit(str(error))
+            if not self.isInterruptionRequested():
+                self.failed.emit(str(error))
 
 
 class PointResumeWorker(QThread):
@@ -144,7 +147,8 @@ class PointResumeWorker(QThread):
             if not self.isInterruptionRequested():
                 self.succeeded.emit(result)
         except PurchaseApiError as error:
-            self.failed.emit(str(error))
+            if not self.isInterruptionRequested():
+                self.failed.emit(str(error))
 
 
 class AppCheckoutWorker(QThread):
@@ -162,4 +166,5 @@ class AppCheckoutWorker(QThread):
             if not self.isInterruptionRequested():
                 self.succeeded.emit(result)
         except PurchaseApiError as error:
-            self.failed.emit(str(error))
+            if not self.isInterruptionRequested():
+                self.failed.emit(str(error))

@@ -24,6 +24,7 @@ class ConfirmacaoCompraScreen(QWidget):
         self.setObjectName("purchaseConfirmationScreen")
         self.setAttribute(Qt.WA_StyledBackground, True)
         self.setStyleSheet(Theme.purchase_confirmation_stylesheet())
+        self._checkout_interactions_enabled = True
 
         root = QVBoxLayout(self)
         root.setContentsMargins(Spacing.LG, Spacing.LG, Spacing.LG, Spacing.LG)
@@ -97,7 +98,12 @@ class ConfirmacaoCompraScreen(QWidget):
         return self.parent_app.terminal.carrinho
 
     def mostrar_resumo(self):
-        self.btn_confirmar.setEnabled(True)
+        enabled = (
+            self._checkout_interactions_enabled
+            and self.parent_app.compra_session.can_accept_checkout_actions()
+        )
+        self.btn_confirmar.setEnabled(enabled)
+        self.btn_voltar.setEnabled(enabled)
         self.btn_confirmar.setText("CONFIRMAR E PAGAR")
         while self.items_layout.count():
             item = self.items_layout.takeAt(0)
@@ -131,11 +137,23 @@ class ConfirmacaoCompraScreen(QWidget):
         self.total.setText(self.carrinho.total_formatado().replace(".", ","))
 
     def voltar(self):
+        if not self._checkout_interactions_enabled:
+            return
         self.parent_app.setCurrentWidget(self.parent_app.terminal)
 
     def confirmar(self):
-        if self.carrinho.vazio() or not self.btn_confirmar.isEnabled():
+        if (
+            not self._checkout_interactions_enabled
+            or not self.parent_app.compra_session.can_accept_checkout_actions()
+            or self.carrinho.vazio()
+            or not self.btn_confirmar.isEnabled()
+        ):
             return
         self.btn_confirmar.setEnabled(False)
         self.btn_confirmar.setText("PREPARANDO...")
         self.parent_app.terminal.iniciar_pagamento_confirmado()
+
+    def set_checkout_interactions_enabled(self, enabled):
+        self._checkout_interactions_enabled = bool(enabled)
+        self.btn_voltar.setEnabled(enabled)
+        self.btn_confirmar.setEnabled(enabled)

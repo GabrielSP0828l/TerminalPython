@@ -211,6 +211,17 @@ Voltar para [o índice](00-index.md). Nenhuma melhoria abaixo foi implementada n
 - total e ações fixos, com tipografia de compra/confirmação ampliada;
 - cobertura automatizada e render visual exato em `1024×600`.
 
+## MEL-029 — Lifecycle central do timeout de checkout
+
+**Status:** implementada em 28 de agosto de 2026.
+
+- deadline global configurável, com 600 segundos em produção;
+- evento único de expiração por geração;
+- bloqueio imediato de scanner e ações de lista/confirmação;
+- reset central pelo método já existente ou reconciliação financeira correlacionada;
+- invalidação de callbacks antigos por tentativa, `cartId` e `orderId`;
+- testes rápidos sem espera de dez minutos e sem chamada financeira real.
+
 ## MEL-023 — Coalescer invalidações de catálogo em tempo real
 
 **Status:** implementada em 24 de agosto de 2026.

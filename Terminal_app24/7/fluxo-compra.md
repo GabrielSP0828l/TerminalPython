@@ -33,6 +33,24 @@ A resposta de criação da cobrança é intermediária. Apenas `APPROVED` da Ord
 
 Enquanto `CompraSession.payment_in_flight=true`, `cartId`, `orderId` e `paymentId` não são limpos por perda de socket ou indisponibilidade do backend. Ao conectar/reconectar, o Terminal mostra “Verificando pagamento” e chama `GET /order/{orderId}/status`; enquanto aguarda também repete a consulta a cada 10 segundos. `WAITING_PAYMENT` conserva a tela, `APPROVED` abre `checked.svg` e falha definitiva abre `error.svg`.
 
+## Expiração global da sessão
+
+`CompraSession` mantém o único deadline de 600 segundos. No primeiro tick com `remaining <= 0`, ela publica `00:00`, para o `QTimer`, marca a sessão inativa e emite `expired(generation)` uma única vez. O sinal é recebido por `MainWindow`, nunca pelas telas de lista ou confirmação.
+
+```text
+remaining <= 0
+  -> interações bloqueadas
+  -> MainWindow processa a geração ativa
+      -> sem tentativa/IDs remotos: reset_compra -> boas-vindas
+      -> request Point ainda executando: aguarda callback delimitado
+      -> cartId/orderId existente: PagamentoScreen reconcilia
+          -> APPROVED: sucesso
+          -> falha definitiva: reset -> boas-vindas
+          -> intermediário/incerto: RECONCILIATION_PENDING
+```
+
+O reset central limpa o carrinho, IDs, flags, timers visuais e tokens da tentativa. Scanner, `FINALIZAR` e `CONFIRMAR E PAGAR` ficam bloqueados desde a expiração. Uma nova entrada na tela de compra permite um novo scan, que cria outra `generation`, reinicia o deadline completo e não aceita callbacks da tentativa anterior.
+
 ## UX
 
 `Finalizar` apenas abre o resumo. `Confirmar e pagar` é desabilitado imediatamente e muda para “Preparando...” antes do worker. A cobrança aceita mostra a instrução da Point em laranja; processamento usa loading; falha definitiva usa vermelho e preserva o carrinho; aprovação usa verde.

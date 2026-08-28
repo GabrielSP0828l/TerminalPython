@@ -240,6 +240,9 @@ class PagamentoScreen(QWidget):
             self.poll_timer.start(self.POLL_INTERVAL_MS)
             self._retomar_inicio_point()
             return
+        if self.timeout_pending:
+            self._finish_expired_session()
+            return
         self._safe_failure("Não foi possível iniciar o pagamento. O carrinho foi preservado.")
 
     def processar_evento(self, data):
@@ -261,19 +264,19 @@ class PagamentoScreen(QWidget):
 
     def _apply_status(self, order_id, status, transaction_id=None):
         session = self.parent.compra_session
-        if transaction_id:
-            session.set_remote_ids(payment_id=transaction_id)
         result = session.apply_status(order_id, status)
+        if result != "IGNORED" and transaction_id:
+            session.set_remote_ids(payment_id=transaction_id)
         if result == "APPROVED":
             self.parar_espera()
             session.mark_success()
             self.parent.confirmacao.mostrar_tela()
             self.parent.setCurrentWidget(self.parent.confirmacao)
         elif result == "FAILED":
+            expired_flow = self.timeout_pending or self.timeout_abandoned
             self.parar_espera()
-            if self.timeout_abandoned:
-                self.parent.reset_compra(outcome="cancelled")
-                self.parent.setCurrentWidget(self.parent.welcome)
+            if expired_flow:
+                self._finish_expired_session()
             else:
                 self._show_definitive_failure(session.last_status)
         elif result == "PROCESSING":
@@ -315,7 +318,9 @@ class PagamentoScreen(QWidget):
         self.status_worker.succeeded.connect(
             lambda data, oid=expected_order: self._status_received(oid, data)
         )
-        self.status_worker.failed.connect(self._status_failed)
+        self.status_worker.failed.connect(
+            lambda message, oid=expected_order: self._status_failed(oid, message)
+        )
         self.status_worker.start()
 
     def verificar_apos_reconexao(self):
@@ -345,19 +350,43 @@ class PagamentoScreen(QWidget):
         cart_id = self.parent.compra_session.cart_id
         if not cart_id or (self.resume_worker and self.resume_worker.isRunning()):
             return
+        expected_attempt = self.current_attempt
         self.resume_worker = PointResumeWorker(cart_id, parent=self)
         self.resume_worker.succeeded.connect(
-            lambda data: self._point_started(self.current_attempt, data)
+            lambda data, token=expected_attempt, cid=cart_id:
+            self._resume_started(token, cid, data)
         )
-        self.resume_worker.failed.connect(self._status_failed)
+        self.resume_worker.failed.connect(
+            lambda message, token=expected_attempt, cid=cart_id:
+            self._resume_failed(token, cid, message)
+        )
         self.resume_worker.start()
+
+    def _resume_started(self, attempt, cart_id, data):
+        if attempt != self.current_attempt:
+            return
+        if cart_id != self.parent.compra_session.cart_id:
+            return
+        self._point_started(attempt, data)
+
+    def _resume_failed(self, attempt, cart_id, message):
+        if attempt != self.current_attempt:
+            return
+        if cart_id != self.parent.compra_session.cart_id:
+            return
+        self._status_failed(None, message)
 
     def _status_received(self, expected_order, data):
         if expected_order != self.parent.compra_session.order_id:
             return
         self._apply_payload(data)
 
-    def _status_failed(self, message):
+    def _status_failed(self, expected_order, message):
+        if (
+            expected_order is not None
+            and expected_order != self.parent.compra_session.order_id
+        ):
+            return
         logger.warning("Não foi possível reconciliar pagamento: %s", message)
         self._show_loading(
             "CONFIRMANDO PAGAMENTO",
@@ -370,9 +399,15 @@ class PagamentoScreen(QWidget):
         session = self.parent.compra_session
         if generation != session.generation:
             return
-        if not session.order_id and not session.cart_id:
-            self.parent.reset_compra(outcome="cancelled")
-            self.parent.setCurrentWidget(self.parent.welcome)
+        point_request_running = bool(
+            self.point_worker is not None and self.point_worker.isRunning()
+        )
+        if (
+            not session.order_id
+            and not session.cart_id
+            and not point_request_running
+        ):
+            self._finish_expired_session()
             return
         self.timeout_pending = True
         self.parent.setCurrentWidget(self)
@@ -435,6 +470,16 @@ class PagamentoScreen(QWidget):
             "[CHECKOUT-SESSION] timeout operacional state=%s orderId=%s",
             session.state, session.order_id,
         )
+        if self.timeout_pending and not session.order_id and not session.cart_id:
+            if self.point_worker is not None and self.point_worker.isRunning():
+                self._show_loading(
+                    "CONFIRMANDO PAGAMENTO",
+                    "Aguardando a conclusão segura da operação...",
+                    "Não inicie outra compra enquanto verificamos se houve cobrança.",
+                )
+                return
+            self._finish_expired_session()
+            return
         if session.state == "RECONCILIATION_PENDING":
             self.parent.setCurrentWidget(self.parent.welcome)
             self.poll_timer.start(self.POLL_INTERVAL_MS)
@@ -457,12 +502,41 @@ class PagamentoScreen(QWidget):
         session = self.parent.compra_session
         if not self.timeout_pending or not session.payment_in_flight:
             return
+        if not session.order_id and not session.cart_id:
+            if self.point_worker is not None and self.point_worker.isRunning():
+                self.final_recovery_timer.start(self.FINAL_RECONCILIATION_GRACE_MS)
+                return
+            self._finish_expired_session()
+            return
         self.timeout_abandoned = True
         session.mark_reconciliation_pending()
         self.operation_timer.stop()
         self.parent.setCurrentWidget(self.parent.welcome)
         self.poll_timer.start(self.POLL_INTERVAL_MS)
         self.reconciliar_estado()
+
+    def _finish_expired_session(self):
+        generation = self.parent.compra_session.generation
+        complete = getattr(self.parent, "complete_checkout_expiration", None)
+        if complete is not None:
+            complete(generation)
+            return
+        self.parent.reset_compra(outcome="cancelled")
+        self.parent.setCurrentWidget(self.parent.welcome)
+
+    def _disconnect_worker_callbacks(self):
+        """Invalida callbacks locais sem interromper uma requisição financeira incerta."""
+        for worker in (self.point_worker, self.status_worker, self.resume_worker):
+            if worker is None:
+                continue
+            for signal_name in ("succeeded", "failed"):
+                signal = getattr(worker, signal_name, None)
+                if signal is None:
+                    continue
+                try:
+                    signal.disconnect()
+                except (TypeError, RuntimeError):
+                    pass
 
     def parar_espera(self):
         self.poll_timer.stop()
@@ -471,6 +545,9 @@ class PagamentoScreen(QWidget):
         self.failure_return_timer.stop()
         self.final_recovery_timer.stop()
         self.current_attempt = None
+        self.timeout_pending = False
+        self.timeout_abandoned = False
+        self._disconnect_worker_callbacks()
 
     def parar_workers(self):
         self.parar_espera()

@@ -33,16 +33,28 @@ class CompraSession(QObject):
 
     def start_if_needed(self):
         if self.started_at is not None:
-            return
+            return self.can_accept_checkout_actions()
         self.started_at = self._clock()
         self.generation = uuid.uuid4().hex
+        self.active = True
+        self._expired_emitted = False
         self._set_state("SCANNING")
         self._timer.start()
         self._emit_remaining()
         logger.info("[CHECKOUT-SESSION] iniciada duration=%ss", self.duration_seconds)
+        return True
+
+    def can_accept_checkout_actions(self):
+        if self.started_at is None:
+            return self.state == "IDLE"
+        if self.remaining_seconds() <= 0:
+            self._tick()
+            return False
+        return self.active
 
     def begin_payment(self):
-        self.start_if_needed()
+        if not self.start_if_needed():
+            return None
         if self.payment_in_flight or self.state in {"APPROVED", "SUCCESS", "TIMEOUT_CHECK"}:
             return None
         self.payment_in_flight = True
@@ -83,7 +95,8 @@ class CompraSession(QObject):
             return "FAILED"
         if normalized in self.INTERMEDIATE:
             self.payment_in_flight = True
-            self._set_state("PROCESSING")
+            if self.state != "RECONCILIATION_PENDING":
+                self._set_state("PROCESSING")
             return "PROCESSING"
         return "UNKNOWN"
 
@@ -98,9 +111,10 @@ class CompraSession(QObject):
             self._set_state("CART_READY")
 
     def mark_timeout_check(self):
-        if self.state in {"APPROVED", "SUCCESS", "IDLE"}:
+        if self.state in {"APPROVED", "SUCCESS", "IDLE", "TIMEOUT_CHECK"}:
             return False
         self._timer.stop()
+        self.active = False
         self._set_state("TIMEOUT_CHECK")
         return True
 
@@ -141,9 +155,13 @@ class CompraSession(QObject):
         self.payment_id = None
         self.payment_in_flight = False
         self.last_status = None
+        self.active = False
+        self._expired_emitted = False
         self.state = "IDLE"
         if previous_state not in (None, "IDLE"):
             self.state_changed.emit("IDLE")
+        if previous_state is not None:
+            self._emit_remaining()
 
     def stop(self):
         """Interrompe somente o timer local, preservando o estado para shutdown."""
@@ -161,6 +179,16 @@ class CompraSession(QObject):
     def _tick(self):
         remaining = self.remaining_seconds()
         self.remaining_changed.emit(remaining)
-        if remaining == 0 and self.mark_timeout_check():
-            logger.warning("[CHECKOUT-SESSION] timeout")
-            self.expired.emit(self.generation or "")
+        if remaining > 0:
+            return
+        if self.state in {"APPROVED", "SUCCESS", "IDLE"}:
+            self._timer.stop()
+            return
+
+        self.mark_timeout_check()
+        if self._expired_emitted:
+            return
+
+        self._expired_emitted = True
+        logger.warning("[CHECKOUT-SESSION] timeout reached")
+        self.expired.emit(self.generation or "")

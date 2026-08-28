@@ -56,6 +56,10 @@ class PaymentStateScreensTest(unittest.TestCase):
             "cartId": "cart-a", "orderId": "order-a", "status": "WAITING_PAYMENT"
         })
 
+    def tearDown(self):
+        self.screen.parar_workers()
+        self.parent.confirmacao.stop()
+
     def test_assets_are_root_relative_and_recolored_without_changing_svg(self):
         original = icon_path("alert.svg").read_bytes()
         current = os.getcwd()

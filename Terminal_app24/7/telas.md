@@ -24,6 +24,8 @@ Cada card mostra somente nome, subtotal exibido, quantidade e a ação `REMOVER`
 
 O footer usa uma única faixa horizontal para aproveitar a altura de 600 px. `TOTAL` usa 28 px, o valor usa 46 px e `FINALIZAR` usa 26 px com 72 px mínimos de altura. O relógio global de 10 minutos permanece no canto superior em 20 px.
 
+Ao atingir `00:00`, o scanner, remoções, cancelamento e `FINALIZAR` são desabilitados antes da navegação. Sem pendência financeira, o controlador limpa a compra e abre a tela de boas-vindas; a lista não possui lógica própria de timeout.
+
 Não existe campo de promoção no modelo/contrato local atual; a tela não inventa preço promocional. Caso o backend passe a fornecer preço original e promocional, o contrato deve ser definido primeiro em [[api-backend]] e [[compatibilidade-backend]].
 
 ## Confirmação da compra
@@ -37,9 +39,13 @@ A estrutura e a fonte única do carrinho foram preservadas. A revisão foi tipog
 - `VOLTAR` e `CONFIRMAR E PAGAR`: 26 px e 72 px mínimos de altura;
 - fundo escuro pintado explicitamente para não depender do compositor Qt.
 
+O mesmo evento global bloqueia imediatamente `VOLTAR` e `CONFIRMAR E PAGAR`; o controlador cancela o resumo, reutiliza `reset_compra` e retorna às boas-vindas quando ainda não há operação financeira a reconciliar.
+
 ## Preparação do pagamento
 
 O loading continua usando `icon/tube-spinner.svg`, renderizado em 128×128. `Preparando pagamento...` usa 32 px. Nenhuma alteração foi feita no início, correlação ou resultado financeiro descritos em [[mercado-pago]] e [[websocket]].
+
+Se a sessão expirar durante esse loading, a tela não libera ações. Um worker Point ainda em execução pode terminar apenas para informar com segurança se existem `cartId`/`orderId`; seu callback é aceito somente para a tentativa capturada. Sem referência remota após a resposta delimitada, ocorre reset. Com referência remota, a tela passa à reconciliação.
 
 ## Validação visual
 

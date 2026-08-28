@@ -323,6 +323,17 @@ Falha, instrução e sucesso eram cards e a aprovação apagava a compra após c
 - **Correção:** cálculo pelo viewport, 3 colunas em 1024 px, cards `292×224`, altura mínima do conteúdo por quantidade de linhas, scroll apenas vertical, footer horizontal fixo e tipografia/contraste ampliados no carrinho e confirmação.
 - **Validação:** teste Qt automatizado com quarta mercadoria em `(row=1, column=0)` e render offscreen com seis mercadorias em `1024×600`.
 
+## BUG-039 — Cronômetro chegava a `00:00` sem lifecycle central de expiração
+
+**Status:** corrigido em 28 de agosto de 2026.
+
+- **Severidade:** crítica.
+- **Causa:** `CompraSession._tick` atualizava `remaining_changed` e emitia `expired`, porém `main.py` conectava o sinal diretamente a `PagamentoScreen.tratar_timeout_global`. Não existia um handler de lifecycle no controlador nem uma flag explícita de emissão única/atividade; lista, confirmação, scanner e callbacks tardios ficavam fora de uma política central verificável.
+- **Impacto:** o display podia permanecer em `00:00` com a compra antiga utilizável ou dependente do comportamento de uma tela que não era a atual.
+- **Correção:** `MainWindow._checkout_session_expired` bloqueia interações, valida a geração e reutiliza `reset_compra` quando não há pendência remota. Tentativas/IDs remotos seguem reconciliação segura. `CompraSession` para o timer, marca `active=false` e protege a emissão com `_expired_emitted`.
+- **Proteções adicionais:** status exige `orderId`; `paymentId` só é aplicado depois da correlação; status/resume workers capturam Order/tentativa/carrinho; reset desconecta callbacks locais e restaura deadline/flag. Uma interrupção solicitada não publica sucesso nem falha tardia.
+- **Validação:** testes com duração injetada de dois segundos cobrem o `QTimer` real chegando a zero, lista, confirmação, scanner bloqueado, nova geração, emissão única, loading Point sem IDs e falha definitiva após timeout, sem cobrança real.
+
 ## BUG-030 — Sync somente no startup e paths relativos
 
 **Status:** corrigido em 24 de agosto de 2026.

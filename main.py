@@ -45,6 +45,7 @@ class MainWindow(QMainWindow):
         self.sync_service = None
         self.socket = None
         self.compra_session = CompraSession(self)
+        self._expiring_checkout_generation = None
         self._shutdown_authorized = False
         self._shutdown_started = False
         self._services_stopped = False
@@ -151,7 +152,46 @@ class MainWindow(QMainWindow):
         self.stacked_widget.addWidget(self.terminal)
         self.stacked_widget.addWidget(self.pagamento)
 
-        self.compra_session.expired.connect(self.pagamento.tratar_timeout_global)
+        self.compra_session.expired.connect(self._checkout_session_expired)
+
+    def _checkout_session_expired(self, generation):
+        """Processa uma única expiração e delega só a reconciliação financeira."""
+        session = self.compra_session
+        if not generation or generation != session.generation:
+            return
+        if self._expiring_checkout_generation == generation:
+            return
+
+        self._expiring_checkout_generation = generation
+        logging.getLogger(__name__).warning(
+            "[CHECKOUT-SESSION] expiring session generation=%s", generation
+        )
+        self._set_checkout_interactions_enabled(False)
+
+        if session.payment_in_flight or session.order_id or session.cart_id:
+            self.pagamento.tratar_timeout_global(generation)
+            return
+        self.complete_checkout_expiration(generation)
+
+    def complete_checkout_expiration(self, generation):
+        """Conclui no controlador o reset de uma sessão expirada sem pendência."""
+        if not generation or generation != self.compra_session.generation:
+            return
+        logging.getLogger(__name__).warning(
+            "[CHECKOUT-SESSION] resetting purchase generation=%s", generation
+        )
+        self.reset_compra(outcome="cancelled")
+        logging.getLogger(__name__).warning(
+            "[CHECKOUT-SESSION] returning to welcome screen"
+        )
+        self.setCurrentWidget(self.welcome)
+        self._expiring_checkout_generation = None
+
+    def _set_checkout_interactions_enabled(self, enabled):
+        if self.terminal is not None:
+            self.terminal.set_checkout_interactions_enabled(enabled)
+        if self.confirmacao_compra is not None:
+            self.confirmacao_compra.set_checkout_interactions_enabled(enabled)
 
     def iniciar_operacao_terminal(self):
         if self._operacao_iniciada:
@@ -235,11 +275,13 @@ class MainWindow(QMainWindow):
         if self.app_payment is not None:
             self.app_payment.parar_espera()
         if self.terminal is not None:
+            self.terminal.set_checkout_interactions_enabled(False)
             self.terminal.liberar_tela()
         if outcome == "finalized":
             self.compra_session.finish()
         else:
             self.compra_session.cancel()
+        self._expiring_checkout_generation = None
 
     # -----------------------------
     # HELPERS
@@ -247,10 +289,20 @@ class MainWindow(QMainWindow):
     def setCurrentWidget(self, widget):
         if (
             widget is self.terminal
-            and self.compra_session.state == "RECONCILIATION_PENDING"
+            and self.compra_session.started_at is not None
+            and not self.compra_session.active
         ):
-            self.pagamento.mostrar_reconciliacao_pendente()
+            if (
+                self.compra_session.payment_in_flight
+                or self.compra_session.order_id
+                or self.compra_session.cart_id
+            ):
+                self.pagamento.mostrar_reconciliacao_pendente()
+            else:
+                self.stacked_widget.setCurrentWidget(self.welcome)
             return
+        if widget is self.terminal:
+            self._set_checkout_interactions_enabled(True)
         if (
             self.stacked_widget.currentWidget() is self.configuracao
             and widget is not self.configuracao
