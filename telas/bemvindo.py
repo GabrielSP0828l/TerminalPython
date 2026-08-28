@@ -61,6 +61,7 @@ class TelaBemVindos(QWidget):
         self.botao_entrar.clicked.connect(
             lambda: self.parent.setCurrentWidget(self.parent.terminal)
         )
+        self.parent.compra_session.state_changed.connect(self._checkout_state_changed)
 
         layout_cartao.addStretch(1)
         layout_cartao.addWidget(self.logo, stretch=3)
@@ -76,6 +77,12 @@ class TelaBemVindos(QWidget):
         self.clock_timer.timeout.connect(self.atualizarRelogio)
         self.clock_timer.start(1000)
         self.atualizarRelogio()
+
+    def _checkout_state_changed(self, state):
+        if state == "RECONCILIATION_PENDING":
+            self.botao_entrar.setText("VERIFICANDO COMPRA ANTERIOR")
+        else:
+            self.botao_entrar.setText("TOQUE PARA CONTINUAR")
 
     def atualizarRelogio(self):
         self.relogio.setText(datetime.now().strftime("%H:%M:%S"))

@@ -1,5 +1,6 @@
 import os
 import tempfile
+import time
 import unittest
 from types import SimpleNamespace
 
@@ -7,10 +8,12 @@ os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 from PyQt5.QtCore import QSize
 from PyQt5.QtGui import QColor
-from PyQt5.QtWidgets import QApplication, QWidget
+from PyQt5.QtTest import QTest
+from PyQt5.QtWidgets import QApplication, QProgressBar, QWidget
 
 from model.CompraSession import CompraSession
 from styles.svg_icons import icon_path, render_colored_svg
+from styles.animated_svg import AnimatedSvgWidget
 from styles.tokens import Colors
 from telas.ConfirmacaoScreen import ConfirmacaoScreen
 from telas.pagamento import PagamentoScreen
@@ -34,7 +37,7 @@ class ParentStub(QWidget):
     def setCurrentWidget(self, widget):
         self.current = widget
 
-    def reset_compra(self):
+    def reset_compra(self, outcome="cancelled"):
         self.reset_calls += 1
         self.compra_session.reset()
 
@@ -92,10 +95,25 @@ class PaymentStateScreensTest(unittest.TestCase):
 
     def test_waiting_is_attention_but_processing_is_loading(self):
         self.assertIs(self.screen.attention_page, self.screen.pages.currentWidget())
+        self.assertTrue(self.screen.attention_recheck_timer.isActive())
         self.parent.compra_session.set_remote_ids(order_id="order-a")
         self.screen._apply_status("order-a", "PROCESSING")
         self.assertIs(self.screen.loading_page, self.screen.pages.currentWidget())
+        self.assertTrue(self.screen.operation_timer.isActive())
         self.assertNotEqual(self.screen.error_page, self.screen.pages.currentWidget())
+
+    def test_tube_spinner_is_animated_and_replaces_qt_progress_bar(self):
+        spinner = AnimatedSvgWidget("tube-spinner.svg", Colors.INFO)
+        spinner.resize(128, 128)
+        spinner.show()
+        self.app.processEvents()
+        first = spinner.grab().toImage()
+        QTest.qWait(250)
+        self.app.processEvents()
+        second = spinner.grab().toImage()
+        self.assertTrue(spinner.is_animated)
+        self.assertNotEqual(first, second)
+        self.assertEqual([], self.screen.findChildren(QProgressBar))
 
     def test_success_has_four_actions_and_no_automatic_reset(self):
         success = self.parent.confirmacao
@@ -105,13 +123,13 @@ class PaymentStateScreensTest(unittest.TestCase):
         self.app.processEvents()
         self.assertEqual("R$ 48,90", success.lbl_total.text())
         self.assertEqual([
-            "FINALIZAR",
             "ADICIONAR CPF",
             "ENVIAR COMPROVANTE POR E-MAIL",
             "ENVIAR COMPROVANTE POR WHATSAPP",
+            "FINALIZAR",
         ], [
-            success.btn_finalizar.text(), success.btn_cpf.text(),
-            success.btn_email.text(), success.btn_whatsapp.text(),
+            success.btn_cpf.text(), success.btn_email.text(),
+            success.btn_whatsapp.text(), success.btn_finalizar.text(),
         ])
         self.assertEqual(0, self.parent.reset_calls)
         for button in (
@@ -135,6 +153,19 @@ class PaymentStateScreensTest(unittest.TestCase):
             self.parent.confirmacao.notice_page,
             self.parent.confirmacao.pages.currentWidget(),
         )
+
+    def test_failure_returns_to_cart_and_success_times_out_to_welcome(self):
+        self.screen._apply_status("order-a", "REJECTED")
+        self.assertTrue(self.screen.failure_return_timer.isActive())
+        self.screen._voltar_lista()
+        self.assertIs(self.parent.terminal, self.parent.current)
+
+        success = self.parent.confirmacao
+        success.mostrar_tela()
+        success._post_deadline = time.monotonic() - 1
+        success._tick_post_timeout()
+        self.assertEqual(1, self.parent.reset_calls)
+        self.assertIs(self.parent.welcome, self.parent.current)
 
 
 if __name__ == "__main__":

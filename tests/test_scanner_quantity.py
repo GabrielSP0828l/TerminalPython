@@ -51,7 +51,7 @@ class ScannerQuantityTest(unittest.TestCase):
 
         self.assertEqual(2, screen.carrinho.buscar_item("789").quantidade)
         line_widget = screen.linhas["789"][0]
-        self.assertEqual(["×"], [button.text() for button in line_widget.findChildren(QPushButton)])
+        self.assertEqual(["REMOVER"], [button.text() for button in line_widget.findChildren(QPushButton)])
         self.assertGreaterEqual(
             line_widget.findChild(QPushButton).minimumHeight(), 56
         )

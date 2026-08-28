@@ -52,7 +52,7 @@ class Produtos:
         try:
             url = f"{url_base}?page={page}&size={size}"
 
-            response = requests.get(url)
+            response = requests.get(url, timeout=10)
 
             if response.status_code != 200:
                 print(f"Erro API: {response.status_code}")

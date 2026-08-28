@@ -39,7 +39,7 @@ class ParentStub(QWidget):
     def setCurrentWidget(self, widget):
         self.current = widget
 
-    def reset_compra(self):
+    def reset_compra(self, outcome="cancelled"):
         self.compra_session.reset()
 
 
@@ -88,7 +88,7 @@ class PortraitScreensTest(unittest.TestCase):
         screen._safe_failure("Não foi possível concluir o pagamento.")
         self.assertEqual("PAGAMENTO NÃO CONCLUÍDO", screen.title.text())
         self.assertEqual("TENTAR NOVAMENTE", screen.btn_voltar.text())
-        self.assertFalse(screen.progress.isVisible())
+        self.assertFalse(screen.loading_spinner.isVisible())
 
 
 if __name__ == "__main__":

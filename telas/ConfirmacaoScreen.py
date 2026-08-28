@@ -1,5 +1,9 @@
-from PyQt5.QtCore import Qt
-from PyQt5.QtWidgets import QLabel, QPushButton, QStackedLayout, QVBoxLayout, QWidget
+import time
+
+from PyQt5.QtCore import Qt, QTimer
+from PyQt5.QtWidgets import (
+    QHBoxLayout, QLabel, QPushButton, QStackedLayout, QVBoxLayout, QWidget
+)
 
 from styles.svg_icons import ColoredSvgLabel
 from styles.theme import Theme
@@ -8,6 +12,8 @@ from styles.tokens import Colors, Spacing
 
 class ConfirmacaoScreen(QWidget):
     """Resultado aprovado; mantém a compra até o cliente tocar em Finalizar."""
+
+    POST_PURCHASE_TIMEOUT_SECONDS = 120
 
     UNAVAILABLE_MESSAGES = {
         "CPF": (
@@ -32,6 +38,7 @@ class ConfirmacaoScreen(QWidget):
         self.parent_app = parent
         self.setObjectName("confirmationScreen")
         self.setStyleSheet(Theme.confirmation_stylesheet())
+        self._post_deadline = None
 
         self.pages = QStackedLayout(self)
         self.pages.setContentsMargins(0, 0, 0, 0)
@@ -39,23 +46,29 @@ class ConfirmacaoScreen(QWidget):
         self.notice_page = self._build_notice_page()
         self.pages.addWidget(self.success_page)
         self.pages.addWidget(self.notice_page)
+        self.post_timeout_timer = QTimer(self)
+        self.post_timeout_timer.setInterval(1000)
+        self.post_timeout_timer.timeout.connect(self._tick_post_timeout)
 
     def _build_success_page(self):
         page = QWidget(self)
         page.setProperty("paymentState", "success")
         root = QVBoxLayout(page)
-        root.setContentsMargins(
-            Spacing.XXXL, Spacing.XXXL, Spacing.XXXL, Spacing.XXXL
-        )
-        root.setSpacing(Spacing.MD)
-        root.addStretch(1)
+        root.setContentsMargins(Spacing.XL, Spacing.MD, Spacing.XL, Spacing.MD)
+        root.setSpacing(Spacing.SM)
+        top = QHBoxLayout()
+        top.addStretch(1)
+        self.post_timeout_label = QLabel()
+        self.post_timeout_label.setProperty("role", "sessionTimer")
+        top.addWidget(self.post_timeout_label)
+        root.addLayout(top)
 
         self.lbl_icon = ColoredSvgLabel(
             "checked.svg", Colors.PAYMENT_STATE_FOREGROUND, "✓", page
         )
         self.lbl_icon.setObjectName("paymentStateIcon")
-        self.lbl_icon.setMinimumSize(160, 160)
-        self.lbl_icon.setMaximumSize(200, 200)
+        self.lbl_icon.setMinimumSize(88, 88)
+        self.lbl_icon.setMaximumSize(112, 112)
         root.addWidget(self.lbl_icon, 0, Qt.AlignHCenter)
 
         self.lbl_sucesso = QLabel("PAGAMENTO APROVADO")
@@ -64,8 +77,8 @@ class ConfirmacaoScreen(QWidget):
         self.lbl_sucesso.setWordWrap(True)
         root.addWidget(self.lbl_sucesso)
 
-        self.lbl_subtext = QLabel("Compra concluída")
-        self.lbl_subtext.setObjectName("paymentStateMessage")
+        self.lbl_subtext = QLabel("TOTAL")
+        self.lbl_subtext.setObjectName("paymentStateSupporting")
         self.lbl_subtext.setAlignment(Qt.AlignCenter)
         root.addWidget(self.lbl_subtext)
 
@@ -73,8 +86,6 @@ class ConfirmacaoScreen(QWidget):
         self.lbl_total.setObjectName("paymentStateTotal")
         self.lbl_total.setAlignment(Qt.AlignCenter)
         root.addWidget(self.lbl_total)
-        root.addStretch(1)
-
         self.btn_finalizar = self._button("FINALIZAR", "statePrimary")
         self.btn_finalizar.setProperty("primaryAction", True)
         self.btn_finalizar.clicked.connect(self.finalizar_e_voltar)
@@ -88,20 +99,24 @@ class ConfirmacaoScreen(QWidget):
             "ENVIAR COMPROVANTE POR WHATSAPP", "stateSecondary"
         )
         self.btn_whatsapp.clicked.connect(lambda: self._show_unavailable("WHATSAPP"))
-        for button in (
-            self.btn_finalizar, self.btn_cpf, self.btn_email, self.btn_whatsapp
-        ):
+        for button in (self.btn_cpf, self.btn_email, self.btn_whatsapp):
             root.addWidget(button)
+        root.addSpacing(Spacing.XS)
+        root.addWidget(self.btn_finalizar)
         return page
 
     def _build_notice_page(self):
         page = QWidget(self)
         page.setProperty("paymentState", "success")
         root = QVBoxLayout(page)
-        root.setContentsMargins(
-            Spacing.XXXL, Spacing.XXXL, Spacing.XXXL, Spacing.XXXL
-        )
+        root.setContentsMargins(Spacing.XL, Spacing.LG, Spacing.XL, Spacing.LG)
         root.setSpacing(Spacing.XL)
+        top = QHBoxLayout()
+        top.addStretch(1)
+        self.notice_timeout_label = QLabel()
+        self.notice_timeout_label.setProperty("role", "sessionTimer")
+        top.addWidget(self.notice_timeout_label)
+        root.addLayout(top)
         root.addStretch(2)
         self.notice_title = QLabel()
         self.notice_title.setObjectName("postPaymentNoticeTitle")
@@ -136,6 +151,9 @@ class ConfirmacaoScreen(QWidget):
         self.lbl_total.setText(total)
         self.pages.setCurrentWidget(self.success_page)
         self.btn_finalizar.setFocus()
+        self._post_deadline = time.monotonic() + self.POST_PURCHASE_TIMEOUT_SECONDS
+        self._tick_post_timeout()
+        self.post_timeout_timer.start()
 
     def _show_unavailable(self, action):
         title, message = self.UNAVAILABLE_MESSAGES[action]
@@ -144,19 +162,38 @@ class ConfirmacaoScreen(QWidget):
         self.pages.setCurrentWidget(self.notice_page)
 
     def finalizar_e_voltar(self):
+        self.post_timeout_timer.stop()
+        self._post_deadline = None
         if self.parent_app:
-            self.parent_app.reset_compra()
+            self.parent_app.reset_compra(outcome="finalized")
             self.parent_app.setCurrentWidget(self.parent_app.welcome)
 
     def stop(self):
-        """Mantido para o shutdown central; esta tela não possui mais timers."""
+        self.post_timeout_timer.stop()
+
+    def _tick_post_timeout(self):
+        if self._post_deadline is None:
+            return
+        remaining = max(0, int(self._post_deadline - time.monotonic() + 0.999))
+        minutes, seconds = divmod(remaining, 60)
+        text = f"Finalizando em {minutes:02}:{seconds:02}"
+        self.post_timeout_label.setText(text)
+        self.notice_timeout_label.setText(text)
+        if remaining == 0:
+            self.finalizar_e_voltar()
 
     def resizeEvent(self, event):
         super().resizeEvent(event)
         if self.height() > self.width():
+            self.success_page.layout().setContentsMargins(
+                Spacing.XXXL, Spacing.XXL, Spacing.XXXL, Spacing.XXL
+            )
             self.lbl_icon.setMinimumSize(160, 160)
             self.lbl_icon.setMaximumSize(200, 200)
         else:
+            self.success_page.layout().setContentsMargins(
+                Spacing.XL, Spacing.MD, Spacing.XL, Spacing.MD
+            )
             self.lbl_icon.setMinimumSize(88, 88)
             self.lbl_icon.setMaximumSize(120, 120)
 

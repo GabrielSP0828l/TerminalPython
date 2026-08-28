@@ -143,6 +143,26 @@ class Theme:
             QLabel[state="info"],
             QLabel[state="loading"] {{ color: {Colors.INFO}; }}
 
+            QLabel[role="sessionTimer"] {{
+                min-height: 38px;
+                padding: 0 {Spacing.MD}px;
+                color: {Colors.TEXT_SECONDARY};
+                background-color: {Colors.SURFACE_ELEVATED};
+                border: 1px solid {Colors.BORDER};
+                border-radius: {Radius.SMALL}px;
+                font-size: {FontSize.LABEL}px;
+                font-weight: {FontWeight.BOLD};
+            }}
+            QLabel[role="sessionTimer"][state="warning"] {{
+                color: {Colors.WARNING};
+                border-color: {Colors.WARNING};
+            }}
+            QLabel[role="sessionTimer"][state="critical"] {{
+                color: {Colors.PAYMENT_STATE_FOREGROUND};
+                background-color: {Colors.PAYMENT_ATTENTION_BACKGROUND};
+                border-color: {Colors.PAYMENT_STATE_FOREGROUND};
+            }}
+
             QScrollArea {{
                 border: none;
                 background-color: transparent;
@@ -185,25 +205,29 @@ class Theme:
                 font-weight: {FontWeight.BOLD};
             }}
             QFrame#productRow {{
-                background-color: {Colors.SURFACE};
-                border: 1px solid {Colors.BORDER};
-                border-radius: {Radius.INPUT}px;
+                min-height: 190px;
+                background-color: {Colors.SURFACE_ELEVATED};
+                border: 2px solid {Colors.BORDER};
+                border-radius: {Radius.CARD}px;
             }}
-            QLabel[role="productName"] {{
-                color: {Colors.TEXT_PRIMARY}; font-size: {FontSize.BODY}px;
-                font-weight: {FontWeight.MEDIUM};
+            QLabel[role="productCardName"] {{
+                color: {Colors.TEXT_PRIMARY}; font-size: {FontSize.PRODUCT_NAME}px;
+                font-weight: {FontWeight.BOLD};
             }}
-            QLabel[role="productMeta"] {{ color: {Colors.TEXT_SECONDARY}; font-size: {FontSize.SMALL}px; }}
-            QLabel[role="productPrice"] {{
-                color: {Colors.TEXT_PRIMARY}; font-size: {FontSize.H3}px;
+            QLabel[role="productCardPrice"] {{
+                color: {Colors.TEXT_PRIMARY}; font-size: {FontSize.PRODUCT_PRICE}px;
+                font-weight: {FontWeight.EXTRA_BOLD};
+            }}
+            QLabel[role="productCardQuantity"] {{
+                color: {Colors.TEXT_SECONDARY}; font-size: {FontSize.BODY}px;
                 font-weight: {FontWeight.BOLD};
             }}
             QPushButton[variant="remove"] {{
-                min-width: {TouchSize.MINIMUM}px; max-width: {TouchSize.MINIMUM}px;
-                min-height: {TouchSize.MINIMUM}px; max-height: {TouchSize.MINIMUM}px;
-                padding: 0; background-color: {Colors.SURFACE_ELEVATED};
-                color: {Colors.ERROR}; border: 2px solid {Colors.ERROR};
-                font-size: {FontSize.H3}px;
+                min-width: 124px;
+                min-height: {TouchSize.MINIMUM}px;
+                padding: 0 {Spacing.MD}px; background-color: {Colors.ERROR};
+                color: {Colors.PAYMENT_STATE_FOREGROUND}; border: 2px solid {Colors.ERROR};
+                font-size: {FontSize.LABEL}px;
             }}
         """
 
@@ -214,18 +238,34 @@ class Theme:
                 background-color: {Colors.SURFACE}; border: 1px solid {Colors.BORDER};
                 border-radius: {Radius.CARD}px;
             }}
-            QLabel#confirmationItemCount {{ color: {Colors.TEXT_SECONDARY}; font-size: {FontSize.BODY}px; }}
-            QLabel#confirmationTotal {{
-                color: {Colors.TEXT_PRIMARY}; font-size: {FontSize.H1}px;
-                font-weight: {FontWeight.BOLD};
+            QLabel#purchaseConfirmationTitle {{
+                color: {Colors.TEXT_PRIMARY}; font-size: 40px;
+                font-weight: {FontWeight.EXTRA_BOLD};
             }}
-            QLabel[role="productName"] {{
-                color: {Colors.TEXT_PRIMARY}; font-size: {FontSize.BODY}px;
+            QLabel#confirmationItemCount {{
+                color: {Colors.TEXT_SECONDARY}; font-size: {FontSize.H3}px;
                 font-weight: {FontWeight.MEDIUM};
             }}
-            QLabel[role="productPrice"] {{
-                color: {Colors.TEXT_PRIMARY}; font-size: {FontSize.H3}px;
+            QFrame#confirmationTotalCard {{
+                background-color: {Colors.LIGHT_SURFACE};
+                border: 3px solid {Colors.PRIMARY};
+                border-radius: {Radius.INPUT}px;
+            }}
+            QLabel#confirmationTotalCaption {{
+                color: {Colors.TEXT_ON_LIGHT}; font-size: {FontSize.TOTAL_LABEL}px;
                 font-weight: {FontWeight.BOLD};
+            }}
+            QLabel#confirmationTotal {{
+                color: {Colors.TEXT_ON_LIGHT}; font-size: {FontSize.TOTAL_VALUE}px;
+                font-weight: {FontWeight.EXTRA_BOLD};
+            }}
+            QLabel[role="confirmationProductName"] {{
+                color: {Colors.TEXT_PRIMARY}; font-size: 24px;
+                font-weight: {FontWeight.BOLD};
+            }}
+            QLabel[role="confirmationProductPrice"] {{
+                color: {Colors.TEXT_PRIMARY}; font-size: 30px;
+                font-weight: {FontWeight.EXTRA_BOLD};
             }}
         """
 
@@ -414,7 +454,7 @@ class Theme:
                 background-color: transparent;
             }}
             QLabel#paymentStateTitle {{
-                font-size: {FontSize.H1}px;
+                font-size: {FontSize.STATUS_TITLE}px;
                 font-weight: {FontWeight.EXTRA_BOLD};
                 letter-spacing: 1px;
             }}
@@ -424,7 +464,7 @@ class Theme:
             }}
             QLabel#paymentStateSupporting {{
                 color: {Colors.PAYMENT_STATE_FOREGROUND};
-                font-size: {FontSize.BODY}px;
+                font-size: 24px;
                 font-weight: {FontWeight.MEDIUM};
             }}
             QLabel#paymentStateTotal {{
@@ -446,47 +486,28 @@ class Theme:
             }}
             QWidget[paymentState] QPushButton[variant="stateSecondary"] {{
                 min-height: {TouchSize.SECONDARY_BUTTON}px;
-                background-color: rgba(0, 0, 0, 50);
+                background-color: {Colors.PAYMENT_ACTION_SECONDARY};
                 color: {Colors.PAYMENT_STATE_FOREGROUND};
                 border: 2px solid {Colors.PAYMENT_STATE_FOREGROUND};
             }}
             QWidget[paymentState] QPushButton[variant="stateSecondary"]:pressed {{
-                background-color: rgba(0, 0, 0, 110);
+                background-color: {Colors.BACKGROUND_SECONDARY};
             }}
-            QFrame#paymentCard {{
-                background-color: {Colors.SURFACE};
-                border: 1px solid {Colors.BORDER};
-                border-radius: {Radius.CARD}px;
+            QWidget#paymentLoadingPage {{
+                background-color: {Colors.BACKGROUND_PRIMARY};
             }}
             QLabel#paymentTitle {{
-                color: {Colors.TEXT_PRIMARY}; font-size: {FontSize.H1}px;
+                color: {Colors.TEXT_PRIMARY}; font-size: 36px;
                 font-weight: {FontWeight.BOLD}; letter-spacing: 2px;
             }}
-            QLabel#paymentTotal {{
-                color: {Colors.SUCCESS}; font-size: {FontSize.DISPLAY}px;
-                font-weight: {FontWeight.BOLD};
-            }}
             QLabel#paymentLoading {{
-                color: {Colors.INFO}; font-size: {FontSize.H3}px;
+                color: {Colors.TEXT_PRIMARY}; font-size: 30px;
                 font-weight: {FontWeight.MEDIUM};
             }}
-            QLabel#paymentIcon {{ color: {Colors.INFO}; font-size: 88px; }}
-            QLabel#paymentIcon[state="error"] {{ color: {Colors.ERROR}; }}
             QLabel#paymentLoading[state="error"] {{ color: {Colors.ERROR}; }}
             QLabel#paymentInstructions {{
-                color: {Colors.TEXT_SECONDARY}; font-size: {FontSize.BODY}px;
-                padding: {Spacing.LG}px;
+                color: {Colors.TEXT_SECONDARY}; font-size: 24px;
             }}
-            QLabel#paymentTimer {{
-                color: {Colors.WARNING}; font-size: {FontSize.H2}px;
-                font-weight: {FontWeight.BOLD};
-            }}
-            QProgressBar#paymentProgress {{
-                min-height: 12px; max-height: 12px;
-                background-color: {Colors.DISABLED_BACKGROUND}; border: none;
-                border-radius: 6px;
-            }}
-            QProgressBar#paymentProgress::chunk {{ background-color: {Colors.PRIMARY}; border-radius: 6px; }}
         """
 
     @classmethod

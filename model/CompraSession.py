@@ -1,11 +1,15 @@
 import time
 import uuid
+import logging
 
 from PyQt5.QtCore import QObject, QTimer, pyqtSignal
 
 
+logger = logging.getLogger(__name__)
+
+
 class CompraSession(QObject):
-    SESSION_LIMIT_SECONDS = 15 * 60
+    SESSION_LIMIT_SECONDS = 10 * 60
 
     remaining_changed = pyqtSignal(int)
     expired = pyqtSignal(str)
@@ -18,9 +22,10 @@ class CompraSession(QObject):
     APPROVED = {"APPROVED", "PAID", "PROCESSED"}
     FAILED = {"REJECTED", "FAILED", "CANCELED", "CANCELLED", "EXPIRED", "REFUNDED"}
 
-    def __init__(self, parent=None, clock=None):
+    def __init__(self, parent=None, clock=None, duration_seconds=None):
         super().__init__(parent)
         self._clock = clock or time.monotonic
+        self.duration_seconds = int(duration_seconds or self.SESSION_LIMIT_SECONDS)
         self._timer = QTimer(self)
         self._timer.setInterval(1000)
         self._timer.timeout.connect(self._tick)
@@ -34,6 +39,7 @@ class CompraSession(QObject):
         self._set_state("SCANNING")
         self._timer.start()
         self._emit_remaining()
+        logger.info("[CHECKOUT-SESSION] iniciada duration=%ss", self.duration_seconds)
 
     def begin_payment(self):
         self.start_if_needed()
@@ -88,14 +94,7 @@ class CompraSession(QObject):
         self.payment_id = None
         self.attempt_id = None
         self.last_status = None
-        if self.started_at is not None and self.remaining_seconds() <= 0:
-            # Uma tentativa encerrada/expirada pode ser refeita com o mesmo
-            # carrinho visual, mas passa a ser uma nova geração operacional.
-            self.started_at = self._clock()
-            self.generation = uuid.uuid4().hex
-            self._timer.start()
-            self._emit_remaining()
-        if self.started_at is not None:
+        if self.started_at is not None and self.remaining_seconds() > 0:
             self._set_state("CART_READY")
 
     def mark_timeout_check(self):
@@ -108,14 +107,30 @@ class CompraSession(QObject):
     def mark_success(self):
         self._timer.stop()
         self._set_state("SUCCESS")
+        logger.info("[CHECKOUT-SESSION] pagamento aprovado; timer global encerrado")
 
     def remaining_seconds(self):
         if self.started_at is None:
-            return self.SESSION_LIMIT_SECONDS
+            return self.duration_seconds
         elapsed = max(0, int(self._clock() - self.started_at))
-        return max(0, self.SESSION_LIMIT_SECONDS - elapsed)
+        return max(0, self.duration_seconds - elapsed)
+
+    def mark_reconciliation_pending(self):
+        self._timer.stop()
+        self.payment_in_flight = True
+        self._set_state("RECONCILIATION_PENDING")
+        logger.warning("[CHECKOUT-SESSION] timeout; reconciliação financeira pendente")
+
+    def cancel(self):
+        logger.info("[CHECKOUT-SESSION] cancelada")
+        self.reset()
+
+    def finish(self):
+        logger.info("[CHECKOUT-SESSION] finalizada")
+        self.reset()
 
     def reset(self):
+        previous_state = getattr(self, "state", None)
         if hasattr(self, "_timer"):
             self._timer.stop()
         self.started_at = None
@@ -127,6 +142,8 @@ class CompraSession(QObject):
         self.payment_in_flight = False
         self.last_status = None
         self.state = "IDLE"
+        if previous_state not in (None, "IDLE"):
+            self.state_changed.emit("IDLE")
 
     def stop(self):
         """Interrompe somente o timer local, preservando o estado para shutdown."""
@@ -145,4 +162,5 @@ class CompraSession(QObject):
         remaining = self.remaining_seconds()
         self.remaining_changed.emit(remaining)
         if remaining == 0 and self.mark_timeout_check():
+            logger.warning("[CHECKOUT-SESSION] timeout")
             self.expired.emit(self.generation or "")

@@ -1,5 +1,5 @@
 from PyQt5.QtCore import Qt
-from PyQt5.QtWidgets import QLabel, QVBoxLayout, QWidget
+from PyQt5.QtWidgets import QHBoxLayout, QLabel, QVBoxLayout, QWidget
 
 from styles.svg_icons import ColoredSvgLabel
 from styles.tokens import Colors, Spacing
@@ -28,6 +28,9 @@ class PaymentStateWidget(QWidget):
             Spacing.XXXL, Spacing.XXXL, Spacing.XXXL, Spacing.XXXL
         )
         self.layout_root.setSpacing(Spacing.XL)
+        self.header_layout = QHBoxLayout()
+        self.header_layout.addStretch(1)
+        self.layout_root.addLayout(self.header_layout)
         self.layout_root.addStretch(1)
 
         self.icon = ColoredSvgLabel(
@@ -62,11 +65,22 @@ class PaymentStateWidget(QWidget):
     def set_message(self, message):
         self.message.setText(message)
 
+    def set_timer_widget(self, widget):
+        self.header_layout.addWidget(widget)
+
     def resizeEvent(self, event):
         super().resizeEvent(event)
         if self.height() > self.width():
+            self.layout_root.setContentsMargins(
+                Spacing.XXXL, Spacing.XXXL, Spacing.XXXL, Spacing.XXXL
+            )
+            self.layout_root.setSpacing(Spacing.XL)
             self.icon.setMinimumSize(160, 160)
             self.icon.setMaximumSize(200, 200)
         else:
-            self.icon.setMinimumSize(100, 100)
-            self.icon.setMaximumSize(140, 140)
+            self.layout_root.setContentsMargins(
+                Spacing.XL, Spacing.LG, Spacing.XL, Spacing.LG
+            )
+            self.layout_root.setSpacing(Spacing.MD)
+            self.icon.setMinimumSize(160, 160)
+            self.icon.setMaximumSize(180, 180)

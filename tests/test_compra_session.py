@@ -31,7 +31,27 @@ class CompraSessionTest(unittest.TestCase):
         self.clock.value += 5 * 60
         self.session.begin_payment()
         self.assertEqual(started, self.session.started_at)
-        self.assertEqual(10 * 60, self.session.remaining_seconds())
+        self.assertEqual(5 * 60, self.session.remaining_seconds())
+
+    def test_production_session_is_ten_minutes_and_retry_never_restarts_it(self):
+        self.assertEqual(600, self.session.duration_seconds)
+        self.session.start_if_needed()
+        started = self.session.started_at
+        self.clock.value += 601
+        self.session.prepare_retry()
+        self.assertEqual(started, self.session.started_at)
+        self.assertEqual(0, self.session.remaining_seconds())
+
+    def test_duration_is_configurable_for_fast_timeout_tests(self):
+        short = CompraSession(clock=self.clock, duration_seconds=10)
+        expired = []
+        short.expired.connect(expired.append)
+        short.start_if_needed()
+        self.clock.value += 11
+        short._tick()
+        self.assertEqual(0, short.remaining_seconds())
+        self.assertEqual("TIMEOUT_CHECK", short.state)
+        self.assertEqual([short.generation], expired)
 
     def test_double_click_creates_only_one_active_attempt(self):
         first = self.session.begin_payment()

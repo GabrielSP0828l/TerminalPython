@@ -3,6 +3,7 @@ import logging
 from PyQt5.QtCore import Qt, QTimer
 from PyQt5.QtWidgets import (
     QFrame,
+    QGridLayout,
     QHBoxLayout,
     QLabel,
     QLineEdit,
@@ -20,9 +21,61 @@ from model.Item import Item
 from model.Produtos import Produtos
 from styles.theme import Theme
 from styles.tokens import Spacing, TouchSize
+from telas.SessionTimerLabel import SessionTimerLabel
 
 
 logger = logging.getLogger(__name__)
+
+
+class ProductCard(QFrame):
+    """Card touchscreen que apresenta somente dados úteis ao consumidor."""
+
+    def __init__(self, item, remove_callback, parent=None):
+        super().__init__(parent)
+        self.item = item
+        self.setObjectName("productRow")
+        self.setMinimumHeight(190)
+
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(Spacing.LG, Spacing.MD, Spacing.LG, Spacing.MD)
+        layout.setSpacing(Spacing.SM)
+
+        self.name = QLabel()
+        self.name.setProperty("role", "productCardName")
+        self.name.setWordWrap(True)
+        self.name.setAlignment(Qt.AlignCenter)
+        self.name.setMaximumHeight(68)
+        self.price = QLabel()
+        self.price.setProperty("role", "productCardPrice")
+        self.price.setAlignment(Qt.AlignCenter)
+        self.quantity = QLabel()
+        self.quantity.setProperty("role", "productCardQuantity")
+        self.quantity.setAlignment(Qt.AlignVCenter | Qt.AlignLeft)
+        remove = QPushButton("REMOVER")
+        remove.setProperty("variant", "remove")
+        remove.setMinimumHeight(TouchSize.MINIMUM)
+        remove.setAccessibleName(f"Remover {item.produto.nome}")
+        remove.clicked.connect(remove_callback)
+
+        bottom = QHBoxLayout()
+        bottom.setSpacing(Spacing.MD)
+        bottom.addWidget(self.quantity, 1)
+        bottom.addWidget(remove)
+        layout.addWidget(self.name)
+        layout.addWidget(self.price)
+        layout.addStretch(1)
+        layout.addLayout(bottom)
+        self.update_item(item)
+
+    def update_item(self, item):
+        self.item = item
+        full_name = str(item.produto.nome or "Produto")
+        display_name = full_name if len(full_name) <= 52 else f"{full_name[:49].rstrip()}…"
+        self.name.setText(display_name)
+        self.name.setToolTip(full_name)
+        self.name.setAccessibleName(full_name)
+        self.price.setText(f"R$ {item.subtotal():.2f}".replace(".", ","))
+        self.quantity.setText(f"Qtd: {item.quantidade}")
 
 
 class TerminalScreen(QWidget):
@@ -38,6 +91,7 @@ class TerminalScreen(QWidget):
         self.total = 0.0
         self.id_contador = 1
         self.peso_total_venda = 0.0
+        self._grid_columns = 2
 
         self.listener = PaymentListener(self)
         self.listener.payment_status_signal.connect(
@@ -65,39 +119,34 @@ class TerminalScreen(QWidget):
 
     def _montar_interface(self):
         root = QVBoxLayout(self)
-        root.setContentsMargins(Spacing.XL, Spacing.XL, Spacing.XL, Spacing.XL)
-        root.setSpacing(Spacing.LG)
+        root.setContentsMargins(Spacing.LG, Spacing.LG, Spacing.LG, Spacing.LG)
+        root.setSpacing(Spacing.MD)
 
         self.header_card = QFrame(self)
         self.header_card.setObjectName("cartHeader")
-        header = QVBoxLayout(self.header_card)
-        header.setContentsMargins(Spacing.XL, Spacing.LG, Spacing.XL, Spacing.LG)
-        header.setSpacing(Spacing.XS)
+        header = QHBoxLayout(self.header_card)
+        header.setContentsMargins(Spacing.LG, Spacing.SM, Spacing.LG, Spacing.SM)
+        header.setSpacing(Spacing.MD)
 
         title = QLabel("SUA COMPRA")
         title.setProperty("role", "pageTitle")
-        title.setAlignment(Qt.AlignCenter)
-        subtitle = QLabel("Escaneie os produtos e confira a lista abaixo")
-        subtitle.setProperty("role", "pageSubtitle")
-        subtitle.setAlignment(Qt.AlignCenter)
-        subtitle.setWordWrap(True)
+        title.setAlignment(Qt.AlignVCenter | Qt.AlignLeft)
+        self.session_timer = SessionTimerLabel(self.parent_app.compra_session, self)
         header.addWidget(title)
-        header.addWidget(subtitle)
+        header.addStretch(1)
+        header.addWidget(self.session_timer)
 
         self.scroll = QScrollArea(self)
         self.scroll.setWidgetResizable(True)
         self.productsContainer = QWidget()
-        self.productsLayout = QVBoxLayout(self.productsContainer)
+        self.productsLayout = QGridLayout(self.productsContainer)
         self.productsLayout.setContentsMargins(0, 0, 0, 0)
         self.productsLayout.setSpacing(Spacing.MD)
-        self.productsLayout.setAlignment(Qt.AlignTop)
+        self.productsLayout.setAlignment(Qt.AlignTop | Qt.AlignHCenter)
         self.scroll.setWidget(self.productsContainer)
 
-        self.empty_label = QLabel("Nenhum produto escaneado")
-        self.empty_label.setProperty("role", "pageSubtitle")
-        self.empty_label.setAlignment(Qt.AlignCenter)
-        self.empty_label.setMinimumHeight(120)
-        self.productsLayout.addWidget(self.empty_label)
+        self.empty_label = None
+        self._show_empty_state()
 
         scanner_layout = QHBoxLayout()
         scanner_layout.setSpacing(Spacing.MD)
@@ -117,8 +166,8 @@ class TerminalScreen(QWidget):
         self.footer_card = QFrame(self)
         self.footer_card.setObjectName("cartFooter")
         footer = QVBoxLayout(self.footer_card)
-        footer.setContentsMargins(Spacing.XL, Spacing.LG, Spacing.XL, Spacing.XL)
-        footer.setSpacing(Spacing.MD)
+        footer.setContentsMargins(Spacing.LG, Spacing.SM, Spacing.LG, Spacing.MD)
+        footer.setSpacing(Spacing.SM)
 
         total_row = QHBoxLayout()
         total_label = QLabel("TOTAL")
@@ -154,23 +203,33 @@ class TerminalScreen(QWidget):
         root.addLayout(scanner_layout)
         root.addWidget(self.footer_card)
 
-    def _texto_linha(self, id_linha, codigo, item):
-        return (
-            f"{item.produto.nome}\n"
-            f"{item.quantidade} × R$ {item.produto.preco:.2f}  •  "
-            f"Código {codigo}\nSubtotal: R$ {item.subtotal():.2f}"
-        )
-
     def atualizar_interface(self):
-        self.totalBox.setText(self.carrinho.total_formatado())
+        self.totalBox.setText(self.carrinho.total_formatado().replace(".", ","))
         self.peso_display.setText(f"{self.peso_total_venda:.3f} KG")
 
     def atualizar_linha(self, codigo, label):
         item = self.carrinho.buscar_item(codigo)
         if not item or codigo not in self.linhas:
             return
-        _, _, id_linha = self.linhas[codigo]
-        label.setText(self._texto_linha(id_linha, codigo, item))
+        _, card, _ = self.linhas[codigo]
+        card.update_item(item)
+
+    def _show_empty_state(self):
+        self.empty_label = QLabel("Nenhum produto escaneado")
+        self.empty_label.setProperty("role", "pageSubtitle")
+        self.empty_label.setAlignment(Qt.AlignCenter)
+        self.empty_label.setMinimumHeight(120)
+        self.productsLayout.addWidget(self.empty_label, 0, 0, 1, self._grid_columns)
+
+    def _relayout_product_cards(self):
+        cards = [entry[0] for entry in self.linhas.values()]
+        for card in cards:
+            self.productsLayout.removeWidget(card)
+        for index, card in enumerate(cards):
+            row, column = divmod(index, self._grid_columns)
+            self.productsLayout.addWidget(card, row, column)
+        for column in range(self._grid_columns):
+            self.productsLayout.setColumnStretch(column, 1)
 
     def processar_evento_pagamento(self, data):
         if self.parent_app:
@@ -201,11 +260,8 @@ class TerminalScreen(QWidget):
             if widget is not None:
                 widget.setParent(None)
                 widget.deleteLater()
-        self.empty_label = QLabel("Nenhum produto escaneado")
-        self.empty_label.setProperty("role", "pageSubtitle")
-        self.empty_label.setAlignment(Qt.AlignCenter)
-        self.empty_label.setMinimumHeight(120)
-        self.productsLayout.addWidget(self.empty_label)
+        self.empty_label = None
+        self._show_empty_state()
         self.total = 0.0
         self.id_contador = 1
         self.peso_total_venda = 0.0
@@ -246,14 +302,11 @@ class TerminalScreen(QWidget):
         self.carrinho.remover_item(codigo_produto)
         self.linhas.pop(codigo_produto, None)
         widget_linha.deleteLater()
+        self._relayout_product_cards()
         self.atualizar_interface()
         if self.carrinho.vazio():
-            self.parent_app.compra_session.reset()
-            self.empty_label = QLabel("Nenhum produto escaneado")
-            self.empty_label.setProperty("role", "pageSubtitle")
-            self.empty_label.setAlignment(Qt.AlignCenter)
-            self.empty_label.setMinimumHeight(120)
-            self.productsLayout.addWidget(self.empty_label)
+            self.parent_app.compra_session.cancel()
+            self._show_empty_state()
 
     def readProduct(self):
         barcode = self.codigo_barras.text().strip()
@@ -292,31 +345,15 @@ class TerminalScreen(QWidget):
             item = self.carrinho.buscar_item(codigo)
             id_linha = self.id_contador
 
-            linha_widget = QFrame()
-            linha_widget.setObjectName("productRow")
-            layout_linha = QHBoxLayout(linha_widget)
-            layout_linha.setContentsMargins(
-                Spacing.LG, Spacing.MD, Spacing.MD, Spacing.MD
+            linha_widget = ProductCard(
+                item,
+                lambda _, c=codigo: self.remover_produto(
+                    c, self.linhas[c][0]
+                ),
+                self.productsContainer,
             )
-            layout_linha.setSpacing(Spacing.MD)
-
-            lbl_texto = QLabel(self._texto_linha(id_linha, codigo, item))
-            lbl_texto.setProperty("role", "productName")
-            lbl_texto.setWordWrap(True)
-            lbl_texto.setMinimumHeight(82)
-
-            btn_remover = QPushButton("×")
-            btn_remover.setProperty("variant", "remove")
-            btn_remover.setFixedSize(TouchSize.MINIMUM, TouchSize.MINIMUM)
-            btn_remover.setAccessibleName(f"Remover {produto.nome}")
-            btn_remover.clicked.connect(
-                lambda _, c=codigo, w=linha_widget: self.remover_produto(c, w)
-            )
-
-            layout_linha.addWidget(lbl_texto, 1)
-            layout_linha.addWidget(btn_remover)
-            self.productsLayout.addWidget(linha_widget)
-            self.linhas[codigo] = (linha_widget, lbl_texto, id_linha)
+            self.linhas[codigo] = (linha_widget, linha_widget, id_linha)
+            self._relayout_product_cards()
 
             self.atualizar_interface()
             self.id_contador += 1
@@ -331,3 +368,16 @@ class TerminalScreen(QWidget):
 
     def mostrar_aviso(self, titulo, mensagem):
         QMessageBox.warning(self, titulo, mensagem, QMessageBox.Ok)
+
+    def resizeEvent(self, event):
+        super().resizeEvent(event)
+        columns = 2 if self.width() >= 800 else 1
+        if columns != self._grid_columns:
+            self._grid_columns = columns
+            if self.empty_label is not None:
+                self.productsLayout.removeWidget(self.empty_label)
+                self.productsLayout.addWidget(
+                    self.empty_label, 0, 0, 1, self._grid_columns
+                )
+            else:
+                self._relayout_product_cards()

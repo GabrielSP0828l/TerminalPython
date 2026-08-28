@@ -33,7 +33,7 @@ class ParentStub(QWidget):
     def setCurrentWidget(self, widget):
         self.current = widget
 
-    def reset_compra(self):
+    def reset_compra(self, outcome="cancelled"):
         self.reset_calls += 1
         self.compra_session.reset()
 
@@ -77,6 +77,21 @@ class PaymentFlowTest(unittest.TestCase):
         self.screen._apply_status("order-a", "WAITING_PAYMENT")
         self.assertTrue(self.parent.compra_session.payment_in_flight)
         self.assertIn("Aguardando", self.screen.loading.text())
+
+    def test_global_timeout_without_remote_payment_returns_to_welcome(self):
+        self.parent.compra_session.reset()
+        self.parent.compra_session.start_if_needed()
+        generation = self.parent.compra_session.generation
+        self.screen.tratar_timeout_global(generation)
+        self.assertEqual(1, self.parent.reset_calls)
+        self.assertIs(self.parent.welcome, self.parent.current)
+
+    def test_global_timeout_with_remote_payment_starts_bounded_reconciliation(self):
+        generation = self.parent.compra_session.generation
+        self.screen.tratar_timeout_global(generation)
+        self.assertTrue(self.screen.timeout_pending)
+        self.assertTrue(self.screen.final_recovery_timer.isActive())
+        self.assertIs(self.screen.loading_page, self.screen.pages.currentWidget())
 
     def test_reconnect_checks_backend_and_approved_opens_success(self):
         with patch.object(self.screen, "reconciliar_estado") as reconcile:

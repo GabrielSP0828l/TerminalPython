@@ -229,19 +229,28 @@ class MainWindow(QMainWindow):
             return
         super().keyPressEvent(event)
 
-    def reset_compra(self):
+    def reset_compra(self, outcome="cancelled"):
         if self.pagamento is not None:
             self.pagamento.parar_espera()
         if self.app_payment is not None:
             self.app_payment.parar_espera()
         if self.terminal is not None:
             self.terminal.liberar_tela()
-        self.compra_session.reset()
+        if outcome == "finalized":
+            self.compra_session.finish()
+        else:
+            self.compra_session.cancel()
 
     # -----------------------------
     # HELPERS
     # -----------------------------
     def setCurrentWidget(self, widget):
+        if (
+            widget is self.terminal
+            and self.compra_session.state == "RECONCILIATION_PENDING"
+        ):
+            self.pagamento.mostrar_reconciliacao_pendente()
+            return
         if (
             self.stacked_widget.currentWidget() is self.configuracao
             and widget is not self.configuracao

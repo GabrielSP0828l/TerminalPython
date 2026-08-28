@@ -11,6 +11,7 @@ from PyQt5.QtWidgets import (
 
 from styles.theme import Theme
 from styles.tokens import Spacing, TouchSize
+from telas.SessionTimerLabel import SessionTimerLabel
 
 
 class ConfirmacaoCompraScreen(QWidget):
@@ -24,20 +25,26 @@ class ConfirmacaoCompraScreen(QWidget):
         self.setStyleSheet(Theme.purchase_confirmation_stylesheet())
 
         root = QVBoxLayout(self)
-        root.setContentsMargins(Spacing.XL, Spacing.XL, Spacing.XL, Spacing.XL)
-        root.setSpacing(Spacing.LG)
+        root.setContentsMargins(Spacing.LG, Spacing.LG, Spacing.LG, Spacing.LG)
+        root.setSpacing(Spacing.SM)
 
         title = QLabel("CONFIRME SUA COMPRA")
-        title.setProperty("role", "pageTitle")
-        title.setAlignment(Qt.AlignCenter)
+        title.setObjectName("purchaseConfirmationTitle")
+        title.setAlignment(Qt.AlignVCenter | Qt.AlignLeft)
+        title_row = QHBoxLayout()
+        title_row.setSpacing(Spacing.MD)
+        title_row.addWidget(title)
+        title_row.addStretch(1)
+        self.session_timer = SessionTimerLabel(self.parent_app.compra_session, self)
+        title_row.addWidget(self.session_timer)
         self.item_count = QLabel()
         self.item_count.setObjectName("confirmationItemCount")
-        self.item_count.setAlignment(Qt.AlignCenter)
+        self.item_count.setAlignment(Qt.AlignLeft)
 
         self.card = QFrame(self)
         self.card.setObjectName("purchaseConfirmationCard")
         card_layout = QVBoxLayout(self.card)
-        card_layout.setContentsMargins(Spacing.LG, Spacing.LG, Spacing.LG, Spacing.LG)
+        card_layout.setContentsMargins(Spacing.MD, Spacing.MD, Spacing.MD, Spacing.MD)
 
         self.scroll = QScrollArea()
         self.scroll.setWidgetResizable(True)
@@ -49,9 +56,12 @@ class ConfirmacaoCompraScreen(QWidget):
         self.scroll.setWidget(self.items_widget)
         card_layout.addWidget(self.scroll)
 
-        total_row = QHBoxLayout()
+        total_card = QFrame(self)
+        total_card.setObjectName("confirmationTotalCard")
+        total_row = QHBoxLayout(total_card)
+        total_row.setContentsMargins(Spacing.LG, Spacing.XS, Spacing.LG, Spacing.XS)
         total_caption = QLabel("TOTAL")
-        total_caption.setProperty("role", "sectionTitle")
+        total_caption.setObjectName("confirmationTotalCaption")
         self.total = QLabel("R$ 0,00")
         self.total.setObjectName("confirmationTotal")
         total_row.addWidget(total_caption)
@@ -67,12 +77,16 @@ class ConfirmacaoCompraScreen(QWidget):
         self.btn_confirmar.setMinimumHeight(TouchSize.PRIMARY_BUTTON)
         self.btn_confirmar.clicked.connect(self.confirmar)
 
-        root.addWidget(title)
+        actions = QHBoxLayout()
+        actions.setSpacing(Spacing.MD)
+        actions.addWidget(self.btn_voltar, 1)
+        actions.addWidget(self.btn_confirmar, 2)
+
+        root.addLayout(title_row)
         root.addWidget(self.item_count)
         root.addWidget(self.card, 1)
-        root.addLayout(total_row)
-        root.addWidget(self.btn_confirmar)
-        root.addWidget(self.btn_voltar)
+        root.addWidget(total_card)
+        root.addLayout(actions)
 
     @property
     def carrinho(self):
@@ -93,18 +107,18 @@ class ConfirmacaoCompraScreen(QWidget):
         for cart_item in self.carrinho.listar_itens():
             row = QFrame()
             row.setProperty("role", "information")
-            layout = QVBoxLayout(row)
+            layout = QHBoxLayout(row)
             layout.setContentsMargins(Spacing.LG, Spacing.MD, Spacing.LG, Spacing.MD)
             name = QLabel(f"{cart_item.quantidade} × {cart_item.produto.nome}")
-            name.setProperty("role", "productName")
+            name.setProperty("role", "confirmationProductName")
             name.setWordWrap(True)
-            price = QLabel(f"R$ {cart_item.subtotal():.2f}")
-            price.setProperty("role", "productPrice")
+            price = QLabel(f"R$ {cart_item.subtotal():.2f}".replace(".", ","))
+            price.setProperty("role", "confirmationProductPrice")
             price.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
-            layout.addWidget(name)
-            layout.addWidget(price)
+            layout.addWidget(name, 3)
+            layout.addWidget(price, 1)
             self.items_layout.addWidget(row)
-        self.total.setText(self.carrinho.total_formatado())
+        self.total.setText(self.carrinho.total_formatado().replace(".", ","))
 
     def voltar(self):
         self.parent_app.setCurrentWidget(self.parent_app.terminal)
