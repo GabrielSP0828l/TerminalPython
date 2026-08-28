@@ -1,0 +1,51 @@
+* [33m9b70c68[m[33m ([m[1;36mHEAD[m[33m -> [m[1;32mmain[m[33m, [m[1;31morigin/main[m[33m, [m[1;31morigin/HEAD[m[33m)[m updats
+*   [33ma30184b[m Merge remote-tracking branch 'origin/main'
+[32m|[m[33m\[m  
+[32m|[m * [33m1c083b6[m Revert "Atualiza terminal e ignora arquivos locais"
+[32m|[m * [33mb1d8c11[m Atualiza terminal e ignora arquivos locais
+* [33m|[m [33mda802d1[m nova implementação de call back
+[33m|[m[33m/[m  
+* [33m120711c[m ignora ambiente virtual
+* [33md22348f[m mensagem de aviso
+* [33m60b6643[m mensagem de aviso
+* [33m87c1763[m mensagem de aviso
+* [33m6a2b7c0[m deixando a tela de bom vindo responsiva
+* [33m2ddcd96[m deixando a tela de bom vindo responsiva
+* [33mea9473f[m deixando a tela de bom vindo responsiva
+* [33m5cdd2b6[m deixando a tela de bom vindo responsiva
+* [33maf36885[m deixando a tela de bom vindo responsiva
+* [33m4b2d8b8[m deixando a tela de bom vindo responsiva
+* [33m246b4f0[m deixando a tela de bom vindo responsiva
+* [33m6c7296c[m deixando a tela de bom vindo responsiva
+* [33m059c3e1[m deixando a tela de bom vindo responsiva
+* [33m492bb54[m deixando a tela de bom vindo responsiva
+* [33m3ce2961[m deixando a tela de bom vindo responsiva
+* [33m727c87e[m deixando a tela de bom vindo responsiva
+* [33me1448bd[m deixando a tela de bom vindo responsiva
+* [33m7447711[m deixando a tela de bom vindo responsiva
+* [33m494b884[m req
+* [33m2e4791a[m req
+* [33m2f0c008[m req
+* [33me173aa4[m req
+* [33me12a3c1[m req
+* [33mad5d042[m retirando o listener de pagamento do redis e usando websocket. otimizando imports e centralizando as urls no .env
+* [33m76af5d0[m geranciando pagamento pelo back-end e finalizando logica de pagamento usando o redis
+* [33m66dc1db[m geranciando pagamento pelo back-end e finalizando logica de pagamento usando o redis
+* [33m10567a6[m geranciando pagamento pelo back-end e finalizando logica de pagamento usando o redis
+* [33m02b5f18[m geranciando pagamento pelo back-end e finalizando logica de pagamento usando o redis
+* [33mbd67288[m geranciando pagamento pelo back-end e finalizando logica de pagamento usando o redis
+* [33m9f2609f[m geranciando pagamento pelo back-end e finalizando logica de pagamento usando o redis
+* [33m72d39da[m geranciando pagamento pelo back-end e finalizando logica de pagamento usando o redis
+* [33ma35cd5b[m geranciando pagamento pelo back-end e finalizando logica de pagamento usando o redis
+* [33m75ed9be[m geranciando pagamento pelo back-end
+* [33me84ee53[m conectando terminal ao app
+* [33mea76567[m terminal usando o carrinho como maestro para pagamentos e controle do sistema
+* [33m14d45a7[m adicionando memoria em cache e sinconização com o bando de dados
+*   [33m7a4d4c2[m Resolve merge conflicts
+[34m|[m[35m\[m  
+[34m|[m *   [33m8ed3008[m Atualização terminal inteligente
+[34m|[m [36m|[m[1;31m\[m  
+[34m|[m [36m|[m * [33m7ef3cd1[m Atualização Final: Balança
+[34m|[m [36m|[m * [33mcbcee3b[m Correção: Remoção de dependências
+[34m|[m * [33m6e1d583[m[33m ([m[1;31morigin/master[m[33m)[m Integração PIX Mercado Pago e melhorias no terminal
+* [33m4cc600d[m Projeto corrigido
