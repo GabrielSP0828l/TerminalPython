@@ -37,4 +37,6 @@ Enquanto `CompraSession.payment_in_flight=true`, `cartId`, `orderId` e `paymentI
 
 `Finalizar` apenas abre o resumo. `Confirmar e pagar` é desabilitado imediatamente e muda para “Preparando...” antes do worker. A cobrança aceita mostra a instrução da Point em laranja; processamento usa loading; falha definitiva usa vermelho e preserva o carrinho; aprovação usa verde.
 
+No display de 7 polegadas (`1024×600`), o carrinho usa grid rolável de três colunas e footer fixo; a sessão global continua limitada a 10 minutos. A disposição e as métricas visuais estão em [[telas]].
+
 Não existe mais reset automático após `APPROVED`. A Order, Payment e compra local permanecem referenciadas na tela verde até `FINALIZAR`. CPF/e-mail/WhatsApp são opcionais, mas seus contratos ainda não existem no backend; a UI informa essa indisponibilidade e não simula envio ou persistência.

@@ -14,7 +14,7 @@ Voltar para [[00-index]]. Padrão em [[design-system]] e portrait em [[layout-ve
 | `AdminAuthScreen` | senha obrigatória antes da administração | sim | tema central, teclado alfanumérico reutilizado |
 | `CadastroTerminalScreen` | QR e polling de ativação | sim | tema central, reflow portrait/landscape |
 | `ConfiguracaoScreen` | menu administrativo, reset e encerramento | sim, após senha | tema central |
-| `TerminalScreen` | scanner, lista, total e Finalizar | sim | tema central, lista rolável |
+| `TerminalScreen` | scanner, grid, total e Finalizar | sim | catálogo rolável; 3 colunas em 1024×600 |
 | `ConfirmacaoCompraScreen` | resumo antes do Point | sim | nova; lê o carrinho atual |
 | `PagamentoScreen` | preparação, instrução Point, processamento e falha | sim | páginas fullscreen semânticas |
 | `ConfirmacaoScreen` | resultado aprovado e ações pós-compra | sim | verde fullscreen; reset somente em Finalizar |
@@ -65,11 +65,15 @@ TelaBemVindos
 
 ## Carrinho
 
-A lista ocupa a área flexível e usa cards com nome quebrável, quantidade, preço, código e subtotal. O botão remover mede 56 × 56. Scanner/peso permanecem operacionais. Total, “Cancelar compra” e “Finalizar” ficam visíveis fora do scroll. `Finalizar` não cria Carrinho remoto, Order ou cobrança.
+O catálogo ocupa a área flexível e usa `QGridLayout` real dentro de `QScrollArea`. Em `1024×600`, são 3 colunas com cards de `292×224`; a largura responsiva fica entre 250 e 292 px, limitada a quatro colunas. O espaçamento é 12 px, a barra horizontal fica desativada e a altura do container acompanha a quantidade de linhas para o scroll vertical não sobrepor cards.
+
+Cada card mostra nome em até duas linhas (26 px), preço/subtotal (34 px), quantidade (22 px) e `REMOVER`; dados técnicos não aparecem. Scanner/peso permanecem operacionais. O footer horizontal mantém `TOTAL` (28 px), valor (46 px), “Cancelar compra” e “Finalizar” (26 px/72 px) fora do scroll. `Finalizar` não cria Carrinho remoto, Order ou cobrança.
 
 ## Confirmação pré-pagamento
 
 `ConfirmacaoCompraScreen` não possui `Carrinho`. A propriedade `carrinho` sempre retorna `MainWindow.terminal.carrinho`. `mostrar_resumo()` reconstrói apenas widgets de apresentação com quantidade total, linhas e total atual. Voltar preserva itens. Confirmar desabilita imediatamente a ação e chama o método Point já existente.
+
+No display físico, o título usa 40 px; nome usa 26 px; quantidade/preço usam 24 px; o total usa fundo branco sólido, texto escuro e valor de 48 px. Os dois botões usam 26 px e altura mínima de 72 px.
 
 ## Pagamento e resultado
 
@@ -81,4 +85,4 @@ Preparação mostra loading antes do worker HTTP. Depois de uma resposta Point v
 
 ## Testes visuais
 
-Os testes Qt offscreen cobrem todas as páginas acima em `768x1360`, targets visíveis de pelo menos 56 px, nome longo, preço grande, lista/resumo, erro e overlay. Cadastro também continua coberto em `600x1024`, `1024x600` e `800x480`.
+Os testes Qt offscreen cobrem todas as páginas acima em `768x1360`, targets visíveis de pelo menos 56 px, nome longo, preço grande, grid/resumo, erro e overlay. O carrinho possui validação específica em `1024×600` para três colunas, dimensões, fontes e ausência de scroll horizontal. Cadastro também continua coberto em `600x1024`, `1024x600` e `800x480`.

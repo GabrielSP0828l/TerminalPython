@@ -10,7 +10,7 @@ Voltar para [[00-index]]. Telas em [[telas]] e contrato em [[api-backend]].
 
 1. scanner preenche o input e envia Enter;
 2. `readProduct()` consulta o produto ativo no SQLite;
-3. primeiro scan cria um `Item` e inicia o prazo global de 15 minutos;
+3. primeiro scan cria um `Item` e inicia o prazo global de 10 minutos;
 4. scans repetidos incrementam quantidade;
 5. remover elimina a linha inteira; carrinho vazio reseta a sessão local.
 

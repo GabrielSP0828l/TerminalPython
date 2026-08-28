@@ -202,6 +202,15 @@ Voltar para [o índice](00-index.md). Nenhuma melhoria abaixo foi implementada n
 - bloqueia `Esc`/fechamento comum e centraliza shutdown cooperativo e idempotente;
 - não reseta compra nem cancela cobrança em andamento.
 
+## MEL-028 — Grid de catálogo para o display físico
+
+**Status:** implementada em 28 de agosto de 2026.
+
+- 3 colunas em `1024×600`, cards de 250–292 px e scroll somente vertical;
+- nomes em duas linhas sem redução de fonte;
+- total/ações fixos e confirmação com tipografia/contraste ampliados;
+- validação automatizada e visual na resolução física.
+
 ## MEL-023 — Coalescer invalidações de catálogo em tempo real
 
 **Status:** implementada em 24 de agosto de 2026.

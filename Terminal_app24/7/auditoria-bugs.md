@@ -314,6 +314,15 @@ O toque longo abria diretamente as configurações. Agora uma senha de ambiente,
 
 Falha, instrução e sucesso eram cards e a aprovação apagava a compra após cinco segundos. Agora os estados são fullscreen, usam SVG branco/ícone + texto + cor, retry não cria cobrança e `FINALIZAR` é o único reset normal. CPF/comprovantes continuam explicitamente pendentes do backend.
 
+## BUG-038 — Carrinho parecia lista e perdia legibilidade no display de 7 polegadas
+
+**Status:** corrigido em 28 de agosto de 2026.
+
+- **Causa:** o `resizeEvent` limitava `TerminalScreen` a duas colunas em qualquer largura a partir de 800 px; os cards expandiam e aparentavam linhas largas. O conteúdo do grid também não forçava a altura total das linhas no `QScrollArea`.
+- **Impacto:** baixo aproveitamento de `1024×600`, tipografia percebida como pequena e risco de sobreposição visual ao formar uma segunda linha.
+- **Correção:** cálculo pelo viewport, 3 colunas em 1024 px, cards `292×224`, altura mínima do conteúdo por quantidade de linhas, scroll apenas vertical, footer horizontal fixo e tipografia/contraste ampliados no carrinho e confirmação.
+- **Validação:** teste Qt automatizado com quarta mercadoria em `(row=1, column=0)` e render offscreen com seis mercadorias em `1024×600`.
+
 ## BUG-030 — Sync somente no startup e paths relativos
 
 **Status:** corrigido em 24 de agosto de 2026.

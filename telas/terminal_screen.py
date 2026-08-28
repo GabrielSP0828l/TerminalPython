@@ -1,6 +1,7 @@
 import logging
 
 from PyQt5.QtCore import Qt, QTimer
+from PyQt5.QtGui import QFontMetrics
 from PyQt5.QtWidgets import (
     QFrame,
     QGridLayout,
@@ -30,11 +31,13 @@ logger = logging.getLogger(__name__)
 class ProductCard(QFrame):
     """Card touchscreen que apresenta somente dados úteis ao consumidor."""
 
+    HEIGHT = 224
+
     def __init__(self, item, remove_callback, parent=None):
         super().__init__(parent)
         self.item = item
         self.setObjectName("productRow")
-        self.setMinimumHeight(190)
+        self.setFixedHeight(self.HEIGHT)
 
         layout = QVBoxLayout(self)
         layout.setContentsMargins(Spacing.LG, Spacing.MD, Spacing.LG, Spacing.MD)
@@ -44,7 +47,7 @@ class ProductCard(QFrame):
         self.name.setProperty("role", "productCardName")
         self.name.setWordWrap(True)
         self.name.setAlignment(Qt.AlignCenter)
-        self.name.setMaximumHeight(68)
+        self.name.setFixedHeight(68)
         self.price = QLabel()
         self.price.setProperty("role", "productCardPrice")
         self.price.setAlignment(Qt.AlignCenter)
@@ -69,17 +72,56 @@ class ProductCard(QFrame):
 
     def update_item(self, item):
         self.item = item
-        full_name = str(item.produto.nome or "Produto")
-        display_name = full_name if len(full_name) <= 52 else f"{full_name[:49].rstrip()}…"
-        self.name.setText(display_name)
-        self.name.setToolTip(full_name)
-        self.name.setAccessibleName(full_name)
+        self.full_name = str(item.produto.nome or "Produto")
+        self._update_display_name()
+        self.name.setToolTip(self.full_name)
+        self.name.setAccessibleName(self.full_name)
         self.price.setText(f"R$ {item.subtotal():.2f}".replace(".", ","))
         self.quantity.setText(f"Qtd: {item.quantidade}")
+
+    def set_card_width(self, width):
+        self.setFixedWidth(width)
+        self._update_display_name()
+
+    def _update_display_name(self):
+        """Limita visualmente o nome a duas linhas sem reduzir a fonte."""
+        self.name.ensurePolished()
+        metrics = QFontMetrics(self.name.font())
+        available_width = max(1, self.width() - (2 * Spacing.LG))
+        words = self.full_name.split()
+        if not words:
+            self.name.setText("Produto")
+            return
+
+        first_line = words.pop(0)
+        while words:
+            candidate = f"{first_line} {words[0]}"
+            if metrics.horizontalAdvance(candidate) > available_width:
+                break
+            first_line = candidate
+            words.pop(0)
+
+        display_first_line = metrics.elidedText(
+            first_line, Qt.ElideRight, available_width
+        )
+        if not words:
+            self.name.setText(
+                display_first_line
+            )
+            return
+
+        second_line = metrics.elidedText(
+            " ".join(words), Qt.ElideRight, available_width
+        )
+        self.name.setText(f"{display_first_line}\n{second_line}")
 
 
 class TerminalScreen(QWidget):
     """Carrinho visual; o objeto ``carrinho`` é a fonte única da compra atual."""
+
+    GRID_MIN_CARD_WIDTH = 250
+    GRID_MAX_CARD_WIDTH = 292
+    GRID_MAX_COLUMNS = 4
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -91,7 +133,8 @@ class TerminalScreen(QWidget):
         self.total = 0.0
         self.id_contador = 1
         self.peso_total_venda = 0.0
-        self._grid_columns = 2
+        self._grid_columns = 3
+        self._grid_card_width = self.GRID_MAX_CARD_WIDTH
 
         self.listener = PaymentListener(self)
         self.listener.payment_status_signal.connect(
@@ -110,6 +153,7 @@ class TerminalScreen(QWidget):
 
         self.setProperty("role", "page")
         self.setObjectName("cartScreen")
+        self.setAttribute(Qt.WA_StyledBackground, True)
         self.setStyleSheet(Theme.cart_stylesheet())
         self._montar_interface()
 
@@ -138,6 +182,8 @@ class TerminalScreen(QWidget):
 
         self.scroll = QScrollArea(self)
         self.scroll.setWidgetResizable(True)
+        self.scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        self.scroll.setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOn)
         self.productsContainer = QWidget()
         self.productsLayout = QGridLayout(self.productsContainer)
         self.productsLayout.setContentsMargins(0, 0, 0, 0)
@@ -165,19 +211,15 @@ class TerminalScreen(QWidget):
 
         self.footer_card = QFrame(self)
         self.footer_card.setObjectName("cartFooter")
-        footer = QVBoxLayout(self.footer_card)
+        footer = QHBoxLayout(self.footer_card)
         footer.setContentsMargins(Spacing.LG, Spacing.SM, Spacing.LG, Spacing.MD)
-        footer.setSpacing(Spacing.SM)
+        footer.setSpacing(Spacing.MD)
 
-        total_row = QHBoxLayout()
         total_label = QLabel("TOTAL")
         total_label.setObjectName("cartTotalLabel")
         self.totalBox = QLabel("R$ 0,00")
         self.totalBox.setObjectName("cartTotal")
-        self.totalBox.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
-        total_row.addWidget(total_label)
-        total_row.addStretch(1)
-        total_row.addWidget(self.totalBox)
+        self.totalBox.setAlignment(Qt.AlignLeft | Qt.AlignVCenter)
 
         actions = QHBoxLayout()
         actions.setSpacing(Spacing.MD)
@@ -195,8 +237,10 @@ class TerminalScreen(QWidget):
 
         actions.addWidget(self.btn_cancelar, 1)
         actions.addWidget(self.btn_finalizar, 2)
-        footer.addLayout(total_row)
-        footer.addLayout(actions)
+        footer.addWidget(total_label)
+        footer.addWidget(self.totalBox)
+        footer.addStretch(1)
+        footer.addLayout(actions, 2)
 
         root.addWidget(self.header_card)
         root.addWidget(self.scroll, 1)
@@ -215,6 +259,7 @@ class TerminalScreen(QWidget):
         card.update_item(item)
 
     def _show_empty_state(self):
+        self.productsContainer.setMinimumHeight(0)
         self.empty_label = QLabel("Nenhum produto escaneado")
         self.empty_label.setProperty("role", "pageSubtitle")
         self.empty_label.setAlignment(Qt.AlignCenter)
@@ -227,9 +272,48 @@ class TerminalScreen(QWidget):
             self.productsLayout.removeWidget(card)
         for index, card in enumerate(cards):
             row, column = divmod(index, self._grid_columns)
+            card.set_card_width(self._grid_card_width)
             self.productsLayout.addWidget(card, row, column)
-        for column in range(self._grid_columns):
-            self.productsLayout.setColumnStretch(column, 1)
+        row_count = (len(cards) + self._grid_columns - 1) // self._grid_columns
+        content_height = (
+            row_count * ProductCard.HEIGHT
+            + max(0, row_count - 1) * self.productsLayout.verticalSpacing()
+        )
+        self.productsContainer.setMinimumHeight(content_height)
+
+    def _update_grid_geometry(self):
+        """Dimensiona o catálogo pelo viewport, já descontada a barra vertical."""
+        available_width = self.scroll.viewport().width()
+        if available_width <= 0:
+            available_width = max(0, self.width() - (2 * Spacing.LG) - 14)
+
+        spacing = self.productsLayout.horizontalSpacing()
+        possible_columns = max(
+            1,
+            (available_width + spacing) // (self.GRID_MIN_CARD_WIDTH + spacing),
+        )
+        columns = min(self.GRID_MAX_COLUMNS, possible_columns)
+        card_width = min(
+            self.GRID_MAX_CARD_WIDTH,
+            max(
+                1,
+                (available_width - (spacing * (columns - 1))) // columns,
+            ),
+        )
+
+        geometry_changed = (
+            columns != self._grid_columns or card_width != self._grid_card_width
+        )
+        self._grid_columns = columns
+        self._grid_card_width = card_width
+
+        if self.empty_label is not None:
+            self.productsLayout.removeWidget(self.empty_label)
+            self.productsLayout.addWidget(
+                self.empty_label, 0, 0, 1, self._grid_columns
+            )
+        elif geometry_changed:
+            self._relayout_product_cards()
 
     def processar_evento_pagamento(self, data):
         if self.parent_app:
@@ -371,13 +455,7 @@ class TerminalScreen(QWidget):
 
     def resizeEvent(self, event):
         super().resizeEvent(event)
-        columns = 2 if self.width() >= 800 else 1
-        if columns != self._grid_columns:
-            self._grid_columns = columns
-            if self.empty_label is not None:
-                self.productsLayout.removeWidget(self.empty_label)
-                self.productsLayout.addWidget(
-                    self.empty_label, 0, 0, 1, self._grid_columns
-                )
-            else:
-                self._relayout_product_cards()
+        self._update_grid_geometry()
+        # O viewport recebe sua largura final depois que o layout raiz conclui o
+        # resize; recalcular no próximo ciclo evita usar a largura provisória.
+        QTimer.singleShot(0, self._update_grid_geometry)

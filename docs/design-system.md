@@ -50,6 +50,8 @@ Família: `Segoe UI`, fallback `DejaVu Sans`. Dados técnicos usam `Consolas`/`D
 | Caption | 16 | metadado técnico não essencial |
 | Button | 22 | botão |
 
+Na compra em `1024×600`, os tokens especializados são: nome 26 px, preço 34 px, quantidade 22 px, valor total 46 px e ação principal 26 px. Na confirmação: título 40 px, nome 26 px, detalhe 24 px, total 48 px e ações 26 px. O loading usa 32 px.
+
 Informação operacional importante não usa 12–16 px. Em área pequena, o layout reflui ou ganha scroll antes de reduzir texto.
 
 ## Toque, espaçamento e raios
@@ -100,4 +102,4 @@ Hover é um refinamento para desenvolvimento; `pressed`, `disabled`, texto e con
 
 A única `MainWindow` chama `showFullScreen()`. Páginas vivem no mesmo `QStackedWidget`, usam layouts e `QSizePolicy.Expanding`. Lista de produtos e resumo usam `QScrollArea`; total e ações ficam fora do scroll. Tamanho fixo só é aceito no botão compacto de remover (56 × 56), cuja área de toque é deliberadamente estável.
 
-Validação mínima: `768x1360` portrait e `1024x600`/`800x480` landscape de desenvolvimento.
+Validação mínima: display físico prioritário de 7 polegadas em `1024×600`, além de `768x1360` portrait e `800x480` landscape de desenvolvimento. Em `1024×600`, o carrinho usa três cards de `292×224` por linha e scroll somente vertical.

@@ -321,6 +321,15 @@ Critério: **confirmado** quando o caminho executável ou contrato prova o compo
 - **Correção:** estados semânticos fullscreen, SVG branco reutilizável, motivos humanos, retry sem cobrança automática e reset aprovado somente em `FINALIZAR`.
 - **Limite registrado:** integrações pós-compra não existem no backend e não são simuladas pela UI.
 
+## BUG-038 — Carrinho parecia lista e perdia legibilidade no display de 7 polegadas
+
+**Status:** corrigido em 28 de agosto de 2026.
+
+- duas colunas largas foram substituídas por cálculo real do viewport e três colunas em `1024×600`;
+- cards usam `292×224`, grid com altura por linhas e scroll somente vertical;
+- footer fixo, tipografia e contraste do carrinho/confirmação foram ampliados;
+- teste e render Qt offscreen validam seis produtos na resolução física.
+
 ## BUG-030 — Sync somente no startup e paths relativos
 
 **Status:** corrigido em 24 de agosto de 2026.

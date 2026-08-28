@@ -14,7 +14,7 @@ from PyQt5.QtWidgets import QApplication, QProgressBar, QWidget
 from model.CompraSession import CompraSession
 from styles.svg_icons import icon_path, render_colored_svg
 from styles.animated_svg import AnimatedSvgWidget
-from styles.tokens import Colors
+from styles.tokens import Colors, FontSize
 from telas.ConfirmacaoScreen import ConfirmacaoScreen
 from telas.pagamento import PagamentoScreen
 
@@ -114,6 +114,9 @@ class PaymentStateScreensTest(unittest.TestCase):
         self.assertTrue(spinner.is_animated)
         self.assertNotEqual(first, second)
         self.assertEqual([], self.screen.findChildren(QProgressBar))
+        self.assertEqual("tube-spinner.svg", self.screen.loading_spinner.source.name)
+        self.assertEqual(QSize(128, 128), self.screen.loading_spinner.size())
+        self.assertEqual(FontSize.LOADING_MESSAGE, self.screen.loading.font().pixelSize())
 
     def test_success_has_four_actions_and_no_automatic_reset(self):
         success = self.parent.confirmacao

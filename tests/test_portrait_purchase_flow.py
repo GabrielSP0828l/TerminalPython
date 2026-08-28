@@ -5,6 +5,7 @@ from unittest.mock import MagicMock, patch
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
+from PyQt5.QtCore import Qt
 from PyQt5.QtGui import QColor, QPalette
 from PyQt5.QtWidgets import QApplication, QFrame, QLabel, QStackedWidget, QWidget
 
@@ -78,18 +79,26 @@ class PortraitPurchaseFlowTest(unittest.TestCase):
         self.assertGreaterEqual(self.terminal.btn_finalizar.minimumHeight(), 72)
         self.assertGreater(self.terminal.scroll.height(), 300)
 
-    def test_real_hardware_uses_two_large_product_cards_and_legible_confirmation(self):
+    def test_real_hardware_uses_three_column_grid_and_legible_confirmation(self):
         self.parent.resize(1024, 600)
         self.parent.stacked_widget.resize(1024, 600)
         self.parent.stacked_widget.setCurrentWidget(self.terminal)
         self.parent.show()
 
-        first = PRODUCT_ROW
-        second = list(PRODUCT_ROW)
-        second[0], second[1], second[2], second[3] = (
-            "product-2", "790", "Leite Integral 1L", 7.99
-        )
-        for barcode, row in (("789", first), ("790", tuple(second))):
+        rows = []
+        for index, (name, price) in enumerate((
+            (PRODUCT_ROW[2], PRODUCT_ROW[3]),
+            ("Leite Integral 1L", 7.99),
+            ("Arroz Tipo 1 1kg", 8.90),
+            ("Café Torrado 500g", 18.90),
+        )):
+            row = list(PRODUCT_ROW)
+            row[0], row[1], row[2], row[3] = (
+                f"product-{index + 1}", str(789 + index), name, price
+            )
+            rows.append((str(789 + index), tuple(row)))
+
+        for barcode, row in rows:
             self.terminal.db.buscar_por_codigo.return_value = row
             self.terminal.codigo_barras.setText(barcode)
             self.terminal.readProduct()
@@ -102,12 +111,29 @@ class PortraitPurchaseFlowTest(unittest.TestCase):
             )[1]
             for card in cards
         ]
-        self.assertEqual([0, 1], columns)
-        self.assertTrue(all(card.height() >= 190 for card in cards))
+        positions = [
+            self.terminal.productsLayout.getItemPosition(
+                self.terminal.productsLayout.indexOf(card)
+            )[:2]
+            for card in cards
+        ]
+        self.assertEqual(3, self.terminal._grid_columns)
+        self.assertEqual([0, 1, 2, 0], columns)
+        self.assertEqual([(0, 0), (0, 1), (0, 2), (1, 0)], positions)
+        self.assertTrue(all(250 <= card.width() <= 292 for card in cards))
+        self.assertTrue(all(card.height() == 224 for card in cards))
+        self.assertGreaterEqual(
+            cards[3].y(), cards[0].y() + cards[0].height() + 12
+        )
+        self.assertEqual(Qt.ScrollBarAlwaysOff, self.terminal.scroll.horizontalScrollBarPolicy())
+        self.assertFalse(self.terminal.scroll.horizontalScrollBar().isVisible())
         self.assertTrue(all("Código" not in card.findChild(QLabel).text() for card in cards))
-        self.assertGreaterEqual(cards[0].name.font().pixelSize(), 24)
-        self.assertGreaterEqual(cards[0].price.font().pixelSize(), 28)
-        self.assertGreaterEqual(cards[0].quantity.font().pixelSize(), 20)
+        self.assertLessEqual(len(cards[0].name.text().splitlines()), 2)
+        self.assertGreaterEqual(cards[0].name.font().pixelSize(), 26)
+        self.assertGreaterEqual(cards[0].price.font().pixelSize(), 34)
+        self.assertGreaterEqual(cards[0].quantity.font().pixelSize(), 22)
+        self.assertGreaterEqual(self.terminal.totalBox.font().pixelSize(), 40)
+        self.assertEqual(26, self.terminal.btn_finalizar.font().pixelSize())
         self.assertGreaterEqual(self.terminal.btn_finalizar.height(), 72)
 
         self.parent.confirmacao_compra.mostrar_resumo()
@@ -119,7 +145,18 @@ class PortraitPurchaseFlowTest(unittest.TestCase):
         self.assertEqual(
             "#ffffff", total_card.palette().color(QPalette.Window).name().lower()
         )
+        confirmation_names = [
+            label for label in self.parent.confirmacao_compra.findChildren(QLabel)
+            if label.property("role") == "confirmationProductName"
+        ]
+        confirmation_quantities = [
+            label for label in self.parent.confirmacao_compra.findChildren(QLabel)
+            if label.property("role") == "confirmationProductQuantity"
+        ]
+        self.assertEqual(26, confirmation_names[0].font().pixelSize())
+        self.assertEqual(24, confirmation_quantities[0].font().pixelSize())
         self.assertGreaterEqual(self.parent.confirmacao_compra.total.font().pixelSize(), 40)
+        self.assertGreaterEqual(self.parent.confirmacao_compra.btn_voltar.font().pixelSize(), 24)
         self.assertGreaterEqual(self.parent.confirmacao_compra.btn_confirmar.height(), 72)
 
     def test_finalize_opens_summary_without_starting_payment(self):

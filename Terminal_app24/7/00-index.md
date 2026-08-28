@@ -8,6 +8,7 @@ Estado funcional verificado em 24 de agosto de 2026. O Terminal está adaptado a
 - [[arquitetura]] — lifecycle atual, services, threads e fontes de verdade.
 - [[arquitetura-atual]] — inventário histórico detalhado.
 - [[fluxo-compra]] — scanner, carrinho, checkout, pagamento, resultado e reset executáveis hoje.
+- [[telas]] — composição visual, grid do carrinho e métricas do display físico.
 
 ## Integrações e persistência
 

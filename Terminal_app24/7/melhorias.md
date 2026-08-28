@@ -200,6 +200,17 @@ Voltar para [o índice](00-index.md). Nenhuma melhoria abaixo foi implementada n
 - reset preservado e nova opção `Fechar Terminal`;
 - aviso para compra/pagamento ativo e shutdown cooperativo sem cancelamento financeiro local.
 
+## MEL-028 — Grid de catálogo para o display físico
+
+**Status:** implementada em 28 de agosto de 2026.
+
+- prioridade para 3 colunas no display de 7 polegadas em `1024×600`;
+- cards de 250–292 px calculados pelo viewport, sem coordenadas absolutas;
+- segunda linha preservada por scroll vertical e scroll horizontal bloqueado;
+- nomes em até duas linhas sem redução de fonte;
+- total e ações fixos, com tipografia de compra/confirmação ampliada;
+- cobertura automatizada e render visual exato em `1024×600`.
+
 ## MEL-023 — Coalescer invalidações de catálogo em tempo real
 
 **Status:** implementada em 24 de agosto de 2026.
