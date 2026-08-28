@@ -6,6 +6,14 @@ Voltar para [[00-index]]. Fluxo funcional em [[fluxo-compra]] e limites de integ
 
 A interface operacional é validada prioritariamente no display físico de 7 polegadas, em `1024×600`. A janela continua fullscreen e as páginas permanecem no `QStackedWidget`; nenhuma tela de compra abre janela separada.
 
+## Administração, Wi-Fi e display
+
+O toque longo e a senha de `AdminAuthScreen` continuam sendo a única entrada. A mesma `ConfiguracaoScreen` possui agora três páginas internas: menu, [[wifi]] e [[display]]. O menu preserva reset e fechamento e acrescenta `CONFIGURAR WI-FI` e `ORIENTAÇÃO DA TELA`; voltar de subpágina não pede nova senha, mas sair do painel encerra a autorização.
+
+`WifiScreen` mostra estado, SSID, sinal humano/percentual, IP, atualizar, desconectar/ativar e redes disponíveis. Cards têm ao menos 76 px; senha protegida usa input mascarado e teclado alfanumérico/símbolos. Scan/conexão/desconexão usam spinner, worker e timeout. O overlay offline permite entrar nesse mesmo fluxo autenticado.
+
+`DisplayScreen` mostra orientação e saída atuais e oferece apenas `HORIZONTAL`/`VERTICAL`. Compra/pagamento bloqueiam a ação; o compositor gira a saída e os layouts recebem a nova geometria, sem rotação individual de widgets.
+
 ## Tela de compra
 
 `TerminalScreen` é composta por header, catálogo rolável, scanner/peso e footer fixo. Somente o catálogo rola. Total, cancelamento e `FINALIZAR` permanecem visíveis.

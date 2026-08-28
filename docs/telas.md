@@ -13,12 +13,14 @@ Voltar para [[00-index]]. Padrão em [[design-system]] e portrait em [[layout-ve
 | `TelaBemVindos` | entrada e acesso local à manutenção | sim | tema central, portrait |
 | `AdminAuthScreen` | senha obrigatória antes da administração | sim | tema central, teclado alfanumérico reutilizado |
 | `CadastroTerminalScreen` | QR e polling de ativação | sim | tema central, reflow portrait/landscape |
-| `ConfiguracaoScreen` | menu administrativo, reset e encerramento | sim, após senha | tema central |
+| `ConfiguracaoScreen` | menu administrativo com subpáginas, reset e encerramento | sim, após senha | tema central, 1024×600 |
+| `WifiScreen` | estado, scan, conexão e desconexão NetworkManager | somente dentro da administração | tema central, teclado completo e cards touch |
+| `DisplayScreen` | orientação horizontal/vertical do compositor | somente dentro da administração | tema central, ações touch |
 | `TerminalScreen` | scanner, grid, total e Finalizar | sim | catálogo rolável; 3 colunas em 1024×600 |
 | `ConfirmacaoCompraScreen` | resumo antes do Point | sim | nova; lê o carrinho atual |
 | `PagamentoScreen` | preparação, instrução Point, processamento e falha | sim | páginas fullscreen semânticas |
 | `ConfirmacaoScreen` | resultado aprovado e ações pós-compra | sim | verde fullscreen; reset somente em Finalizar |
-| `OfflineOverlay` | indisponibilidade e reconexão | monitor hoje desativado | tema central |
+| `OfflineOverlay` | indisponibilidade, reconexão e acesso autenticado ao Wi-Fi | sim | tema central |
 | `AppPaymentScreen` | checkout legado por QR | sem entrada no carrinho | preservada e migrada visualmente |
 | `LoginScreen` | identificação legada | não | preservada e migrada visualmente |
 | `TecladoScreen` | teclado da identificação legada | não | preservada, touch targets corrigidos |
@@ -35,6 +37,8 @@ toque longo no logotipo
       -> senha incorreta: mensagem e permanência na autenticação
       -> cancelar: volta exatamente à página anterior
       -> senha correta: ConfiguracaoScreen existente
+          -> Configurar Wi-Fi
+          -> Orientação da tela
           -> Restaurar padrões de fábrica
           -> Fechar Terminal
           -> Voltar: encerra a sessão administrativa
@@ -45,6 +49,14 @@ A senha vem de `TERMINAL_ADMIN_PASSWORD` no ambiente. Não existe fallback ou se
 “Restaurar padrões de fábrica” preserva o marcador/backup recuperável existente e a confirmação final. “Fechar Terminal” pede apenas confirmação, com aviso específico para compra ou pagamento ativo; nenhuma cobrança é cancelada localmente. O encerramento para timers, workers, listener de pagamento, sync, heartbeat e sockets antes de `QApplication.quit()`.
 
 `Esc` e solicitações comuns de fechamento da janela não encerram o quiosque. A saída normal pela interface é o menu autenticado.
+
+## Wi-Fi e orientação
+
+As duas funções novas vivem dentro da `ConfiguracaoScreen` existente. Um `QStackedWidget` interno alterna menu, [[wifi]] e [[display]]; voltar de uma subpágina preserva a autenticação, enquanto sair do painel a invalida.
+
+`WifiScreen` apresenta estado/SSID/sinal/IP, redes deduplicadas, senha mascarada com teclado alfanumérico/símbolos, loading e mensagens humanas. Os cards possuem ao menos 76 px e as operações usam worker com timeout. Em estado offline, o overlay permite abrir o mesmo fluxo de senha administrativa para recuperar a rede.
+
+`DisplayScreen` mostra orientação atual e apenas `HORIZONTAL`/`VERTICAL`. A alteração é bloqueada enquanto houver compra ou pagamento e não gira widgets. Após sucesso, a janela reaplica fullscreen para responder à geometria entregue pelo compositor.
 
 ## Fluxo ativo
 
@@ -85,4 +97,4 @@ Preparação mostra loading antes do worker HTTP. Depois de uma resposta Point v
 
 ## Testes visuais
 
-Os testes Qt offscreen cobrem todas as páginas acima em `768x1360`, targets visíveis de pelo menos 56 px, nome longo, preço grande, grid/resumo, erro e overlay. O carrinho possui validação específica em `1024×600` para três colunas, dimensões, fontes e ausência de scroll horizontal. Cadastro também continua coberto em `600x1024`, `1024x600` e `800x480`.
+Os testes Qt offscreen cobrem todas as páginas acima em `768x1360`, targets visíveis de pelo menos 56 px, nome longo, preço grande, grid/resumo, erro e overlay. O carrinho possui validação específica em `1024×600` para três colunas, dimensões, fontes e ausência de scroll horizontal. Cadastro também continua coberto em `600x1024`, `1024x600` e `800x480`. O menu, Wi-Fi, teclado de símbolos e orientação possuem cobertura adicional em `1024×600`.

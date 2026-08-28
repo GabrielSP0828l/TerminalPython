@@ -1,6 +1,6 @@
 # Melhorias recomendadas
 
-Voltar para [o índice](00-index.md). Nenhuma melhoria abaixo foi implementada nesta auditoria.
+Voltar para [o índice](00-index.md). Cada item informa explicitamente quando já foi implementado e quais limites permanecem.
 
 ## MEL-001 — Unificar identidade do terminal
 
@@ -221,6 +221,27 @@ Voltar para [o índice](00-index.md). Nenhuma melhoria abaixo foi implementada n
 - reset central pelo método já existente ou reconciliação financeira correlacionada;
 - invalidação de callbacks antigos por tentativa, `cartId` e `orderId`;
 - testes rápidos sem espera de dez minutos e sem chamada financeira real.
+
+## MEL-030 — Wi-Fi no painel administrativo
+
+**Status:** implementada em 28 de agosto de 2026; validação física no Raspberry pendente.
+
+- reutiliza a autenticação e `ConfiguracaoScreen` existentes;
+- `WifiService` concentra NetworkManager/`nmcli`, argv seguro e mensagens tipadas;
+- senha segue por `stdin` do `nmcli --ask`, sem argv, persistência local ou log;
+- `WifiWorker` protege a UI com timeouts de 3–18 s;
+- página `1024×600` cobre estado/SSID/sinal/IP, redes deduplicadas e teclado com símbolos;
+- manutenção offline continua autenticada e não duplica socket, sync ou heartbeat.
+
+## MEL-031 — Orientação persistente pelo compositor
+
+**Status:** implementada em 28 de agosto de 2026; validação física no Raspberry pendente.
+
+- `DisplayService` detecta saída e usa `wlr-randr` em Wayland/wlroots ou `xrandr` em X11;
+- UI administrativa oferece `HORIZONTAL`/`VERTICAL` e bloqueia durante compra/pagamento;
+- worker e timeout de oito segundos evitam congelamento;
+- orientação é gravada atomicamente em `db/display_orientation` e reaplicada no `start.sh`;
+- não há rotação de widgets, shell ou output hardcoded.
 
 ## MEL-023 — Coalescer invalidações de catálogo em tempo real
 

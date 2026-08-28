@@ -28,11 +28,15 @@ MainWindow (lifecycle da aplicação)
     └── ConfirmacaoScreen / resultado, ações pós-compra e reset explícito
 ```
 
+O ramo administrativo reutiliza a mesma `ConfiguracaoScreen`: `WifiScreen -> WifiWorker -> WifiService -> nmcli` e `DisplayScreen -> DisplayWorker -> DisplayService -> wlr-randr/xrandr`. Subprocessos recebem argv, não shell, e timeouts; callbacks carregam token de operação para serem ignorados depois de sair da página. Veja [[menu-administrativo]], [[wifi]] e [[display]].
+
 Configuração, `.env`, identidade, banco e cursor usam paths derivados da raiz do código, independentemente do diretório de execução. Sync e heartbeat começam somente depois de `Terminal.is_activated()` e continuam durante todas as telas, inclusive pagamento. HTTP/SQLite rodam fora da thread Qt. O scanner consulta SQLite a cada leitura; não existe cache paralelo a invalidar. Itens já presentes no carrinho mantêm o snapshot de produto/preço capturado no scan, enquanto a sync afeta leituras futuras.
 
 O backend continua sendo fonte de verdade para terminal, condomínio, empresa, catálogo, disponibilidade, estoque e status financeiro. Veja [[sincronizacao]], [[heartbeat]], [[sqlite]], [[api-backend]] e [[websocket]].
 
-O design visual está centralizado em `styles/tokens.py` e `styles/theme.py`. A UI é portrait-first (`768x1360`), mas continua expansível em landscape. A rotação real é responsabilidade do compositor; `start.sh` oferece configuração opcional via `wlr-randr` sem hardcode de saída e não impede o startup se a ferramenta faltar.
+O design visual está centralizado em `styles/tokens.py` e `styles/theme.py`. A UI é portrait-first (`768x1360`), mas continua expansível em landscape. A rotação real é responsabilidade do compositor; `start.sh` reaplica a orientação salva pelo `DisplayService`, sem hardcode de saída, e não impede o startup se a ferramenta faltar.
+
+`InternetMonitor` volta a fazer parte do lifecycle pós-ativação e consulta `API_URL`; o `OfflineOverlay` pode abrir o acesso administrativo de Wi-Fi. Conexão nova não cria outro WebSocket, sync ou heartbeat: os serviços já existentes retomam ao detectar o backend.
 
 Os estados Point usam `PaymentStateWidget` fullscreen. `styles/svg_icons.py` resolve `icon/` pela raiz e recolore os SVGs em memória com `QSvgRenderer`, preservando os assets pretos. `CompraSession` guarda o último status interno para a mensagem humana e trata `APPROVED` duplicado de forma idempotente. O reset aprovado é exclusivamente disparado por `FINALIZAR`.
 

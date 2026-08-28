@@ -1,33 +1,43 @@
+import logging
+
 import requests
-import time
 from PyQt5.QtCore import QThread, pyqtSignal
+
+from config import API_URL
+
+
+logger = logging.getLogger(__name__)
 
 
 class InternetMonitor(QThread):
     status_changed = pyqtSignal(bool)
 
-    def __init__(self, interval=3):
+    def __init__(self, interval=3, target_url=API_URL, request_get=requests.get):
         super().__init__()
         self.interval = interval
-        self.running = True
+        self.target_url = str(target_url or "").strip()
+        self.request_get = request_get
         self.status = None
 
     def check_internet(self):
+        if not self.target_url:
+            return False
         try:
-            requests.get("https://www.google.com", timeout=3)
+            self.request_get(self.target_url, timeout=3)
             return True
-        except:
+        except requests.RequestException:
             return False
 
     def run(self):
-        while self.running:
+        while not self.isInterruptionRequested():
             new_status = self.check_internet()
 
             if new_status != self.status:
                 self.status = new_status
+                logger.info("[NETWORK] backend=%s", "online" if new_status else "offline")
                 self.status_changed.emit(self.status)
-
-            time.sleep(self.interval)
+            self.msleep(max(250, int(self.interval * 1000)))
 
     def stop(self):
-        self.running = False
+        self.requestInterruption()
+        self.wait(3500)

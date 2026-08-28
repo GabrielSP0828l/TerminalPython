@@ -35,11 +35,13 @@ class SafeShutdownTest(unittest.TestCase):
                 activation_timer=MagicMock(), activation_worker=activation_worker
             ),
             confirmacao=MagicMock(),
+            configuracao=MagicMock(),
             pagamento=MagicMock(),
             app_payment=MagicMock(),
             terminal=SimpleNamespace(timer_foco=MagicMock(), listener=MagicMock()),
             sync_service=MagicMock(),
             socket=MagicMock(),
+            internet_monitor=MagicMock(),
         )
 
         MainWindow._parar_servicos(window)
@@ -51,7 +53,9 @@ class SafeShutdownTest(unittest.TestCase):
         window.sync_service.stop.assert_called_once()
         window.socket.stop.assert_called_once()
         window.pagamento.parar_workers.assert_called_once()
+        window.configuracao.stop_workers.assert_called_once_with(wait=True)
         window.app_payment.parar_espera.assert_called_once()
+        window.internet_monitor.stop.assert_called_once()
         activation_worker.requestInterruption.assert_called_once()
 
     def test_authorized_shutdown_quits_application(self):

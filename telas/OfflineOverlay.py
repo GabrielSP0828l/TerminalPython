@@ -1,5 +1,5 @@
 from PyQt5.QtCore import Qt
-from PyQt5.QtWidgets import QFrame, QLabel, QVBoxLayout, QWidget
+from PyQt5.QtWidgets import QFrame, QLabel, QPushButton, QVBoxLayout, QWidget
 
 from styles.theme import Theme
 from styles.tokens import Spacing
@@ -35,10 +35,18 @@ class OfflineOverlay(QWidget):
         self.sub.setProperty("role", "pageSubtitle")
         self.sub.setAlignment(Qt.AlignCenter)
         self.sub.setWordWrap(True)
+        self.configure_network_button = QPushButton("CONFIGURAR WI-FI")
+        self.configure_network_button.setProperty("variant", "secondary")
+        open_settings = getattr(parent, "abrir_configuracoes", None)
+        if open_settings is not None:
+            self.configure_network_button.clicked.connect(open_settings)
+        else:
+            self.configure_network_button.hide()
 
         layout.addWidget(icon)
         layout.addWidget(self.label)
         layout.addWidget(self.sub)
+        layout.addWidget(self.configure_network_button)
         root.addWidget(card)
 
     def showEvent(self, event):

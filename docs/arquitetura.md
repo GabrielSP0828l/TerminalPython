@@ -7,12 +7,16 @@ MainWindow / showFullScreen
 ├── QStackedWidget
 │   ├── ativação / boas-vindas / configuração
 │   ├── AdminAuthScreen ── barreira efêmera por senha de ambiente
+│   ├── ConfiguracaoScreen
+│   │   ├── WifiScreen ── WifiWorker ── WifiService ── nmcli
+│   │   └── DisplayScreen ── DisplayWorker ── DisplayService ── compositor
 │   ├── TerminalScreen ── Carrinho único em memória
 │   ├── ConfirmacaoCompraScreen ── view do mesmo Carrinho
 │   ├── PagamentoScreen ── workers HTTP Point
 │   └── ConfirmacaoScreen ── resultado aprovado/ações/reset explícito
 ├── CompraSession ── prazo, IDs e estado operacional
 ├── SyncService ── catálogo SQLite fora da UI
+├── InternetMonitor ── disponibilidade do backend / OfflineOverlay
 ├── TerminalSocket ── heartbeat
 └── PaymentListener ── pagamento + invalidação de catálogo
 ```
@@ -25,10 +29,12 @@ O backend continua fonte de verdade para identidade organizacional, catálogo/di
 
 ## Administração e shutdown
 
-`TelaBemVindos.logo -> MainWindow.abrir_configuracoes -> AdminAuthScreen -> ConfiguracaoScreen.entrar`. A autorização existe apenas enquanto a tela de configuração está aberta e não é persistida. As ações administrativas possuem guarda adicional em `ConfiguracaoScreen`.
+`TelaBemVindos.logo -> MainWindow.abrir_configuracoes -> AdminAuthScreen -> ConfiguracaoScreen.entrar`. A autorização existe apenas enquanto a tela de configuração está aberta e não é persistida. As ações administrativas possuem guarda adicional em `ConfiguracaoScreen`. Wi-Fi e display são páginas internas desse mesmo painel; veja [[menu-administrativo]], [[wifi]] e [[display]].
+
+`WifiService` e `DisplayService` encapsulam subprocessos com argv, sem shell, com mensagens tipadas e timeout. `WifiWorker`/`DisplayWorker` mantêm essas operações fora da thread da interface. Ao abandonar o painel, tokens de operação invalidam callbacks tardios. A tela de Wi-Fi não conhece nem reinicia sync, WebSocket ou heartbeat.
 
 `TERMINAL_ADMIN_PASSWORD` é carregada centralmente por `config.py`; `.env.example` contém somente a chave vazia. Nenhum valor é documentado ou registrado.
 
 `MainWindow.encerrar_terminal()` autoriza uma única saída, preserva o estado financeiro e executa `_parar_servicos()` de forma idempotente: timer da compra, relógio, ativação, espera/worker Point, checkout legado, foco/scanner, `PaymentListener`, `SyncService`, heartbeat e monitor opcional. Depois chama `QApplication.quit()`. `closeEvent` sem autorização é ignorado e `Esc` é consumido.
 
-`start.sh` pode configurar a rotação Wayland antes do Python quando `DISPLAY_ORIENTATION=vertical`. Saída e transform são detectáveis/configuráveis; ausência de `wlr-randr` não impede o startup. Veja [[layout-vertical]].
+`start.sh` reaplica `db/display_orientation` antes do Python ou aceita `DISPLAY_ORIENTATION` para a execução. Saída e transform são detectados/configuráveis; ausência da ferramenta compatível não impede o startup. Veja [[layout-vertical]] e [[display]].

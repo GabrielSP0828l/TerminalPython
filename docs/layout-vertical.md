@@ -8,19 +8,19 @@ O sistema/compositor gira o display físico. O PyQt mantém `showFullScreen()` e
 
 ## Inicialização opcional
 
-`start.sh` não gira nada por padrão. Para Wayland/wlroots:
+Quando existe `db/display_orientation`, `start.sh` reaplica a escolha administrativa antes de iniciar o PyQt. Para sobrescrever somente uma execução:
 
 ```bash
 DISPLAY_ORIENTATION=vertical ./start.sh
 ```
 
-O script usa `wlr-randr` somente quando ele existe e `WAYLAND_DISPLAY` está definido. A primeira saída real é detectada, sem hardcode de `HDMI-A-2`. Ambientes com múltiplas saídas devem explicitar:
+`DisplayService` usa `wlr-randr` em Wayland/wlroots e `xrandr` somente em X11. A primeira saída ativa é detectada, sem hardcode de `HDMI-A-2`. Ambientes com múltiplas saídas devem explicitar:
 
 ```bash
 DISPLAY_ORIENTATION=vertical DISPLAY_OUTPUT=HDMI-A-2 DISPLAY_TRANSFORM=90 ./start.sh
 ```
 
-`DISPLAY_TRANSFORM=270` pode ser usado quando o sentido físico exigir. Falha de detecção/rotação gera aviso e o Terminal inicia normalmente. `PYTHON_BIN` permite selecionar o Python/venv.
+`DISPLAY_TRANSFORM=270` pode ser usado quando o sentido físico exigir. Falha de detecção/rotação gera aviso e o Terminal inicia normalmente. Cada comando tem timeout de oito segundos. `PYTHON_BIN` permite selecionar o Python/venv. A escolha também pode ser feita por touchscreen em [[display]].
 
 ## Comportamento da UI
 

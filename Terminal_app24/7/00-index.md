@@ -1,6 +1,6 @@
 # Terminal Python App 24/7 — documentação técnica
 
-Estado funcional verificado em 24 de agosto de 2026. O Terminal está adaptado ao contrato de sync FULL/INCREMENTAL, cursor `syncAt` do backend e `PRODUCT_SYNC_REQUIRED`.
+Estado funcional verificado em 28 de agosto de 2026. O Terminal está adaptado ao contrato de sync FULL/INCREMENTAL, cursor `syncAt` do backend, `PRODUCT_SYNC_REQUIRED` e manutenção local autenticada.
 
 ## Visão e arquitetura
 
@@ -9,6 +9,9 @@ Estado funcional verificado em 24 de agosto de 2026. O Terminal está adaptado a
 - [[arquitetura-atual]] — inventário histórico detalhado.
 - [[fluxo-compra]] — scanner, carrinho, checkout, pagamento, resultado e reset executáveis hoje.
 - [[telas]] — composição visual, grid do carrinho e métricas do display físico.
+- [[menu-administrativo]] — autenticação efêmera, opções e guardas operacionais.
+- [[wifi]] — NetworkManager/`nmcli`, segurança, timeouts e validação física.
+- [[display]] — orientação do compositor e persistência no boot.
 
 ## Integrações e persistência
 
@@ -27,18 +30,19 @@ Estado funcional verificado em 24 de agosto de 2026. O Terminal está adaptado a
 ## Fontes analisadas
 
 - `../../AGENTS.md` completo;
-- 27 arquivos Python atuais, totalizando 3.198 linhas incluindo testes;
+- módulos Python, testes, scripts e configurações relevantes do worktree atual;
 - configurações, requirements, CSS, JSON, SQLite ativo/backup e estado Git;
 - toda a documentação em `../app247/24por7_contexto/`;
 - controllers, DTOs, services, repositories e handlers relevantes do backend atual.
 
 ## Validação e limites
 
-- 72 testes Python passaram, inclusive recuperação de pagamento e Qt offscreen;
+- 113 testes Python passaram, inclusive Wi-Fi, display, recuperação de pagamento e Qt offscreen;
 - compilação dos módulos alterados passou;
 - endpoint real configurado respondeu HTTP 200 e retornou `syncAt`;
 - SQLite canônico: `/home/jefiro/Documentos/projetos/TerminalPython/db/terminal.db`;
 - nenhuma cobrança ou chamada financeira real foi executada.
+- Wi-Fi e rotação foram simulados; adaptador, compositor e touchscreen ainda exigem validação no Raspberry físico.
 
 ## Conclusão
 

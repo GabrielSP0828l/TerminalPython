@@ -12,6 +12,7 @@ TERMINAL_ADMIN_PASSWORD = os.getenv("TERMINAL_ADMIN_PASSWORD", "")
 
 DATABASE_PATH = PROJECT_ROOT / "db" / "terminal.db"
 TERMINAL_CONFIG_PATH = PROJECT_ROOT / "db" / "terminal.json"
+DISPLAY_ORIENTATION_PATH = PROJECT_ROOT / "db" / "display_orientation"
 LAST_SYNC_PATH = PROJECT_ROOT / "database" / "last_sync.txt"
 
 PRODUCT_SYNC_INTERVAL_SECONDS = max(

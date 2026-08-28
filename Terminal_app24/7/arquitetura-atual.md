@@ -20,7 +20,7 @@ main.py
 │   ├── ConfirmacaoScreen.py
 │   ├── login_screen.py (não instanciada)
 │   ├── teclado.py (instanciada, fluxo inativo)
-│   └── OfflineOverlay.py (monitor desativado)
+│   └── OfflineOverlay.py (monitor da API + acesso autenticado ao Wi-Fi)
 ├── model/
 │   ├── Terminal.py
 │   ├── Produtos.py
@@ -31,7 +31,7 @@ main.py
 │   ├── TerminalSocket.py
 │   ├── TerminalInfo.py
 │   ├── FactoryResetService.py
-│   ├── InternetMonitor.py
+│   ├── InternetMonitor.py (ativo após ativação; monitora API_URL)
 │   └── HoldToExitLabel.py
 ├── database/
 │   ├── DatabaseProdutos.py
@@ -99,4 +99,4 @@ Isso permite estados inconsistentes: tela inicial com carrinho antigo, UI vazia 
 - `Produtos.get_produtos_api` não possui chamador.
 - `PagamentoScreen.self.API_URL` hardcoded não é usado nas requisições.
 - monitor de internet está comentado.
-- imports de `LoginScreen`/`InternetMonitor` permanecem em `../../main.py` sem uso ativo.
+- `LoginScreen` permanece legado sem rota ativa; `InternetMonitor` agora faz parte do lifecycle pós-ativação.

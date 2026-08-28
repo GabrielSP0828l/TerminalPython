@@ -23,6 +23,8 @@ O Terminal é cliente PyQt5 do backend Spring Boot. Mantém interface física, a
 | Interface | design system único, targets touch e portrait `768x1360` |
 | Confirmação | `Finalizar` abre resumo; Point somente em `Confirmar e pagar` |
 | Administração | toque longo → senha obrigatória → menu existente |
+| Rede local | Wi-Fi autenticado via NetworkManager/`nmcli`, worker e timeout |
+| Display | horizontal/vertical pelo compositor, persistido no boot |
 
 ## Lifecycle
 
@@ -48,7 +50,7 @@ O relógio da compra é responsabilidade exclusiva de `CompraSession`. Em `00:00
 
 O toque longo de dois segundos no logotipo foi preservado. Antes de mostrar `ConfiguracaoScreen`, `AdminAuthScreen` exige a senha de `TERMINAL_ADMIN_PASSWORD`, mascarada e digitável pelo teclado virtual compartilhado. Senha ausente bloqueia o menu. Senha incorreta não revela detalhes. Cancelar preserva a página/compra anterior e sair do menu invalida a autorização.
 
-O menu mantém o reset recuperável e inclui `Fechar Terminal`. Compra/pagamento ativo gera aviso contextual e não causa cancelamento Mercado Pago. Ao confirmar, o lifecycle cooperativo para recursos e chama `QApplication.quit()`; `Esc` e fechamento comum não saem do quiosque.
+O menu mantém o reset recuperável e inclui `Configurar Wi-Fi`, `Orientação da tela` e `Fechar Terminal`. Voltar de Wi-Fi/display mantém a mesma autenticação; sair do painel a invalida. Troca/desconexão de Wi-Fi durante pagamento gera aviso contextual e não cancela Mercado Pago. Orientação é bloqueada durante compra/pagamento. Ao confirmar encerramento, o lifecycle cooperativo para recursos e chama `QApplication.quit()`; `Esc` e fechamento comum não saem do quiosque.
 
 ## Limites preservados
 

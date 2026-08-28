@@ -6,6 +6,7 @@ from PyQt5.QtWidgets import (
     QLabel,
     QMessageBox,
     QPushButton,
+    QStackedWidget,
     QVBoxLayout,
     QWidget,
 )
@@ -13,6 +14,8 @@ from PyQt5.QtWidgets import (
 from service.FactoryResetService import FactoryResetService
 from styles.theme import Theme
 from styles.tokens import Spacing
+from telas.DisplayScreen import DisplayScreen
+from telas.WifiScreen import WifiScreen
 
 
 logger = logging.getLogger(__name__)
@@ -34,16 +37,28 @@ class ConfiguracaoScreen(QWidget):
 
     def _montar_interface(self):
         root = QVBoxLayout(self)
-        root.setContentsMargins(Spacing.XL, Spacing.XL, Spacing.XL, Spacing.XL)
-        root.setAlignment(Qt.AlignCenter)
+        root.setContentsMargins(0, 0, 0, 0)
 
-        card = QFrame(self)
+        self.pages = QStackedWidget(self)
+        self.menu_page = QWidget(self)
+        menu_root = QVBoxLayout(self.menu_page)
+        menu_root.setContentsMargins(Spacing.LG, Spacing.MD, Spacing.LG, Spacing.MD)
+        menu_root.setAlignment(Qt.AlignCenter)
+
+        self.wifi_screen = WifiScreen(self.parent_app, self.show_menu, parent=self)
+        self.display_screen = DisplayScreen(self.parent_app, self.show_menu, parent=self)
+        self.pages.addWidget(self.menu_page)
+        self.pages.addWidget(self.wifi_screen)
+        self.pages.addWidget(self.display_screen)
+        root.addWidget(self.pages)
+
+        card = QFrame(self.menu_page)
         card.setObjectName("settingsCard")
         card.setMaximumWidth(760)
 
         layout = QVBoxLayout(card)
-        layout.setContentsMargins(Spacing.XXL, Spacing.XXL, Spacing.XXL, Spacing.XXL)
-        layout.setSpacing(Spacing.LG)
+        layout.setContentsMargins(Spacing.LG, Spacing.LG, Spacing.LG, Spacing.LG)
+        layout.setSpacing(Spacing.SM)
 
         title = QLabel("CONFIGURAÇÕES DO TERMINAL")
         title.setProperty("role", "pageTitle")
@@ -55,6 +70,14 @@ class ConfiguracaoScreen(QWidget):
         subtitle.setProperty("role", "pageSubtitle")
         subtitle.setAlignment(Qt.AlignCenter)
         subtitle.setWordWrap(True)
+
+        self.wifi_button = QPushButton("CONFIGURAR WI-FI")
+        self.wifi_button.setProperty("variant", "primary")
+        self.wifi_button.clicked.connect(self.abrir_wifi)
+
+        self.display_button = QPushButton("ORIENTAÇÃO DA TELA")
+        self.display_button.setProperty("variant", "primary")
+        self.display_button.clicked.connect(self.abrir_display)
 
         self.reset_button = QPushButton("RESTAURAR PADRÕES DE FÁBRICA")
         self.reset_button.setProperty("variant", "danger")
@@ -71,19 +94,52 @@ class ConfiguracaoScreen(QWidget):
 
         layout.addWidget(title)
         layout.addWidget(subtitle)
-        layout.addSpacing(24)
+        layout.addSpacing(Spacing.SM)
+        layout.addWidget(self.wifi_button)
+        layout.addWidget(self.display_button)
         layout.addWidget(self.reset_button)
         layout.addWidget(self.close_terminal_button)
         layout.addWidget(self.back_button)
-        root.addWidget(card)
+        menu_root.addWidget(card)
 
     def entrar(self, return_widget):
         self._authenticated = True
         self._return_widget = return_widget
+        self.show_menu()
 
     def encerrar_sessao(self):
+        self.stop_workers()
+        set_network_settings = getattr(
+            self.parent_app, "set_network_settings_active", None
+        )
+        if set_network_settings is not None:
+            set_network_settings(False)
         self._authenticated = False
         self._return_widget = None
+
+    def show_menu(self):
+        self.pages.setCurrentWidget(self.menu_page)
+
+    def abrir_wifi(self):
+        if not self._authenticated:
+            return
+        set_network_settings = getattr(
+            self.parent_app, "set_network_settings_active", None
+        )
+        if set_network_settings is not None:
+            set_network_settings(True)
+        self.pages.setCurrentWidget(self.wifi_screen)
+        self.wifi_screen.show_page()
+
+    def abrir_display(self):
+        if not self._authenticated:
+            return
+        self.pages.setCurrentWidget(self.display_screen)
+        self.display_screen.show_page()
+
+    def stop_workers(self, wait=False):
+        self.wifi_screen.stop_worker(wait=wait)
+        self.display_screen.stop_worker(wait=wait)
 
     def voltar(self):
         return_widget = self._return_widget

@@ -1,6 +1,6 @@
 # Melhorias recomendadas
 
-Voltar para [o índice](00-index.md). Nenhuma melhoria abaixo foi implementada nesta auditoria.
+Voltar para [o índice](00-index.md). Cada item informa explicitamente quando já foi implementado e quais limites permanecem.
 
 ## MEL-001 — Unificar identidade do terminal
 
@@ -210,6 +210,28 @@ Voltar para [o índice](00-index.md). Nenhuma melhoria abaixo foi implementada n
 - nomes em duas linhas sem redução de fonte;
 - total/ações fixos e confirmação com tipografia/contraste ampliados;
 - validação automatizada e visual na resolução física.
+
+## MEL-030 — Wi-Fi no painel administrativo
+
+**Status:** implementada em 28 de agosto de 2026; validação física no Raspberry pendente.
+
+- reutiliza autenticação e `ConfiguracaoScreen` existentes;
+- `WifiService` centraliza NetworkManager/`nmcli`, sem `sudo`, shell ou segredo em argv/log;
+- scan, conexão, desconexão e ativação executam em `WifiWorker` com timeouts de 3–18 s;
+- UI `1024×600` mostra estado, SSID, sinal humano, IP, redes deduplicadas e senha mascarada com símbolos;
+- rede aberta e perfil salvo não exigem senha desnecessária;
+- mudança durante pagamento avisa e preserva a cobrança/reconciliação;
+- `InternetMonitor` e o overlay foram reativados sem duplicar sync, socket ou heartbeat.
+
+## MEL-031 — Orientação persistente pelo compositor
+
+**Status:** implementada em 28 de agosto de 2026; validação física no Raspberry pendente.
+
+- `DisplayService` detecta saída ativa e usa `wlr-randr` em Wayland/wlroots ou `xrandr` em X11;
+- o painel expõe apenas `HORIZONTAL` e `VERTICAL` e bloqueia durante compra/pagamento;
+- execução assíncrona, argv seguro e timeout de oito segundos;
+- escolha gravada atomicamente em `db/display_orientation` e reaplicada por `start.sh`;
+- a janela PyQt recebe a geometria do compositor, sem rotação manual de widgets e sem output hardcoded.
 
 ## MEL-023 — Coalescer invalidações de catálogo em tempo real
 

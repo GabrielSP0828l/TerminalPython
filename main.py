@@ -8,7 +8,7 @@ os.environ["QT_SCALE_FACTOR"] = "1"
 import sys
 import logging
 
-from PyQt5.QtCore import Qt
+from PyQt5.QtCore import Qt, QTimer
 
 from PyQt5.QtWidgets import (
     QApplication, QMainWindow, QStackedWidget,
@@ -20,6 +20,7 @@ from model.CompraSession import CompraSession
 from service.SyncService import SyncService
 from service.TerminalSocket import TerminalSocket
 from service.FactoryResetService import FactoryResetService
+from service.InternetMonitor import InternetMonitor
 
 from telas.CadastroTerminalScreen import CadastroTerminalScreen
 from telas.AdminAuthScreen import AdminAuthScreen
@@ -44,6 +45,8 @@ class MainWindow(QMainWindow):
         self.sync_thread = None
         self.sync_service = None
         self.socket = None
+        self.internet_monitor = None
+        self._network_settings_active = False
         self.compra_session = CompraSession(self)
         self._expiring_checkout_generation = None
         self._shutdown_authorized = False
@@ -104,10 +107,6 @@ class MainWindow(QMainWindow):
         self.confirmacao = None
         self.confirmacao_compra = None
 
-        # self.internet_monitor = InternetMonitor(interval=3)
-        # self.internet_monitor.status_changed.connect(self.handle_internet)
-        # self.internet_monitor.start()
-
         if Terminal.is_activated():
             self.iniciar_operacao_terminal()
             self.stacked_widget.setCurrentWidget(self.welcome)
@@ -116,8 +115,6 @@ class MainWindow(QMainWindow):
             self.stacked_widget.setCurrentWidget(self.cadastro_terminal)
 
     def handle_internet(self, online):
-        print("NET:", online)
-
         if online:
             if self.is_offline:
                 self.is_offline = False
@@ -125,12 +122,25 @@ class MainWindow(QMainWindow):
             return
 
         # OFFLINE
+        if self._network_settings_active:
+            self.is_offline = True
+            self.offline_overlay.hide()
+            return
         if not self.is_offline:
             self.is_offline = True
             self.offline_overlay.resize(self.size())
             self.offline_overlay.show()
             self.offline_overlay.raise_()
             self.offline_overlay.activateWindow()
+
+    def set_network_settings_active(self, active):
+        self._network_settings_active = bool(active)
+        if active:
+            self.offline_overlay.hide()
+        elif self.is_offline:
+            self.offline_overlay.resize(self.size())
+            self.offline_overlay.show()
+            self.offline_overlay.raise_()
 
 
     def inicializar_terminal(self):
@@ -202,6 +212,9 @@ class MainWindow(QMainWindow):
         self.sync_thread = self.sync_service.iniciar_sync_em_thread()
         self.socket = TerminalSocket()
         self.socket.start()
+        self.internet_monitor = InternetMonitor(interval=3)
+        self.internet_monitor.status_changed.connect(self.handle_internet)
+        self.internet_monitor.start()
         self._operacao_iniciada = True
 
     def closeEvent(self, event):
@@ -212,6 +225,8 @@ class MainWindow(QMainWindow):
         event.accept()
 
     def abrir_configuracoes(self):
+        if self.is_offline:
+            self.set_network_settings_active(True)
         return_widget = self.stacked_widget.currentWidget()
         self.admin_auth.iniciar(return_widget)
         self.stacked_widget.setCurrentWidget(self.admin_auth)
@@ -221,6 +236,7 @@ class MainWindow(QMainWindow):
         self.stacked_widget.setCurrentWidget(self.configuracao)
 
     def cancelar_autenticacao_admin(self, return_widget):
+        self.set_network_settings_active(False)
         self.stacked_widget.setCurrentWidget(return_widget or self.welcome)
 
     def encerrar_menu_admin(self, return_widget):
@@ -248,6 +264,9 @@ class MainWindow(QMainWindow):
             self.cadastro_terminal.activation_worker.wait(500)
         if self.confirmacao is not None:
             self.confirmacao.stop()
+        configuracao = getattr(self, "configuracao", None)
+        if configuracao is not None:
+            configuracao.stop_workers(wait=True)
         if self.pagamento is not None:
             self.pagamento.parar_workers()
         if self.app_payment is not None:
@@ -337,6 +356,17 @@ class MainWindow(QMainWindow):
 
         if hasattr(self, "offline_overlay"):
             self.offline_overlay.resize(self.size())
+
+    def refresh_display_geometry(self):
+        QTimer.singleShot(250, self._refresh_display_geometry)
+
+    def _refresh_display_geometry(self):
+        self.showFullScreen()
+        self.central_widget.updateGeometry()
+        self.stacked_widget.updateGeometry()
+        current = self.stacked_widget.currentWidget()
+        if current is not None:
+            current.updateGeometry()
 # -----------------------------
 # MAIN
 # -----------------------------
@@ -361,8 +391,6 @@ if __name__ == "__main__":
 
     # cursor oculto (modo terminal)
     #app.setOverrideCursor(Qt.BlankCursor)
-
-    window.setFixedSize(1024, 600)
 
     window.showFullScreen()
 

@@ -212,12 +212,14 @@ Critério: **confirmado** quando o caminho executável ou contrato prova o compo
 
 ## BUG-022 — Monitor offline está desativado
 
+**Status:** corrigido em 28 de agosto de 2026.
+
 - **Severidade:** média
 - **Tipo:** confirmado
 - **Arquivo/função:** `main.py:100-102`
 - **Cenário:** internet/backend cai.
 - **Impacto:** overlay nunca aparece e não há recuperação coordenada.
-- **Correção recomendada:** monitorar o backend, não Google, integrado ao estado da compra.
+- **Correção aplicada:** `MainWindow` inicia/para `InternetMonitor` contra `API_URL`; `OfflineOverlay` abre o mesmo fluxo administrativo autenticado de Wi-Fi e é suspenso somente durante a manutenção. Socket, sync e heartbeat continuam donos da própria reconexão.
 
 ## BUG-023 — Logs expõem dados e não têm estrutura
 
@@ -333,6 +335,15 @@ Falha, instrução e sucesso eram cards e a aprovação apagava a compra após c
 - **Correção:** `MainWindow._checkout_session_expired` bloqueia interações, valida a geração e reutiliza `reset_compra` quando não há pendência remota. Tentativas/IDs remotos seguem reconciliação segura. `CompraSession` para o timer, marca `active=false` e protege a emissão com `_expired_emitted`.
 - **Proteções adicionais:** status exige `orderId`; `paymentId` só é aplicado depois da correlação; status/resume workers capturam Order/tentativa/carrinho; reset desconecta callbacks locais e restaura deadline/flag. Uma interrupção solicitada não publica sucesso nem falha tardia.
 - **Validação:** testes com duração injetada de dois segundos cobrem o `QTimer` real chegando a zero, lista, confirmação, scanner bloqueado, nova geração, emissão única, loading Point sem IDs e falha definitiva após timeout, sem cobrança real.
+
+## BUG-040 — Rotação de boot dependia de saída e orientação hardcoded
+
+**Status:** corrigido em 28 de agosto de 2026.
+
+- **Causa:** `start.sh` aplicava uma saída/transform específicos, divergindo da documentação de detecção.
+- **Impacto:** outro Raspberry/monitor podia não girar, iniciar errado ou exigir edição manual.
+- **Correção:** `DisplayService` detecta backend/saída, aplica orientação por argv, persiste a escolha e o `start.sh` reaplica o arquivo salvo sem bloquear o boot em caso de erro.
+- **Validação:** output aparece somente em fixture de teste; Wayland sem ferramenta, X11, timeout e reaplicação salva também são cobertos.
 
 ## BUG-030 — Sync somente no startup e paths relativos
 

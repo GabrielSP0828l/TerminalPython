@@ -22,7 +22,7 @@ main.py
 │   ├── ConfiguracaoScreen.py
 │   ├── login_screen.py (não instanciada)
 │   ├── teclado.py (parcial/defeituosa)
-│   └── OfflineOverlay.py (monitor desativado)
+│   └── OfflineOverlay.py (monitor da API + acesso autenticado ao Wi-Fi)
 ├── model/
 │   ├── Terminal.py
 │   ├── Produtos.py
@@ -32,7 +32,7 @@ main.py
 │   ├── SyncService.py
 │   ├── TerminalSocket.py
 │   ├── TerminalInfo.py
-│   ├── InternetMonitor.py (desativado)
+│   ├── InternetMonitor.py (ativo após ativação; monitora API_URL)
 │   └── HoldToExitLabel.py
 ├── database/
 │   ├── DatabaseProdutos.py

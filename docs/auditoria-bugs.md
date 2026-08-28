@@ -211,12 +211,14 @@ Critério: **confirmado** quando o caminho executável ou contrato prova o compo
 
 ## BUG-022 — Monitor offline está desativado
 
+**Status:** corrigido em 28 de agosto de 2026.
+
 - **Severidade:** média
 - **Tipo:** confirmado
 - **Arquivo/função:** `main.py:100-102`
 - **Cenário:** internet/backend cai.
 - **Impacto:** overlay nunca aparece e não há recuperação coordenada.
-- **Correção recomendada:** monitorar o backend, não Google, integrado ao estado da compra.
+- **Correção aplicada:** `MainWindow` inicia/para um monitor do `API_URL`. O overlay oferece acesso ao mesmo fluxo administrativo autenticado de Wi-Fi e é suspenso somente durante essa manutenção. Reconexão de socket, sync e heartbeat permanece com os serviços existentes.
 
 ## BUG-023 — Logs expõem dados e não têm estrutura
 
@@ -329,6 +331,15 @@ Critério: **confirmado** quando o caminho executável ou contrato prova o compo
 - cards usam `292×224`, grid com altura por linhas e scroll somente vertical;
 - footer fixo, tipografia e contraste do carrinho/confirmação foram ampliados;
 - teste e render Qt offscreen validam seis produtos na resolução física.
+
+## BUG-040 — Rotação de boot dependia de saída e orientação hardcoded
+
+**Status:** corrigido em 28 de agosto de 2026.
+
+- **Causa:** `start.sh` aplicava uma saída/transform específicos da máquina de desenvolvimento, apesar da documentação declarar detecção.
+- **Impacto:** outro Raspberry/monitor podia não girar, iniciar na orientação errada ou exigir edição manual do script.
+- **Correção:** `DisplayService` detecta backend e saída ativa, aplica orientação sem shell, persiste a escolha semântica e o `start.sh` reaplica o arquivo salvo com fallback não bloqueante.
+- **Validação:** testes cobrem saída `HDMI-A-2` apenas como fixture, ausência de hardcode no script, Wayland sem ferramenta, X11, timeout e reboot simulado.
 
 ## BUG-030 — Sync somente no startup e paths relativos
 

@@ -1,6 +1,6 @@
 # Documentação técnica do Terminal Python
 
-Estado funcional verificado em 24 de agosto de 2026. O Terminal usa sincronização incremental orientada por UUID, `syncAt` do backend e invalidação WebSocket em tempo real.
+Estado funcional verificado em 28 de agosto de 2026. O Terminal usa sincronização incremental orientada por UUID, `syncAt` do backend, invalidação WebSocket em tempo real e manutenção local autenticada.
 
 ## Documentos
 
@@ -16,12 +16,15 @@ Estado funcional verificado em 24 de agosto de 2026. O Terminal usa sincronizaç
 - [Bugs e riscos](auditoria-bugs.md)
 - [Melhorias propostas](melhorias.md)
 - [Telas e navegação](telas.md)
+- [[menu-administrativo]] — acesso autenticado e guardas operacionais
+- [[wifi]] — NetworkManager/`nmcli`, segurança, timeouts e touchscreen
+- [[display]] — orientação por compositor, persistência e startup
 - [[design-system]] — paleta, tipografia e componentes oficiais
 - [[layout-vertical]] — portrait, rotação Wayland e fallback landscape
 
 ## Escopo e fontes
 
-Foram lidos os 23 módulos Python do repositório (2.911 linhas), `main.py`, `config.py`, `requirements.txt`, os artefatos locais de configuração/persistência e toda a documentação disponível em `../app247/24por7_contexto/`. Também foram confrontados os controllers, DTOs, services e handlers WebSocket relevantes no código Spring Boot atual.
+Foram lidos os módulos Python relevantes, `main.py`, `config.py`, `requirements.txt`, os artefatos locais de configuração/persistência e a documentação disponível em `../app247/24por7_contexto/`. Também foram confrontados os controllers, DTOs, services e handlers WebSocket relevantes no código Spring Boot atual.
 
 O arquivo `../app247/24por7_contexto/terminal-python.md` citado no `AGENTS.md` não existe no worktree auditado. O contexto funcional fornecido pelo solicitante foi considerado como especificação desejada.
 
@@ -30,6 +33,7 @@ O arquivo `../app247/24por7_contexto/terminal-python.md` citado no `AGENTS.md` n
 - Nenhuma cobrança real foi criada.
 - A interface foi validada por testes Qt offscreen; não foi operada no hardware físico.
 - A suíte automatizada inclui testes de fluxo, integrações e layout Qt portrait; nenhuma cobrança real é criada.
+- Wi-Fi e rotação foram simulados nos testes; a validação final de adaptador, compositor e touchscreen depende do Raspberry físico.
 - O repositório já continha mudanças do usuário; elas foram preservadas.
 
 ## Conclusão executiva

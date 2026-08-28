@@ -163,6 +163,36 @@ class AdminAccessTest(unittest.TestCase):
         self.assertTrue(parent.compra_session.payment_in_flight)
         self.assertEqual(0, parent.shutdown_calls)
 
+    def test_existing_admin_menu_contains_wifi_and_orientation_touch_actions(self):
+        parent = AdminParentStub()
+        screen = parent.configuracao
+        screen.resize(1024, 600)
+        screen.entrar(parent.welcome)
+        screen.show()
+        self.app.processEvents()
+
+        self.assertEqual("CONFIGURAR WI-FI", screen.wifi_button.text())
+        self.assertEqual("ORIENTAÇÃO DA TELA", screen.display_button.text())
+        for button in (
+            screen.wifi_button, screen.display_button, screen.reset_button,
+            screen.close_terminal_button, screen.back_button,
+        ):
+            self.assertGreaterEqual(button.height(), 60)
+            self.assertLessEqual(button.geometry().bottom(), 600)
+
+    def test_returning_from_admin_subpage_does_not_request_password_again(self):
+        parent = AdminParentStub()
+        screen = parent.configuracao
+        screen.entrar(parent.welcome)
+        with patch.object(screen.wifi_screen, "show_page"):
+            screen.abrir_wifi()
+        self.assertIs(screen.wifi_screen, screen.pages.currentWidget())
+
+        screen.show_menu()
+
+        self.assertTrue(screen._authenticated)
+        self.assertIs(screen.menu_page, screen.pages.currentWidget())
+
 
 if __name__ == "__main__":
     unittest.main()

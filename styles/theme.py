@@ -314,6 +314,48 @@ class Theme:
         """
 
     @classmethod
+    def wifi_stylesheet(cls):
+        return cls.keyboard_stylesheet() + f"""
+            QFrame#wifiStatusCard {{
+                background-color: {Colors.SURFACE}; border: 1px solid {Colors.BORDER};
+                border-radius: {Radius.CARD}px;
+            }}
+            QLabel#wifiCurrentSsid {{
+                color: {Colors.TEXT_PRIMARY}; font-size: {FontSize.H3}px;
+                font-weight: {FontWeight.BOLD};
+            }}
+            QLabel#wifiCurrentDetails {{
+                color: {Colors.TEXT_SECONDARY}; font-size: {FontSize.SMALL}px;
+            }}
+            QPushButton[wifiNetwork="true"] {{
+                min-height: 76px; padding: {Spacing.SM}px {Spacing.LG}px;
+                text-align: left; background-color: {Colors.SURFACE_ELEVATED};
+                color: {Colors.TEXT_PRIMARY}; border: 2px solid {Colors.BORDER};
+                font-size: {FontSize.LABEL}px;
+            }}
+            QPushButton[wifiNetwork="true"][connected="true"] {{
+                border-color: {Colors.SUCCESS}; color: {Colors.SUCCESS};
+            }}
+            QLabel#wifiFeedbackMessage {{
+                color: {Colors.TEXT_SECONDARY}; font-size: {FontSize.H3}px;
+                font-weight: {FontWeight.MEDIUM};
+            }}
+        """
+
+    @classmethod
+    def display_stylesheet(cls):
+        return cls.settings_stylesheet() + f"""
+            QFrame#displayStatusCard {{
+                background-color: {Colors.SURFACE_ELEVATED};
+                border: 2px solid {Colors.BORDER}; border-radius: {Radius.CARD}px;
+            }}
+            QLabel#displayCurrentOrientation {{
+                color: {Colors.TEXT_PRIMARY}; font-size: {FontSize.H2}px;
+                font-weight: {FontWeight.BOLD};
+            }}
+        """
+
+    @classmethod
     def admin_stylesheet(cls):
         return cls.keyboard_stylesheet() + f"""
             QFrame#adminAuthCard {{

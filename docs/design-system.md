@@ -80,6 +80,10 @@ Temas de página (`cart_stylesheet`, `purchase_confirmation_stylesheet`, `paymen
 
 `admin_stylesheet()` combina card, campo protegido, mensagem de erro e o mesmo teclado de `keyboard_stylesheet()`, incluindo alternância `ABC/abc`. A autenticação administrativa ocupa a página fullscreen em portrait; não usa diálogo pequeno. O valor digitado permanece mascarado. Confirmações destrutivas usam botões touchscreen com textos explícitos `CANCELAR`, `RESETAR` ou `ENCERRAR`.
 
+`wifi_stylesheet()` e `display_stylesheet()` derivam dos mesmos tokens. Em `1024×600`, o menu usa botões de 60–72 px, cards de rede usam no mínimo 76 px, títulos ficam na faixa H1/H2 e texto operacional nunca cai para fonte desktop pequena. Estado atual fica em card de alto contraste; conectado/sucesso, atenção e erro usam cor mais texto, nunca apenas cor. A senha Wi-Fi permanece mascarada e o teclado compartilhado possui página de símbolos (`@`, `#`, `!`, hífen, sublinhado e demais caracteres usuais).
+
+Loading de Wi-Fi/orientação reutiliza `icon/tube-spinner.svg`, sempre acompanhado de texto e timeout. Erros retornam ações `TENTAR NOVAMENTE`/`VOLTAR`; nenhum spinner é um estado terminal.
+
 ## Estados de pagamento
 
 Os resultados financeiros ocupam 100% da página; não usam card central:
@@ -102,4 +106,4 @@ Hover é um refinamento para desenvolvimento; `pressed`, `disabled`, texto e con
 
 A única `MainWindow` chama `showFullScreen()`. Páginas vivem no mesmo `QStackedWidget`, usam layouts e `QSizePolicy.Expanding`. Lista de produtos e resumo usam `QScrollArea`; total e ações ficam fora do scroll. Tamanho fixo só é aceito no botão compacto de remover (56 × 56), cuja área de toque é deliberadamente estável.
 
-Validação mínima: display físico prioritário de 7 polegadas em `1024×600`, além de `768x1360` portrait e `800x480` landscape de desenvolvimento. Em `1024×600`, o carrinho usa três cards de `292×224` por linha e scroll somente vertical.
+Validação mínima: display físico prioritário de 7 polegadas em `1024×600`, além de `768x1360` portrait e `800x480` landscape de desenvolvimento. Em `1024×600`, o carrinho usa três cards de `292×224` por linha e scroll somente vertical. Menu administrativo, lista Wi-Fi, senha/teclado e orientação foram renderizados e inspecionados offscreen nessa resolução.
