@@ -8,6 +8,7 @@ load_dotenv(PROJECT_ROOT / ".env")
 
 API_URL = os.getenv("API_URL", "").rstrip("/")
 WS_URL = os.getenv("WS_URL", "").rstrip("/")
+TERMINAL_ADMIN_PASSWORD = os.getenv("TERMINAL_ADMIN_PASSWORD", "")
 
 DATABASE_PATH = PROJECT_ROOT / "db" / "terminal.db"
 TERMINAL_CONFIG_PATH = PROJECT_ROOT / "db" / "terminal.json"

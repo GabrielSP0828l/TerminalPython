@@ -1,208 +1,164 @@
+import logging
+
 from PyQt5.QtCore import Qt, QTimer
-from PyQt5.QtGui import QPixmap
 from PyQt5.QtWidgets import (
-    QWidget, QVBoxLayout, QHBoxLayout,
-    QLabel, QPushButton, QFrame,
-    QLineEdit, QScrollArea, QMessageBox
+    QFrame,
+    QHBoxLayout,
+    QLabel,
+    QLineEdit,
+    QMessageBox,
+    QPushButton,
+    QScrollArea,
+    QVBoxLayout,
+    QWidget,
 )
+
 from database.DatabaseProdutos import DatabaseProdutos
 from database.PaymentListener import PaymentListener
 from model.Carrinho import Carrinho
 from model.Item import Item
 from model.Produtos import Produtos
+from styles.theme import Theme
+from styles.tokens import Spacing, TouchSize
 
 
-STYLE_BTN_REMOVER = """
-    QPushButton {
-        background-color: #3d1a1a;
-        color: #f85149;
-        font-size: 16px;
-        font-weight: bold;
-        border: 1px solid #f85149;
-        border-radius: 8px;
-        min-width: 40px;
-        max-width: 40px;
-        min-height: 36px;
-        max-height: 36px;
-    }
-    QPushButton:hover  { background-color: #5a2020; }
-    QPushButton:pressed { background-color: #2a0f0f; }
-"""
-
-STYLE_BTN_CANCELAR = """
-    QPushButton {
-        background-color: transparent;
-        color: #f85149;
-        font-size: 15px;
-        font-weight: bold;
-        border: 1px solid #f85149;
-        border-radius: 10px;
-        padding: 14px;
-        letter-spacing: 1px;
-    }
-    QPushButton:hover  { background-color: #3d1a1a; }
-    QPushButton:pressed { background-color: #2a0f0f; }
-"""
+logger = logging.getLogger(__name__)
 
 
 class TerminalScreen(QWidget):
+    """Carrinho visual; o objeto ``carrinho`` é a fonte única da compra atual."""
+
     def __init__(self, parent=None):
         super().__init__(parent)
         self.parent_app = parent
+        self.parent = parent
         self.db = DatabaseProdutos()
         self.carrinho = Carrinho()
-        self.linhas: dict = {}
+        self.linhas = {}
+        self.total = 0.0
+        self.id_contador = 1
+        self.peso_total_venda = 0.0
 
         self.listener = PaymentListener(self)
-        self.listener.payment_status_signal.connect(self.processar_evento_pagamento, Qt.QueuedConnection)
+        self.listener.payment_status_signal.connect(
+            self.processar_evento_pagamento, Qt.QueuedConnection
+        )
         self.listener.product_sync_required.connect(
             self.processar_evento_produto, Qt.QueuedConnection
         )
         self.listener.sync_requested.connect(
             self.solicitar_sync_produtos, Qt.QueuedConnection
         )
-        self.listener.connected.connect(self.reconciliar_pagamento, Qt.QueuedConnection)
+        self.listener.connected.connect(
+            self.verificar_pagamento_apos_reconexao, Qt.QueuedConnection
+        )
         self.listener.start()
 
-        try:
-            with open("css/terminal_screen.css", "r", encoding="utf-8") as file:
-                self.setStyleSheet(file.read())
-        except FileNotFoundError:
-            print("Erro: Arquivo css/terminal_screen.css não encontrado!")
+        self.setProperty("role", "page")
+        self.setObjectName("cartScreen")
+        self.setStyleSheet(Theme.cart_stylesheet())
+        self._montar_interface()
 
-        self.parent = parent
-        self.total = 0.0
-        self.id_contador = 1
-        self.peso_total_venda = 0.0
+        self.timer_foco = QTimer(self)
+        self.timer_foco.timeout.connect(self.garantir_foco)
+        self.timer_foco.start(1000)
 
-        # -----------------------------
-        # LAYOUT PRINCIPAL (VERTICAL - RETRATO)
-        # -----------------------------
-        main_layout = QVBoxLayout(self)
-        main_layout.setContentsMargins(0, 0, 0, 0)
-        main_layout.setSpacing(0)
+    def _montar_interface(self):
+        root = QVBoxLayout(self)
+        root.setContentsMargins(Spacing.XL, Spacing.XL, Spacing.XL, Spacing.XL)
+        root.setSpacing(Spacing.LG)
 
-        # -----------------------------
-        # SIDEBAR (TOPO, HORIZONTAL)
-        # -----------------------------
-        self.sidebar = QFrame()
-        self.sidebar.setObjectName("sidebar")
-        self.sidebar.setFixedHeight(220)
+        self.header_card = QFrame(self)
+        self.header_card.setObjectName("cartHeader")
+        header = QVBoxLayout(self.header_card)
+        header.setContentsMargins(Spacing.XL, Spacing.LG, Spacing.XL, Spacing.LG)
+        header.setSpacing(Spacing.XS)
 
-        layout_lateral = QHBoxLayout(self.sidebar)
-        layout_lateral.setContentsMargins(20, 10, 20, 10)
-        layout_lateral.setSpacing(20)
+        title = QLabel("SUA COMPRA")
+        title.setProperty("role", "pageTitle")
+        title.setAlignment(Qt.AlignCenter)
+        subtitle = QLabel("Escaneie os produtos e confira a lista abaixo")
+        subtitle.setProperty("role", "pageSubtitle")
+        subtitle.setAlignment(Qt.AlignCenter)
+        subtitle.setWordWrap(True)
+        header.addWidget(title)
+        header.addWidget(subtitle)
 
-        self.logo = QLabel()
-        pixmap = QPixmap("css/ima.png")
-        if not pixmap.isNull():
-            self.logo.setPixmap(
-                pixmap.scaled(150, 150, Qt.KeepAspectRatio, Qt.SmoothTransformation)
-            )
-        self.logo.setAlignment(Qt.AlignCenter)
-
-        self.totalBox = QLabel("R$ 0,00")
-        self.totalBox.setObjectName("totalBox")
-        self.totalBox.setAlignment(Qt.AlignCenter)
-
-        valor_box = QVBoxLayout()
-        valor_box.setSpacing(5)
-        valor_box.setAlignment(Qt.AlignVCenter)
-
-        label_valor_total = QLabel("VALOR TOTAL")
-        label_valor_total.setObjectName("labelValorTotal")
-        label_valor_total.setAlignment(Qt.AlignCenter)
-        label_valor_total.setStyleSheet("""
-            font-size: 14px;
-            font-weight: 600;
-            color: #8b949e;
-            letter-spacing: 3px;
-            background-color: transparent;
-        """)
-        valor_box.addWidget(label_valor_total)
-        valor_box.addWidget(self.totalBox)
-
-        layout_lateral.addWidget(self.logo)
-        layout_lateral.addLayout(valor_box, 1)
-
-        # -----------------------------
-        # CONTENT (RESTANTE DA TELA)
-        # -----------------------------
-        self.content = QFrame()
-        self.content.setObjectName("content")
-        layout_conteudo = QVBoxLayout(self.content)
-
-        self.cabecalho = QLabel(
-            "ID        CÓDIGO        PRODUTO        QTD        VALOR"
-        )
-        self.cabecalho.setObjectName("header")
-
-        self.scroll = QScrollArea()
+        self.scroll = QScrollArea(self)
         self.scroll.setWidgetResizable(True)
-        self.scroll.setStyleSheet("border:none; background:transparent;")
-
         self.productsContainer = QWidget()
         self.productsLayout = QVBoxLayout(self.productsContainer)
+        self.productsLayout.setContentsMargins(0, 0, 0, 0)
+        self.productsLayout.setSpacing(Spacing.MD)
         self.productsLayout.setAlignment(Qt.AlignTop)
-        self.productsLayout.setSpacing(5)
         self.scroll.setWidget(self.productsContainer)
 
-        # INPUTS
-        layout_inputs = QHBoxLayout()
+        self.empty_label = QLabel("Nenhum produto escaneado")
+        self.empty_label.setProperty("role", "pageSubtitle")
+        self.empty_label.setAlignment(Qt.AlignCenter)
+        self.empty_label.setMinimumHeight(120)
+        self.productsLayout.addWidget(self.empty_label)
+
+        scanner_layout = QHBoxLayout()
+        scanner_layout.setSpacing(Spacing.MD)
         self.codigo_barras = QLineEdit()
+        self.codigo_barras.setProperty("role", "input")
         self.codigo_barras.setPlaceholderText("Aguardando leitura do produto...")
         self.codigo_barras.returnPressed.connect(self.readProduct)
 
         self.peso_display = QLineEdit("0.000 KG")
-        self.peso_display.setFixedWidth(180)
+        self.peso_display.setProperty("role", "input")
         self.peso_display.setReadOnly(True)
+        self.peso_display.setMaximumWidth(190)
+        self.peso_display.setAlignment(Qt.AlignCenter)
+        scanner_layout.addWidget(self.codigo_barras, 3)
+        scanner_layout.addWidget(self.peso_display, 1)
 
-        layout_inputs.addWidget(self.codigo_barras)
-        layout_inputs.addWidget(self.peso_display)
+        self.footer_card = QFrame(self)
+        self.footer_card.setObjectName("cartFooter")
+        footer = QVBoxLayout(self.footer_card)
+        footer.setContentsMargins(Spacing.XL, Spacing.LG, Spacing.XL, Spacing.XL)
+        footer.setSpacing(Spacing.MD)
 
-        # BOTÕES
-        layout_botoes = QHBoxLayout()
-        layout_botoes.setSpacing(12)
+        total_row = QHBoxLayout()
+        total_label = QLabel("TOTAL")
+        total_label.setObjectName("cartTotalLabel")
+        self.totalBox = QLabel("R$ 0,00")
+        self.totalBox.setObjectName("cartTotal")
+        self.totalBox.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
+        total_row.addWidget(total_label)
+        total_row.addStretch(1)
+        total_row.addWidget(self.totalBox)
 
-        self.btn_pagar = QPushButton("PAGAR AGORA")
-        self.btn_pagar.setObjectName("pay")
-        self.btn_pagar.clicked.connect(self.ir_para_pagamento)
-
-        self.btn_app = QPushButton("PAGAR NO APP")
-        self.btn_app.setObjectName("app")
-        self.btn_app.clicked.connect(self.ir_para_app)
-
-        self.btn_cancelar = QPushButton("CANCELAR VENDA")
-        self.btn_cancelar.setStyleSheet(STYLE_BTN_CANCELAR)
-        self.btn_cancelar.setMinimumHeight(52)
+        actions = QHBoxLayout()
+        actions.setSpacing(Spacing.MD)
+        self.btn_cancelar = QPushButton("CANCELAR COMPRA")
+        self.btn_cancelar.setProperty("variant", "ghost")
         self.btn_cancelar.clicked.connect(self.cancelar_venda)
 
-        layout_botoes.addWidget(self.btn_cancelar, 1)
-        layout_botoes.addWidget(self.btn_app, 2)
-        layout_botoes.addWidget(self.btn_pagar, 2)
+        self.btn_finalizar = QPushButton("FINALIZAR")
+        self.btn_finalizar.setProperty("variant", "primary")
+        self.btn_finalizar.setProperty("primaryAction", True)
+        self.btn_finalizar.setMinimumHeight(TouchSize.PRIMARY_BUTTON)
+        self.btn_finalizar.clicked.connect(self.ir_para_pagamento)
+        # Alias interno para compatibilidade com integrações/testes antigos.
+        self.btn_pagar = self.btn_finalizar
 
-        layout_conteudo.addWidget(self.cabecalho)
-        layout_conteudo.addWidget(self.scroll, 1)
-        layout_conteudo.addLayout(layout_inputs)
-        layout_conteudo.addSpacing(10)
-        layout_conteudo.addLayout(layout_botoes)
+        actions.addWidget(self.btn_cancelar, 1)
+        actions.addWidget(self.btn_finalizar, 2)
+        footer.addLayout(total_row)
+        footer.addLayout(actions)
 
-        main_layout.addWidget(self.sidebar)
-        main_layout.addWidget(self.content, 1)
+        root.addWidget(self.header_card)
+        root.addWidget(self.scroll, 1)
+        root.addLayout(scanner_layout)
+        root.addWidget(self.footer_card)
 
-        # FOCO
-        self.timer_foco = QTimer()
-        self.timer_foco.timeout.connect(self.garantir_foco)
-        self.timer_foco.start(1000)
-
-    # ================= UI =================
     def _texto_linha(self, id_linha, codigo, item):
         return (
-            f"{id_linha:<8} "
-            f"{codigo:<18} "
-            f"{item.produto.nome:<25} "
-            f"{item.quantidade:>3}x   "
-            f"R$ {item.subtotal():>7.2f}"
+            f"{item.produto.nome}\n"
+            f"{item.quantidade} × R$ {item.produto.preco:.2f}  •  "
+            f"Código {codigo}\nSubtotal: R$ {item.subtotal():.2f}"
         )
 
     def atualizar_interface(self):
@@ -232,22 +188,28 @@ class TerminalScreen(QWidget):
         if self.parent_app and self.parent_app.compra_session.payment_in_flight:
             self.parent_app.pagamento.reconciliar_estado()
 
+    def verificar_pagamento_apos_reconexao(self):
+        if self.parent_app and self.parent_app.compra_session.payment_in_flight:
+            self.parent_app.pagamento.verificar_apos_reconexao()
+
     def liberar_tela(self):
-        print("Limpando a tela...")
         self.carrinho = Carrinho()
         self.linhas.clear()
         while self.productsLayout.count():
-            item = self.productsLayout.takeAt(0)
-            widget = item.widget()
+            layout_item = self.productsLayout.takeAt(0)
+            widget = layout_item.widget()
             if widget is not None:
                 widget.setParent(None)
                 widget.deleteLater()
+        self.empty_label = QLabel("Nenhum produto escaneado")
+        self.empty_label.setProperty("role", "pageSubtitle")
+        self.empty_label.setAlignment(Qt.AlignCenter)
+        self.empty_label.setMinimumHeight(120)
+        self.productsLayout.addWidget(self.empty_label)
         self.total = 0.0
         self.id_contador = 1
         self.peso_total_venda = 0.0
-        self.totalBox.setText("R$ 0,00")
-        self.peso_display.setText("0.000 KG")
-        print("Terminal resetado!")
+        self.atualizar_interface()
 
     def garantir_foco(self):
         if self.parent and self.parent.stacked_widget.currentWidget() == self:
@@ -255,28 +217,22 @@ class TerminalScreen(QWidget):
                 self.codigo_barras.setFocus()
 
     def ir_para_pagamento(self):
+        """Abre o resumo; nenhuma chamada remota é iniciada neste toque."""
         if not self.linhas:
             self.mostrar_aviso(
-                "Carrinho vazio",
-                "Adicione pelo menos um produto antes de continuar."
+                "Carrinho vazio", "Adicione pelo menos um produto antes de continuar."
             )
             return
         if self.parent_app:
+            self.parent_app.confirmacao_compra.mostrar_resumo()
+            self.parent_app.setCurrentWidget(self.parent_app.confirmacao_compra)
+
+    def iniciar_pagamento_confirmado(self):
+        """Único ponto visual que encaminha o carrinho atual ao fluxo Point."""
+        if self.parent_app and not self.carrinho.vazio():
             self.parent_app.pagamento.iniciar_pagamento(
                 self.carrinho.to_dict(), self.totalBox.text()
             )
-
-    def ir_para_app(self):
-        if not self.linhas:
-            self.mostrar_aviso(
-                "Carrinho vazio",
-                "Adicione pelo menos um produto antes de continuar."
-            )
-
-            return
-        if self.parent_app:
-            self.parent_app.app_payment.iniciar_pagamento(self.totalBox.text())
-            self.parent_app.setCurrentWidget(self.parent_app.app_payment)
 
     def cancelar_venda(self):
         if self.parent_app:
@@ -289,84 +245,89 @@ class TerminalScreen(QWidget):
             return
         self.carrinho.remover_item(codigo_produto)
         self.linhas.pop(codigo_produto, None)
-        self.totalBox.setText(self.carrinho.total_formatado())
-        self.peso_display.setText(f"{self.peso_total_venda:.3f} KG")
         widget_linha.deleteLater()
-        if self.carrinho.vazio() and self.parent_app:
+        self.atualizar_interface()
+        if self.carrinho.vazio():
             self.parent_app.compra_session.reset()
+            self.empty_label = QLabel("Nenhum produto escaneado")
+            self.empty_label.setProperty("role", "pageSubtitle")
+            self.empty_label.setAlignment(Qt.AlignCenter)
+            self.empty_label.setMinimumHeight(120)
+            self.productsLayout.addWidget(self.empty_label)
 
-    # ================= LEITURA =================
     def readProduct(self):
         barcode = self.codigo_barras.text().strip()
         if not barcode:
             return
         try:
-            tupla = self.db.buscar_por_codigo(barcode)
-            if not tupla:
+            product_tuple = self.db.buscar_por_codigo(barcode)
+            if not product_tuple:
                 self.mostrar_aviso(
-                    "Produto não encontrado",
-                    "O produto informado não está cadastrado."
+                    "Produto não encontrado", "O produto informado não está cadastrado."
                 )
                 self.codigo_barras.clear()
                 return
 
-            produto = Produtos.from_tuple(tupla)
+            produto = Produtos.from_tuple(product_tuple)
             codigo = produto.codigo
             self.parent_app.compra_session.start_if_needed()
 
             if codigo in self.linhas:
                 item = self.carrinho.buscar_item(codigo)
                 item.quantidade += 1
-                _, lbl_texto, _ = self.linhas[codigo]
+                _, label, _ = self.linhas[codigo]
                 self.atualizar_interface()
-                self.atualizar_linha(codigo, lbl_texto)
+                self.atualizar_linha(codigo, label)
                 self.codigo_barras.clear()
                 self.codigo_barras.setFocus()
                 return
 
-            # Produto novo: cria linha no layout
+            if self.empty_label is not None:
+                self.empty_label.setParent(None)
+                self.empty_label.deleteLater()
+                self.empty_label = None
+
             novo_item = Item(produto=produto, quantidade=1, received_weight=None)
             self.carrinho.adicionar_item(novo_item)
-
             item = self.carrinho.buscar_item(codigo)
             id_linha = self.id_contador
 
             linha_widget = QFrame()
+            linha_widget.setObjectName("productRow")
             layout_linha = QHBoxLayout(linha_widget)
-            layout_linha.setContentsMargins(10, 5, 10, 5)
+            layout_linha.setContentsMargins(
+                Spacing.LG, Spacing.MD, Spacing.MD, Spacing.MD
+            )
+            layout_linha.setSpacing(Spacing.MD)
 
             lbl_texto = QLabel(self._texto_linha(id_linha, codigo, item))
+            lbl_texto.setProperty("role", "productName")
+            lbl_texto.setWordWrap(True)
+            lbl_texto.setMinimumHeight(82)
 
-            btn_remover = QPushButton("x")
-
-            btn_remover.setStyleSheet(STYLE_BTN_REMOVER)
-
+            btn_remover = QPushButton("×")
+            btn_remover.setProperty("variant", "remove")
+            btn_remover.setFixedSize(TouchSize.MINIMUM, TouchSize.MINIMUM)
+            btn_remover.setAccessibleName(f"Remover {produto.nome}")
             btn_remover.clicked.connect(
-                lambda _, c=codigo, w=linha_widget:
-                self.remover_produto(c, w)
+                lambda _, c=codigo, w=linha_widget: self.remover_produto(c, w)
             )
 
             layout_linha.addWidget(lbl_texto, 1)
             layout_linha.addWidget(btn_remover)
-
             self.productsLayout.addWidget(linha_widget)
-
-            # Registra no dicionário: codigo -> (widget, label, id_linha)
             self.linhas[codigo] = (linha_widget, lbl_texto, id_linha)
 
-            self.totalBox.setText(self.carrinho.total_formatado())
+            self.atualizar_interface()
             self.id_contador += 1
-
             self.codigo_barras.clear()
             self.codigo_barras.setFocus()
-
-        except Exception as e:
-            print("Erro:", e)
+        except Exception:
+            logger.exception("Erro ao processar leitura do produto")
+            self.mostrar_aviso(
+                "Não foi possível ler o produto",
+                "Tente escanear novamente. Se o problema continuar, chame o responsável.",
+            )
 
     def mostrar_aviso(self, titulo, mensagem):
-        QMessageBox.warning(
-            self,
-            titulo,
-            mensagem,
-            QMessageBox.Ok
-        )
+        QMessageBox.warning(self, titulo, mensagem, QMessageBox.Ok)

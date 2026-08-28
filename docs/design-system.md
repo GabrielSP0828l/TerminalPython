@@ -1,155 +1,103 @@
 # Design System — Terminal App 24/7
 
-Voltar para [o índice](00-index.md).
+Voltar para [[00-index]]. Layout portrait em [[layout-vertical]] e inventário em [[telas]].
 
-Este documento é a referência oficial para novas telas e alterações visuais do Terminal Python. O padrão foi extraído das interfaces existentes mais maduras; não substitui a identidade atual. A implementação central está em `styles/tokens.py` e `styles/theme.py`.
+Esta é a única referência visual do Terminal. A fonte de verdade executável está em `styles/tokens.py` e `styles/theme.py`; telas não mantêm QSS próprios. O padrão foi extraído das telas históricas mais maduras (boas-vindas e carrinho) e consolidado com os estados Point já funcionais.
 
-## Telas de referência
+## Princípios
 
-- **TerminalScreen:** controles de toque, tipografia Segoe UI, azul de ação `#169DFF`, texto informativo azul-claro e raios compactos.
-- **TelaBemVindos:** composição fullscreen, página/card expansíveis, fundo azul-marinho e conteúdo centralizado.
-- **CadastroTerminalScreen:** referência estrutural responsiva após a correção para `1024x600`, `800x480` e retrato; é a primeira tela integralmente migrada ao tema.
+- interface de totem/touchscreen, não desktop;
+- portrait-first, fullscreen e expansível;
+- uma ação dominante por etapa;
+- feedback imediato antes de qualquer operação remota;
+- estado expresso por ícone, texto e cor;
+- texto curto, legível à distância e com quebra de linha;
+- regra de negócio e estado da compra permanecem fora do estilo.
 
-As telas de pagamento e PIX foram analisadas, mas não são referência integral por ainda possuírem QSS local e cores de estado divergentes.
+## Paleta
 
-## Auditoria visual do estado anterior
-
-A inspeção de todas as telas e folhas em `css/` encontrou 143 ocorrências de cores literais no recorte de arquivos Python/CSS. As inconsistências principais são:
-
-- famílias próximas de azul-marinho usadas sem um papel semântico definido;
-- três vermelhos e múltiplos verdes para o mesmo tipo de feedback;
-- fontes Segoe UI, DejaVu Sans e Consolas escolhidas localmente, sem fallback uniforme;
-- QSS de botões repetido em telas e também sobrescrito por widget;
-- raios de botão entre 8 e 16 px e de card entre 18 e 28 px;
-- margens, paddings e tamanhos de fonte sem escala compartilhada;
-- inputs de login/teclado com foco, erro e disabled diferentes;
-- telas de confirmação, PIX, pagamento e overlay com estados equivalentes representados de maneiras distintas;
-- ícones misturando imagens e símbolos Unicode sem regra de tamanho/alinhamento;
-- QSS inline que dificulta corrigir contraste ou identidade sem editar várias classes.
-
-Esses estilos legados não foram removidos nesta etapa. A migração gradual evita alterar de uma vez telas operacionais já estáveis.
-
-## Paleta oficial
-
-| Token | Cor | Uso |
-| --- | --- | --- |
-| `BACKGROUND_PRIMARY` | `#08111F` | Fundo principal das páginas |
-| `BACKGROUND_SECONDARY` | `#03111F` | Fundo profundo e gradientes existentes |
-| `SURFACE` | `#071C33` | Cards e painéis |
-| `SURFACE_ELEVATED` | `#0D253F` | Superfícies destacadas/modais |
-| `SURFACE_HOVER` | `#102748` | Hover em superfícies interativas |
-| `PRIMARY` | `#169DFF` | Ação principal e foco |
-| `PRIMARY_HOVER` | `#39B8FF` | Hover da ação principal |
-| `PRIMARY_PRESSED` | `#0D8CFF` | Ação principal pressionada |
-| `SECONDARY` / `INFO` | `#62C8FF` | Ações secundárias e informação |
-| `TEXT_PRIMARY` | `#FFFFFF` | Texto de maior hierarquia |
-| `TEXT_SECONDARY` | `#8DD4FF` | Subtítulos e texto auxiliar destacado |
-| `TEXT_MUTED` | `#8B949E` | Metadados e legendas |
-| `TEXT_DISABLED` | `#7F97B7` | Conteúdo desabilitado |
-| `TEXT_ON_PRIMARY` | `#03111F` | Texto sobre fundos claros/primários |
-| `BORDER` | `#17324D` | Bordas de cards e controles |
-| `DIVIDER` | `#30363D` | Separadores discretos |
-| `SUCCESS` | `#00D084` | Aprovação, online e conclusão |
-| `WARNING` | `#E0B54A` | Atenção, processamento e cancelamento |
-| `ERROR` | `#FF4D4D` | Recusa, offline e falha |
-
-Cor nunca é a única informação de estado: texto, ícone e contexto continuam obrigatórios.
+| Papel | Token | Valor |
+|---|---|---|
+| fundo | `BACKGROUND_PRIMARY` | `#08111F` |
+| fundo profundo | `BACKGROUND_SECONDARY` | `#03111F` |
+| card | `SURFACE` | `#071C33` |
+| card elevado | `SURFACE_ELEVATED` | `#0D253F` |
+| ação principal | `PRIMARY` | `#169DFF` |
+| informação | `SECONDARY` / `INFO` | `#62C8FF` |
+| texto principal | `TEXT_PRIMARY` | `#FFFFFF` |
+| texto secundário | `TEXT_SECONDARY` | `#8DD4FF` |
+| borda | `BORDER` | `#17324D` |
+| sucesso | `SUCCESS` | `#00D084` |
+| atenção/processamento | `WARNING` | `#E0B54A` |
+| erro/offline | `ERROR` | `#FF4D4D` |
+| sucesso fullscreen | `PAYMENT_SUCCESS_BACKGROUND` | `#087A4F` |
+| atenção fullscreen | `PAYMENT_ATTENTION_BACKGROUND` | `#C44D0A` |
+| falha fullscreen | `PAYMENT_ERROR_BACKGROUND` | `#D92D20` |
 
 ## Tipografia
 
-A família preferencial é `Segoe UI`, com fallback `DejaVu Sans`, disponível normalmente no Raspberry Pi/Linux. Identificadores técnicos usam `Consolas`, com fallback `DejaVu Sans Mono`. Não há dependência de fonte externa.
+Família: `Segoe UI`, fallback `DejaVu Sans`. Dados técnicos usam `Consolas`/`DejaVu Sans Mono`.
 
-| Estilo | Tamanho | Peso | Uso |
-| --- | ---: | ---: | --- |
-| Display | 48 px | 700 | Número/resultado excepcional |
-| H1 | 32 px | 700 | Título principal da tela |
-| H2 | 28 px | 700 | Título de seção ou card |
-| H3 | 22 px | 600 | Subseção |
-| Body | 18 px | 400 | Texto normal |
-| Label | 16 px | 600 | Rótulo de campo |
-| Small | 14 px | 400 | Texto auxiliar |
-| Caption | 13 px | 400 | Metadados compactos |
-| Button | 18 px | 700 | Texto de botão |
+| Estilo | px | Uso |
+|---|---:|---|
+| Display | 52 | total e resultado excepcional |
+| H1 | 38 | título principal |
+| H2 | 30 | seção |
+| H3 | 26 | preço e status |
+| Body | 22 | texto normal |
+| Label | 20 | rótulo |
+| Small | 18 | texto auxiliar |
+| Caption | 16 | metadado técnico não essencial |
+| Button | 22 | botão |
 
-Em resoluções menores, prefira reflow e redução de espaços antes de reduzir o texto essencial.
+Informação operacional importante não usa 12–16 px. Em área pequena, o layout reflui ou ganha scroll antes de reduzir texto.
 
-## Espaçamento e raios
+## Toque, espaçamento e raios
 
-Escala de espaçamento: `XS=4`, `SM=8`, `MD=12`, `LG=16`, `XL=24`, `XXL=32` e `XXXL=48` px. Margens, padding e distância entre widgets devem usar esses valores sempre que possível.
+- alvo mínimo: 56 px;
+- input: 60 px;
+- botão secundário: 60 px;
+- ação principal: 72 px;
+- ícone de ação: cerca de 32 px;
+- espaçamento: 4, 8, 12, 16, 24, 32 e 48 px;
+- raios: 8 px compacto, 12 px input/botão, 18 px card, 24 px modal.
 
-| Token | Valor | Uso |
-| --- | ---: | --- |
-| `SMALL_RADIUS` | 8 px | Tags e elementos compactos |
-| `INPUT_RADIUS` | 12 px | Inputs |
-| `BUTTON_RADIUS` | 12 px | Botões |
-| `CARD_RADIUS` | 18 px | Cards e painéis |
-| `MODAL_RADIUS` | 24 px | Modal/overlay elevado |
+## Componentes semânticos
 
-## Botões
+`Theme.component_stylesheet()` fornece:
 
-Botões de toque usam altura mínima de 48 px, padding horizontal de 24 px, fonte Button e raio de 12 px.
+- `QPushButton[variant="primary|secondary|danger|ghost|remove"]`;
+- `QPushButton[primaryAction="true"]`;
+- `QLineEdit[role="input"]`;
+- `QFrame[role="card|information"]`;
+- `QLabel[role="pageTitle|pageSubtitle|sectionTitle"]`;
+- `QLabel[state="success|warning|error|info|loading"]`;
+- scroll vertical com indicador largo.
 
-- **Primary:** fundo `PRIMARY`; ação dominante da página.
-- **Secondary:** superfície elevada, borda `SECONDARY`; ação alternativa.
-- **Danger:** fundo `ERROR`; operação destrutiva ou irreversível.
-- **Ghost/Text:** fundo transparente, texto `TEXT_SECONDARY`; voltar, fechar ou ação de baixa ênfase.
+Temas de página (`cart_stylesheet`, `purchase_confirmation_stylesheet`, `payment_stylesheet`, `confirmation_stylesheet`, `activation_stylesheet`, `welcome_stylesheet`, `settings_stylesheet`, `keyboard_stylesheet`, `app_payment_stylesheet` e `offline_stylesheet`) apenas especializam esses componentes. Os antigos arquivos `.css` duplicados foram removidos após todas as telas deixarem de referenciá-los.
 
-Cada variante possui hover, pressed e disabled. O disabled usa `DISABLED_BACKGROUND` e `TEXT_DISABLED`, não apenas menor opacidade. Em código, aplique `button.setProperty("variant", "primary")` (ou `secondary`, `danger`, `ghost`) e use o stylesheet central.
+`admin_stylesheet()` combina card, campo protegido, mensagem de erro e o mesmo teclado de `keyboard_stylesheet()`, incluindo alternância `ABC/abc`. A autenticação administrativa ocupa a página fullscreen em portrait; não usa diálogo pequeno. O valor digitado permanece mascarado. Confirmações destrutivas usam botões touchscreen com textos explícitos `CANCELAR`, `RESETAR` ou `ENCERRAR`.
 
-## Inputs
+## Estados de pagamento
 
-Inputs usam altura mínima de 48 px, fundo de input, borda de 2 px, padding horizontal de 16 px e raio de 12 px. Placeholder usa `INPUT_PLACEHOLDER`; foco usa borda `PRIMARY`; erro usa borda `ERROR`; disabled/read-only usam fundo e texto desabilitados.
+Os resultados financeiros ocupam 100% da página; não usam card central:
 
-Use `input.setProperty("role", "input")`. Para erro, aplique `input.setProperty("state", "error")`, repolindo o widget se a propriedade mudar após sua exibição. A mensagem de erro deve permanecer textual e próxima ao campo.
+| Semântica | Composição | Uso |
+|---|---|---|
+| `PAYMENT ATTENTION` | laranja `#C44D0A`, `alert.svg` branco, instrução H1 | cobrança aceita pela Point e ação necessária do cliente |
+| `PAYMENT ERROR` | vermelho `#D92D20`, `error.svg` branco, título + motivo H2, ação inferior | somente falha financeira definitiva |
+| `PAYMENT SUCCESS` | verde `#087A4F`, `checked.svg` branco, total e ações | somente aprovação definitiva |
 
-## Cards, containers e modal
+`ColoredSvgLabel`/`render_colored_svg` renderizam os SVGs monocromáticos como máscara em memória. Isso cobre `fill`, `stroke` e preto implícito, resolve o path por `PROJECT_ROOT/icon` e não altera nem duplica os assets.
 
-- **Card:** `SURFACE`, borda `BORDER`, raio 18 px, padding recomendado 24 px.
-- **Painel de informação:** `SURFACE_ELEVATED`, borda `BORDER`, raio 12–18 px.
-- **Modal:** superfície elevada, raio 24 px, overlay escuro; deve manter ação clara de saída.
-- **Resumo do carrinho:** card com linhas separadas por `DIVIDER`, total com hierarquia H2/H3.
+Loading/preparação permanece no fundo neutro com indicador imediato. `PENDING`, `WAITING_PAYMENT` e `PROCESSING` nunca recebem a tela vermelha. Offline também não é recusa financeira.
 
-Use `QFrame` com propriedade `role="card"` ou `role="information"`. Sombras devem ser discretas e não substituir bordas/contraste.
+Na tela verde, `FINALIZAR` é a ação primária clara; CPF, e-mail e WhatsApp são secundárias. Todos os alvos medem pelo menos 60 px. O resultado não possui reset automático: somente `FINALIZAR` chama o reset central.
 
-## Estados do sistema
+Hover é um refinamento para desenvolvimento; `pressed`, `disabled`, texto e contraste funcionam sem hover.
 
-| Estado funcional | Token visual | Apresentação |
-| --- | --- | --- |
-| `APPROVED`, online | `SUCCESS` | ícone + texto de confirmação |
-| `PROCESSING`, loading | `INFO` ou `WARNING` | mensagem de espera + indicador ativo |
-| `REJECTED` | `ERROR` | ícone + explicação e próxima ação |
-| `CANCELLED` | `WARNING` | texto explícito de cancelamento |
-| offline/falha | `ERROR` | texto de indisponibilidade e recuperação |
+## Estrutura
 
-Labels reutilizáveis usam a propriedade `state`: `success`, `warning`, `error`, `info` ou `loading`. Loading não deve bloquear a UI; combine texto e indicador visual. Componentes desabilitados não devem responder a toque nem parecer ativos.
+A única `MainWindow` chama `showFullScreen()`. Páginas vivem no mesmo `QStackedWidget`, usam layouts e `QSizePolicy.Expanding`. Lista de produtos e resumo usam `QScrollArea`; total e ações ficam fora do scroll. Tamanho fixo só é aceito no botão compacto de remover (56 × 56), cuja área de toque é deliberadamente estável.
 
-## Estrutura fullscreen
-
-A aplicação mantém uma única `MainWindow` fullscreen e páginas dentro de um `QStackedWidget` expansível. As páginas não devem abrir janelas próprias nem chamar `showFullScreen()` individualmente.
-
-Estrutura recomendada:
-
-```text
-Página expansível
-├── header (título, estado global ou navegação)
-├── conteúdo com stretch/reflow
-└── footer/actions, quando necessário
-```
-
-Use layouts Qt, `QSizePolicy.Expanding` onde o conteúdo deve crescer e stretches para distribuição. Evite `setGeometry`, `move`, tamanhos fixos e margins grandes que excedam `1024x600`. Scroll só é apropriado quando o conteúdo é genuinamente maior que a área disponível. O mínimo de validação visual é `1024x600`, `800x480`, `600x1024` e resize em runtime.
-
-## Ícones
-
-O projeto usa imagens existentes e símbolos Unicode; nenhuma biblioteca nova é necessária. Ícones de ação devem ficar normalmente entre 20 e 24 px, alinhados ao texto e com espaçamento `SM`. Ícones centrais de estado podem crescer conforme o layout, mas devem manter proporção. Use significado consistente para voltar, carrinho, pagamento, sucesso e erro e sempre forneça texto acessível junto ao símbolo.
-
-## Reutilização e adoção
-
-`styles/tokens.py` é a fonte de verdade visual. `styles/theme.py` produz o QSS comum e estilos específicos de páginas durante a adoção gradual. Não replique hexadecimal em telas; crie um token semântico somente quando houver uso estável e distinto.
-
-Situação atual:
-
-- cadastro/ativação: migrado para `Theme.activation_stylesheet()`;
-- componentes comuns: variantes de botão, input, card e estado disponíveis;
-- demais telas: preservadas, aguardando migração individual com teste visual e funcional.
-
-Uma migração futura não deve alterar navegação, chamadas HTTP, carrinho, pagamento ou qualquer regra de negócio.
+Validação mínima: `768x1360` portrait e `1024x600`/`800x480` landscape de desenvolvimento.

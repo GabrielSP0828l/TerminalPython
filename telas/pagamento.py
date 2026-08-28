@@ -1,18 +1,36 @@
 import logging
 
 from PyQt5.QtCore import Qt, QTimer
-from PyQt5.QtWidgets import QFrame, QLabel, QPushButton, QVBoxLayout, QWidget
+from PyQt5.QtWidgets import (
+    QFrame,
+    QLabel,
+    QProgressBar,
+    QPushButton,
+    QSizePolicy,
+    QStackedLayout,
+    QVBoxLayout,
+    QWidget,
+)
 
 from model.Terminal import Terminal
 from service.PurchaseApi import OrderStatusWorker, PointCheckoutWorker, PointResumeWorker
 from styles.theme import Theme
+from telas.PaymentStateWidget import PaymentStateWidget
 
 
 logger = logging.getLogger(__name__)
 
 
 class PagamentoScreen(QWidget):
-    POLL_INTERVAL_MS = 5000
+    POLL_INTERVAL_MS = 10000
+    FAILURE_MESSAGES = {
+        "REJECTED": "Pagamento recusado",
+        "FAILED": "Não foi possível concluir o pagamento",
+        "CANCELED": "Pagamento cancelado",
+        "CANCELLED": "Pagamento cancelado",
+        "EXPIRED": "O tempo para pagamento terminou",
+        "REFUNDED": "Pagamento estornado",
+    }
 
     def __init__(self, parent):
         super().__init__(parent)
@@ -26,12 +44,31 @@ class PagamentoScreen(QWidget):
         self.setObjectName("pointPaymentScreen")
         self.setStyleSheet(Theme.payment_stylesheet())
 
-        root = QVBoxLayout(self)
+        self.pages = QStackedLayout(self)
+        self.pages.setContentsMargins(0, 0, 0, 0)
+        self.pages.setSpacing(0)
+        self.loading_page = self._build_loading_page()
+        self.attention_page = self._build_attention_page()
+        self.error_page = self._build_error_page()
+        self.pages.addWidget(self.loading_page)
+        self.pages.addWidget(self.attention_page)
+        self.pages.addWidget(self.error_page)
+
+        self.poll_timer = QTimer(self)
+        self.poll_timer.timeout.connect(self.reconciliar_estado)
+        self.parent.compra_session.remaining_changed.connect(self._update_countdown)
+
+    def _build_loading_page(self):
+        page = QWidget(self)
+        page.setProperty("role", "page")
+        root = QVBoxLayout(page)
         root.setContentsMargins(24, 24, 24, 24)
         root.setAlignment(Qt.AlignCenter)
 
-        self.card = QFrame(self)
+        self.card = QFrame(page)
         self.card.setObjectName("paymentCard")
+        self.card.setMaximumWidth(760)
+        self.card.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
         card_layout = QVBoxLayout(self.card)
         card_layout.setContentsMargins(40, 32, 40, 32)
         card_layout.setSpacing(18)
@@ -39,43 +76,81 @@ class PagamentoScreen(QWidget):
         self.title = QLabel("PREPARANDO PAGAMENTO")
         self.title.setObjectName("paymentTitle")
         self.title.setAlignment(Qt.AlignCenter)
-
         self.total_final = QLabel("R$ 0,00")
         self.total_final.setObjectName("paymentTotal")
         self.total_final.setAlignment(Qt.AlignCenter)
-
+        self.icon = QLabel("●")
+        self.icon.setObjectName("paymentIcon")
+        self.icon.setAlignment(Qt.AlignCenter)
         self.loading = QLabel("●  Preparando compra...")
         self.loading.setObjectName("paymentLoading")
         self.loading.setProperty("state", "loading")
         self.loading.setAlignment(Qt.AlignCenter)
-
+        self.loading.setWordWrap(True)
         self.instructions = QLabel()
         self.instructions.setObjectName("paymentInstructions")
         self.instructions.setAlignment(Qt.AlignCenter)
         self.instructions.setWordWrap(True)
-
+        self.progress = QProgressBar()
+        self.progress.setObjectName("paymentProgress")
+        self.progress.setRange(0, 0)
+        self.progress.setTextVisible(False)
         self.timer_label = QLabel("Tempo restante: 15:00")
         self.timer_label.setObjectName("paymentTimer")
         self.timer_label.setAlignment(Qt.AlignCenter)
-
-        self.btn_voltar = QPushButton("VOLTAR PARA A COMPRA")
-        self.btn_voltar.setProperty("variant", "secondary")
+        self.btn_voltar = QPushButton("TENTAR NOVAMENTE")
+        self.btn_voltar.setProperty("variant", "primary")
+        self.btn_voltar.setProperty("primaryAction", True)
         self.btn_voltar.clicked.connect(self._voltar_lista)
         self.btn_voltar.hide()
 
         card_layout.addWidget(self.title)
         card_layout.addWidget(self.total_final)
         card_layout.addStretch(1)
+        card_layout.addWidget(self.icon)
         card_layout.addWidget(self.loading)
+        card_layout.addWidget(self.progress)
         card_layout.addWidget(self.instructions)
         card_layout.addWidget(self.timer_label)
         card_layout.addStretch(1)
         card_layout.addWidget(self.btn_voltar)
         root.addWidget(self.card)
+        return page
 
-        self.poll_timer = QTimer(self)
-        self.poll_timer.timeout.connect(self.reconciliar_estado)
-        self.parent.compra_session.remaining_changed.connect(self._update_countdown)
+    def _build_attention_page(self):
+        page = PaymentStateWidget(
+            "attention",
+            "alert.svg",
+            "PRESSIONE O BOTÃO VERDE\nDA MAQUININHA",
+            "Siga as instruções exibidas na maquininha\npara concluir o pagamento.",
+            parent=self,
+        )
+        self.attention_timer = QLabel("Tempo restante: 15:00")
+        self.attention_timer.setObjectName("paymentStateSupporting")
+        self.attention_timer.setAlignment(Qt.AlignCenter)
+        page.content_layout.addWidget(self.attention_timer)
+        return page
+
+    def _build_error_page(self):
+        page = PaymentStateWidget(
+            "error",
+            "error.svg",
+            "PAGAMENTO NÃO APROVADO",
+            "Não foi possível concluir o pagamento",
+            parent=self,
+        )
+        self.error_reason = page.message
+        self.error_support = QLabel("Os produtos continuam na sua compra.")
+        self.error_support.setObjectName("paymentStateSupporting")
+        self.error_support.setAlignment(Qt.AlignCenter)
+        self.error_support.setWordWrap(True)
+        page.content_layout.addWidget(self.error_support)
+        self.error_retry = QPushButton("TENTAR NOVAMENTE")
+        self.error_retry.setProperty("variant", "statePrimary")
+        self.error_retry.setProperty("primaryAction", True)
+        self.error_retry.clicked.connect(self._voltar_lista)
+        page.action_layout.addWidget(self.error_retry)
+        return page
 
     def iniciar_pagamento(self, cart_payload, total_text):
         attempt = self.parent.compra_session.begin_payment()
@@ -84,11 +159,11 @@ class PagamentoScreen(QWidget):
         self.current_attempt = attempt
         self.timeout_pending = False
         self.total_final.setText(total_text)
-        self.title.setText("PREPARANDO PAGAMENTO")
-        self.loading.setText("●  Criando pedido e enviando para a maquininha...")
-        self.loading.setProperty("state", "loading")
-        self.instructions.setText("Aguarde. Esta operação pode levar alguns segundos.")
-        self.btn_voltar.hide()
+        self._show_loading(
+            "PREPARANDO PAGAMENTO",
+            "●  Criando pedido e enviando para a maquininha...",
+            "Aguarde. Esta operação pode levar alguns segundos.",
+        )
         self.parent.setCurrentWidget(self)
 
         self.point_worker = PointCheckoutWorker(cart_payload, parent=self)
@@ -101,40 +176,53 @@ class PagamentoScreen(QWidget):
         )
         self.point_worker.start()
 
+    def _show_loading(self, title, message, instructions=""):
+        self.title.setText(title)
+        self.loading.setText(message)
+        self.loading.setProperty("state", "loading")
+        self.loading.style().unpolish(self.loading)
+        self.loading.style().polish(self.loading)
+        self.instructions.setText(instructions)
+        self.icon.setText("●")
+        self.icon.setProperty("state", "loading")
+        self.progress.show()
+        self.btn_voltar.hide()
+        self.btn_voltar.setEnabled(False)
+        self.pages.setCurrentWidget(self.loading_page)
+
+    def _show_attention(self):
+        self.pages.setCurrentWidget(self.attention_page)
+
     def _point_started(self, attempt, data):
         if attempt != self.current_attempt:
             return
         payment = data.get("pagamento") or {}
         self.parent.compra_session.set_remote_ids(
-            data.get("cartId"),
-            data.get("orderId"),
-            payment.get("pagamentoId"),
+            data.get("cartId"), data.get("orderId"),
+            data.get("paymentId") or data.get("transactionId") or payment.get("pagamentoId")
         )
         self.parent.compra_session.mark_waiting()
-        self.title.setText("AGUARDANDO PAGAMENTO")
-        self.loading.setText("●  Pagamento enviado para a maquininha")
-        self.instructions.setText(
-            "Pressione o botão verde da maquininha para visualizar ou continuar "
-            "o pagamento.\nSiga as instruções exibidas na maquininha.\n\n"
-            "Não feche esta tela."
-        )
+        self._show_attention()
         self.poll_timer.start(self.POLL_INTERVAL_MS)
         self._apply_payload(data)
 
     def _point_failed(self, attempt, message, stage, ambiguous, context):
         if attempt != self.current_attempt:
             return
-        logger.warning("Falha ao iniciar Point: stage=%s ambiguous=%s message=%s", stage, ambiguous, message)
+        logger.warning(
+            "Falha ao iniciar Point: stage=%s ambiguous=%s message=%s",
+            stage, ambiguous, message,
+        )
         if context:
             self.parent.compra_session.set_remote_ids(
                 context.get("cartId"), context.get("orderId")
             )
         if ambiguous and self.parent.compra_session.cart_id:
             self.parent.compra_session.mark_waiting()
-            self.title.setText("CONFIRMANDO PAGAMENTO")
-            self.loading.setText("●  Verificando se a cobrança foi enviada...")
-            self.instructions.setText(
-                "A conexão oscilou. Não tente pagar novamente enquanto confirmamos o estado."
+            self._show_loading(
+                "CONFIRMANDO PAGAMENTO",
+                "●  Verificando se a cobrança foi enviada...",
+                "A conexão oscilou. Não tente pagar novamente enquanto confirmamos o estado.",
             )
             self.poll_timer.start(self.POLL_INTERVAL_MS)
             self._retomar_inicio_point()
@@ -142,7 +230,6 @@ class PagamentoScreen(QWidget):
         self._safe_failure("Não foi possível iniciar o pagamento. O carrinho foi preservado.")
 
     def processar_evento(self, data):
-        session = self.parent.compra_session
         terminal = Terminal.load()
         terminal_id = data.get("terminalId")
         if not terminal or str(terminal_id) != str(terminal.terminalId):
@@ -155,7 +242,8 @@ class PagamentoScreen(QWidget):
         payment = data.get("pagamento") or {}
         status = data.get("status") or payment.get("status")
         self._apply_status(
-            data.get("orderId"), status, payment.get("transactionId")
+            data.get("orderId"), status,
+            data.get("paymentId") or data.get("transactionId") or payment.get("transactionId"),
         )
 
     def _apply_status(self, order_id, status, transaction_id=None):
@@ -170,13 +258,19 @@ class PagamentoScreen(QWidget):
             self.parent.setCurrentWidget(self.parent.confirmacao)
         elif result == "FAILED":
             self.parar_espera()
-            if self.timeout_pending:
-                self.parent.reset_compra()
-                self.parent.setCurrentWidget(self.parent.welcome)
-            else:
-                self._safe_failure("Pagamento não confirmado. Você pode tentar novamente.")
+            self._show_definitive_failure(session.last_status)
         elif result == "PROCESSING":
-            self.loading.setText("●  Pagamento enviado. Aguardando confirmação...")
+            if session.last_status == "PROCESSING":
+                self._show_loading(
+                    "PROCESSANDO PAGAMENTO",
+                    "●  Confirmando o resultado do pagamento...",
+                    "Aguarde e não retire o cartão até a maquininha orientar.",
+                )
+            else:
+                # Mantém também o estado textual legado coerente para leitores
+                # de acessibilidade, embora a página visível seja a laranja.
+                self.loading.setText("●  Aguardando interação com a maquininha...")
+                self._show_attention()
 
     def reconciliar_estado(self):
         order_id = self.parent.compra_session.order_id
@@ -190,14 +284,23 @@ class PagamentoScreen(QWidget):
         terminal = Terminal.load()
         if terminal is None:
             return
-        self.status_worker = OrderStatusWorker(
-            order_id, terminal.terminalId, parent=self
-        )
+        self.status_worker = OrderStatusWorker(order_id, terminal.terminalId, parent=self)
         self.status_worker.succeeded.connect(
             lambda data, oid=expected_order: self._status_received(oid, data)
         )
         self.status_worker.failed.connect(self._status_failed)
         self.status_worker.start()
+
+    def verificar_apos_reconexao(self):
+        if not self.parent.compra_session.payment_in_flight:
+            return
+        self.parent.setCurrentWidget(self)
+        self._show_loading(
+            "VERIFICANDO PAGAMENTO",
+            "●  Conexão restaurada. Confirmando o estado da compra...",
+            "Aguarde a confirmação do servidor antes de tentar um novo pagamento.",
+        )
+        self.reconciliar_estado()
 
     def _retomar_inicio_point(self):
         cart_id = self.parent.compra_session.cart_id
@@ -217,7 +320,11 @@ class PagamentoScreen(QWidget):
 
     def _status_failed(self, message):
         logger.warning("Não foi possível reconciliar pagamento: %s", message)
-        self.loading.setText("●  Reconectando e confirmando o pagamento...")
+        self._show_loading(
+            "CONFIRMANDO PAGAMENTO",
+            "●  Reconectando e confirmando o pagamento...",
+            "Não inicie outra tentativa enquanto verificamos o resultado.",
+        )
 
     def tratar_timeout_global(self, generation):
         session = self.parent.compra_session
@@ -229,10 +336,10 @@ class PagamentoScreen(QWidget):
             return
         self.timeout_pending = True
         self.parent.setCurrentWidget(self)
-        self.title.setText("CONFIRMANDO PAGAMENTO")
-        self.loading.setText("●  Verificando o estado final da compra...")
-        self.instructions.setText(
-            "O tempo da compra terminou. Aguarde a confirmação antes de iniciar outra compra."
+        self._show_loading(
+            "CONFIRMANDO PAGAMENTO",
+            "●  Verificando o estado final da compra...",
+            "O tempo terminou. Aguarde a confirmação antes de iniciar outra compra.",
         )
         self.poll_timer.start(self.POLL_INTERVAL_MS)
         if session.order_id:
@@ -240,13 +347,31 @@ class PagamentoScreen(QWidget):
         else:
             self._retomar_inicio_point()
 
+    def _show_definitive_failure(self, status):
+        normalized = str(status or "FAILED").upper()
+        self.error_reason.setText(
+            self.FAILURE_MESSAGES.get(normalized, self.FAILURE_MESSAGES["FAILED"])
+        )
+        self.error_retry.setEnabled(True)
+        self.pages.setCurrentWidget(self.error_page)
+        self.parent.compra_session.prepare_retry()
+
     def _safe_failure(self, message):
+        """Falha operacional antes de um resultado financeiro definitivo."""
+        self._show_loading(
+            "PAGAMENTO NÃO CONCLUÍDO",
+            message,
+            "Os produtos continuam na lista da compra.",
+        )
+        self.icon.setText("!")
+        self.icon.setProperty("state", "error")
         self.loading.setProperty("state", "error")
-        self.loading.style().unpolish(self.loading)
-        self.loading.style().polish(self.loading)
-        self.loading.setText(message)
-        self.instructions.setText("Os produtos continuam na lista da compra.")
+        for widget in (self.icon, self.loading):
+            widget.style().unpolish(widget)
+            widget.style().polish(widget)
+        self.progress.hide()
         self.btn_voltar.show()
+        self.btn_voltar.setEnabled(True)
         self.parent.compra_session.prepare_retry()
 
     def _voltar_lista(self):
@@ -255,8 +380,17 @@ class PagamentoScreen(QWidget):
 
     def _update_countdown(self, seconds):
         minutes, remainder = divmod(max(0, seconds), 60)
-        self.timer_label.setText(f"Tempo restante: {minutes:02}:{remainder:02}")
+        text = f"Tempo restante: {minutes:02}:{remainder:02}"
+        self.timer_label.setText(text)
+        self.attention_timer.setText(text)
 
     def parar_espera(self):
         self.poll_timer.stop()
         self.current_attempt = None
+
+    def parar_workers(self):
+        self.parar_espera()
+        for worker in (self.point_worker, self.status_worker, self.resume_worker):
+            if worker is not None and worker.isRunning():
+                worker.requestInterruption()
+                worker.wait(500)

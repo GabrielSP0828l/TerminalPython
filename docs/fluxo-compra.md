@@ -1,54 +1,49 @@
 # Fluxo atual da compra
 
-Voltar para [o índice](00-index.md).
+Voltar para [[00-index]]. Telas em [[telas]] e contrato em [[api-backend]].
 
-## Sessão global
+## Fonte única de estado
 
-`CompraSession` é a fonte de estado operacional da compra em memória. O prazo único de 15 minutos começa no primeiro produto válido escaneado e não reinicia ao abrir pagamento Point ou pagamento no app. Ela guarda geração, tentativa, `cartId`, `orderId`, `paymentId`, estado e instante inicial.
+`TerminalScreen.carrinho` contém os itens em memória; `CompraSession` contém prazo, geração, tentativa, `cartId`, `orderId`, `paymentId` e estado operacional. A confirmação pré-pagamento consulta esses objetos e não cria cópia do carrinho.
 
 ## Scanner e lista
 
-1. `TerminalScreen.readProduct` busca o código no cache SQLite ativo.
-2. O primeiro scan cria uma linha com quantidade 1 e inicia a sessão.
-3. Novo scan do mesmo código incrementa a quantidade.
-4. Não existem botões manuais `+`/`-`.
-5. O botão `x` preserva o comportamento anterior: remove a linha inteira.
-6. Se a última linha for removida, a sessão volta a `IDLE`.
+1. scanner preenche o input e envia Enter;
+2. `readProduct()` consulta o produto ativo no SQLite;
+3. primeiro scan cria um `Item` e inicia o prazo global de 15 minutos;
+4. scans repetidos incrementam quantidade;
+5. remover elimina a linha inteira; carrinho vazio reseta a sessão local.
 
-## Pagar agora — Point
+## Finalização confirmada
 
 ```text
-TerminalScreen
-  -> PagamentoScreen (loading)
-  -> worker: POST /carrinho
-  -> worker: POST /pagamento/terminal/{carrinhoId}
-  -> PointPaymentResponse com orderId/status
-  -> orientação para pressionar o botão verde da maquininha
-  -> WebSocket + GET correlacionado de status
+Carrinho visual
+  -> FINALIZAR (somente navegação)
+  -> Confirme sua compra
+      -> VOLTAR (mesmo objeto Carrinho)
+      -> CONFIRMAR E PAGAR
+          -> botão desabilitado + “PREPARANDO...”
+          -> PagamentoScreen / worker Point atual
 ```
 
-A segunda chamada só retorna com sucesso depois que o backend aceitou/enviou a cobrança Point e persistiu os dados disponíveis. Nenhuma credencial Mercado Pago existe no Python.
+Não há chamada HTTP ao tocar em `Finalizar`. A primeira operação remota acontece somente em “Confirmar e pagar”.
 
-`WAITING_PAYMENT` e `ACTION_REQUIRED` continuam aguardando. `APPROVED` abre a `ConfirmacaoScreen`; `REJECTED`, `CANCELLED`, `EXPIRED` e `REFUNDED` informam a falha e permitem voltar à lista com os itens locais. Eventos de outra Order ou terminal são ignorados.
+## Point
 
-## Falha e idempotência
+1. `POST /carrinho` persiste Carrinho/Items;
+2. `POST /pagamento/terminal/{carrinhoId}` cria/reutiliza Order e inicia Point;
+3. resposta inicial válida muda a UI para atenção laranja e instrui o cliente na Point;
+4. WebSocket e `GET /order/{orderId}/status?terminalId=...` reconciliam o estado;
+5. `PROCESSING` mantém loading; somente `APPROVED` correlacionado abre o sucesso verde;
+6. falha definitiva abre erro vermelho e “Tentar novamente” retorna ao carrinho;
+7. no sucesso, a compra permanece em memória até `FINALIZAR` executar o reset central.
 
-O botão não inicia outra tentativa enquanto `payment_in_flight` estiver ativo. Se a resposta do início Point for perdida após o carrinho ser criado, o cliente repete somente o `POST` Point com o mesmo `carrinhoId`; o backend reutiliza a Order e a chave idempotente da Order. Falha anterior ao envio Point preserva a lista e libera nova tentativa.
+Falha de comunicação antes de conhecer o resultado usa mensagem operacional neutra, não “recusado”. Timeout com IDs remotos continua reconciliando. Falha definitiva preserva os itens, invalida os IDs antigos e uma nova cobrança só pode começar novamente pelo fluxo de confirmação. O Python não contém credenciais Mercado Pago nem interpreta status externos diretamente.
 
-## Timeout
+## Pós-aprovação
 
-Ao zerar o relógio:
+`APPROVED` não limpa Carrinho, Order ou Payment local imediatamente. A tela verde mantém essas referências para CPF/comprovante e bloqueia uma nova compra. Hoje o backend não possui CPF em Order/Pagamento nem endpoints de comprovante por e-mail/WhatsApp; por isso a UI não grava nem afirma envio. `FINALIZAR` é opcionalmente precedido por essas ações futuras e sempre conclui a experiência por `MainWindow.reset_compra()`.
 
-- sem tentativa remota, a compra local é limpa e o terminal volta ao início;
-- com `orderId`, o terminal consulta o backend antes de concluir;
-- com `cartId` e resposta Point incerta, repete idempotentemente o início para recuperar o `orderId`;
-- estado ainda intermediário mantém a tela bloqueada e continua reconciliando, pois não existe endpoint operacional de cancelamento Point;
-- aprovação durante a verificação vence o timeout; eventos antigos são rejeitados pela Order atual.
+## Fluxos fora da compra principal
 
-## Aprovação e limpeza
-
-`ConfirmacaoScreen` mostra “Pagamento aprovado / Compra concluída” por cinco segundos. `MainWindow.reset_compra()` interrompe espera, limpa carrinho, linhas, totais e IDs/timers da sessão, preservando UUID, ativação, configurações e cache de produtos.
-
-## Pagar no app
-
-O fluxo foi preservado. HTTP e geração do QR agora rodam em `QThread`, sem alterar widgets fora da UI, e o contador usa o mesmo prazo global. Cancelar retorna à lista. A conclusão financeira completa do checkout pelo app continua uma pendência do contrato backend.
+`AppPaymentScreen` permanece no código por compatibilidade histórica, mas o botão “Pagar no App” foi removido do carrinho e nenhuma rota ativa abre essa tela. Crédito/débito/PIX não foram recriados.

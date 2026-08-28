@@ -26,6 +26,13 @@ class Colors:
     ERROR_HOVER = "#F85149"
     INFO = SECONDARY
 
+    # Fundos semânticos de estado. Foram escolhidos para manter contraste AA
+    # com texto/ícones brancos em uma tela inteira, não apenas em detalhes.
+    PAYMENT_SUCCESS_BACKGROUND = "#087A4F"
+    PAYMENT_ATTENTION_BACKGROUND = "#C44D0A"
+    PAYMENT_ERROR_BACKGROUND = "#D92D20"
+    PAYMENT_STATE_FOREGROUND = "#FFFFFF"
+
     INPUT_BACKGROUND = "#FFFFFF"
     INPUT_TEXT = "#17324D"
     INPUT_PLACEHOLDER = "#7F97B7"
@@ -39,15 +46,15 @@ class FontFamily:
 
 
 class FontSize:
-    DISPLAY = 48
-    H1 = 32
-    H2 = 28
-    H3 = 22
-    BODY = 18
-    LABEL = 16
-    SMALL = 14
-    CAPTION = 13
-    BUTTON = 18
+    DISPLAY = 52
+    H1 = 38
+    H2 = 30
+    H3 = 26
+    BODY = 22
+    LABEL = 20
+    SMALL = 18
+    CAPTION = 16
+    BUTTON = 22
 
 
 class FontWeight:
@@ -65,6 +72,14 @@ class Spacing:
     XL = 24
     XXL = 32
     XXXL = 48
+
+
+class TouchSize:
+    MINIMUM = 56
+    INPUT = 60
+    SECONDARY_BUTTON = 60
+    PRIMARY_BUTTON = 72
+    ICON = 32
 
 
 class Radius:

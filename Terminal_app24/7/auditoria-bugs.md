@@ -140,12 +140,15 @@ Critério: **confirmado** quando o caminho executável ou contrato prova o compo
 
 ## BUG-015 — Aprovação durante desconexão não é recuperada
 
+**Status:** corrigido para queda/reconexão do backend e perda de WebSocket; persistência após reboot físico permanece em [[melhorias]].
+
 - **Severidade:** alta
-- **Tipo:** confirmado pela ausência de mecanismo
+- **Tipo:** corrigido
 - **Arquivo/função:** `PaymentListener.run`; persistência local
 - **Cenário:** webhook aprova enquanto socket está offline.
 - **Impacto:** backend pago e terminal exibindo espera/erro.
-- **Correção recomendada:** consulta de estado no reconnect/startup e replay confiável.
+- **Correção:** conexão/reconexão abre “Verificando pagamento”, consulta o endpoint correlacionado e mantém polling HTTP controlado a cada 10 segundos. O backend reconcilia com a Order Point antes de responder.
+- **Validação:** testes cobrem `APPROVED`, `WAITING_PAYMENT` e `REJECTED` recebidos pela consulta pós-reconexão.
 
 ## BUG-016 — Listener pode não encerrar
 
@@ -276,15 +279,40 @@ Critério: **confirmado** quando o caminho executável ou contrato prova o compo
 
 ## BUG-029 — Estilos visuais fragmentados entre telas
 
-**Status:** mitigação inicial em 16 de agosto de 2026; migração das demais telas pendente.
+**Status:** corrigido em 27 de agosto de 2026.
 
 - **Severidade:** média.
 - **Tipo:** confirmado.
 - **Arquivo/função:** QSS inline em `terminal_screen.py`, `pix.py`, `pagamento.py`, `app_payment_screen.py`, `ConfirmacaoScreen.py`, `OfflineOverlay.py` e folhas em `css/`.
 - **Cenário:** telas equivalentes definem diretamente famílias de azul, vermelho e verde, fontes, paddings e raios diferentes.
 - **Impacto:** identidade inconsistente, estados visualmente ambíguos e manutenção sujeita a divergências.
-- **Correção recomendada:** migrar uma tela por vez para os tokens de `styles/tokens.py` e variantes de `styles/theme.py`, com validação visual e funcional por etapa.
-- **Correção aplicada nesta etapa:** design system central criado e tela de cadastro/ativação migrada, sem alterar as demais telas ou sua lógica.
+- **Correção aplicada:** todas as telas foram migradas ao tema central, folhas QSS duplicadas removidas e geometria portrait validada por testes Qt offscreen.
+
+## BUG-034 — Compra iniciava Point sem resumo explícito
+
+**Status:** corrigido em 27 de agosto de 2026.
+
+- `PAGAR AGORA` iniciava o worker diretamente e `PAGAR NO APP` competia na mesma tela.
+- Agora há `FINALIZAR -> CONFIRME SUA COMPRA -> CONFIRMAR E PAGAR`.
+- A confirmação lê a mesma instância de `Carrinho`; voltar preserva os produtos e o botão é desabilitado antes do worker.
+
+## BUG-035 — Navegação quebrada no teclado legado
+
+**Status:** corrigido em 27 de agosto de 2026; rota permanece inativa.
+
+O atributo inexistente `parentrminal` foi corrigido para `parent.terminal`. O endpoint legado de login não foi reativado.
+
+## BUG-036 — Administração sem senha e ausência de saída segura
+
+**Status:** corrigido em 28 de agosto de 2026.
+
+O toque longo abria diretamente as configurações. Agora uma senha de ambiente, mascarada e nunca logada, protege o menu inteiro por acesso. A autorização expira ao sair. `Fechar Terminal` executa confirmação contextual e shutdown cooperativo; `Esc`/close comum não encerram o quiosque.
+
+## BUG-037 — Estados financeiros pequenos e reset aprovado prematuro
+
+**Status:** corrigido em 28 de agosto de 2026.
+
+Falha, instrução e sucesso eram cards e a aprovação apagava a compra após cinco segundos. Agora os estados são fullscreen, usam SVG branco/ícone + texto + cor, retry não cria cobrança e `FINALIZAR` é o único reset normal. CPF/comprovantes continuam explicitamente pendentes do backend.
 
 ## BUG-030 — Sync somente no startup e paths relativos
 

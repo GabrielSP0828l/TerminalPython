@@ -1,27 +1,34 @@
 # Arquitetura do Terminal
 
-Voltar para [o índice](00-index.md).
-
-Este é o ponto de entrada canônico solicitado para a arquitetura. O inventário histórico completo permanece em [[arquitetura-atual]].
+Voltar para [[00-index]]. Inventário detalhado em [[arquitetura-atual]].
 
 ```text
-MainWindow (lifecycle da aplicação)
-├── Terminal/ativação persistente
-├── SyncService (thread)
-│   ├── execução imediata + 300 s
-│   ├── GET /produtos/sync por UUID + syncAt
-│   ├── FULL/INCREMENTAL transacional no SQLite
-│   └── lock + sync_in_progress + sync_pending
-├── TerminalSocket (thread)
-│   ├── heartbeat a cada 10 s
-│   └── ACK após persistência de lastPing
-├── PaymentListener (QThread)
-│   ├── PAYMENT_STATUS → fluxo de pagamento
-│   ├── PRODUCT_SYNC_REQUIRED → SyncService
-│   └── sync ao conectar/reconectar
-└── QStackedWidget / telas
+MainWindow / showFullScreen
+├── QStackedWidget
+│   ├── ativação / boas-vindas / configuração
+│   ├── AdminAuthScreen ── barreira efêmera por senha de ambiente
+│   ├── TerminalScreen ── Carrinho único em memória
+│   ├── ConfirmacaoCompraScreen ── view do mesmo Carrinho
+│   ├── PagamentoScreen ── workers HTTP Point
+│   └── ConfirmacaoScreen ── resultado aprovado/ações/reset explícito
+├── CompraSession ── prazo, IDs e estado operacional
+├── SyncService ── catálogo SQLite fora da UI
+├── TerminalSocket ── heartbeat
+└── PaymentListener ── pagamento + invalidação de catálogo
 ```
 
-Configuração, `.env`, identidade, banco e cursor usam paths derivados da raiz do código, independentemente do diretório de execução. Sync e heartbeat começam somente depois de `Terminal.is_activated()` e continuam durante todas as telas, inclusive pagamento. HTTP/SQLite rodam fora da thread Qt. O scanner consulta SQLite a cada leitura; não existe cache paralelo a invalidar. Itens já presentes no carrinho mantêm o snapshot de produto/preço capturado no scan, enquanto a sync afeta leituras futuras.
+O design system é centralizado em `styles/tokens.py` e `styles/theme.py`. As páginas aplicam temas semânticos, mas não guardam paletas independentes. Layouts Qt expansíveis recebem a geometria real do display; não há rotação de widgets.
 
-O backend continua sendo fonte de verdade para terminal, condomínio, empresa, catálogo, disponibilidade, estoque e status financeiro. Veja [[sincronizacao]], [[heartbeat]], [[sqlite]], [[api-backend]] e [[websocket]].
+`PaymentStateWidget` compõe ícone/título/mensagem/ações para estados fullscreen. `styles/svg_icons.py` resolve assets pela raiz e usa `QSvgRenderer` + máscara `SourceIn` para recolorir SVG em runtime. `CompraSession.last_status` mantém somente o status interno necessário ao motivo humano e rejeita `APPROVED` duplicado sem reconstruir a tela. O reset aprovado migrou do timer para a ação explícita `FINALIZAR`.
+
+O backend continua fonte de verdade para identidade organizacional, catálogo/disponibilidade, estoque, Carrinho/Items persistidos, Order, Pagamento e status financeiro. A nova confirmação é exclusivamente UI e não modifica DTOs/endpoints.
+
+## Administração e shutdown
+
+`TelaBemVindos.logo -> MainWindow.abrir_configuracoes -> AdminAuthScreen -> ConfiguracaoScreen.entrar`. A autorização existe apenas enquanto a tela de configuração está aberta e não é persistida. As ações administrativas possuem guarda adicional em `ConfiguracaoScreen`.
+
+`TERMINAL_ADMIN_PASSWORD` é carregada centralmente por `config.py`; `.env.example` contém somente a chave vazia. Nenhum valor é documentado ou registrado.
+
+`MainWindow.encerrar_terminal()` autoriza uma única saída, preserva o estado financeiro e executa `_parar_servicos()` de forma idempotente: timer da compra, relógio, ativação, espera/worker Point, checkout legado, foco/scanner, `PaymentListener`, `SyncService`, heartbeat e monitor opcional. Depois chama `QApplication.quit()`. `closeEvent` sem autorização é ignorado e `Esc` é consumido.
+
+`start.sh` pode configurar a rotação Wayland antes do Python quando `DISPLAY_ORIENTATION=vertical`. Saída e transform são detectáveis/configuráveis; ausência de `wlr-randr` não impede o startup. Veja [[layout-vertical]].

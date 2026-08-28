@@ -140,6 +140,8 @@ Critério: **confirmado** quando o caminho executável ou contrato prova o compo
 
 ## BUG-015 — Aprovação durante desconexão não é recuperada
 
+**Status:** corrigido para queda/reconexão do backend e perda do WebSocket; reboot físico continua pendente.
+
 - **Severidade:** alta
 - **Tipo:** confirmado pela ausência de mecanismo
 - **Arquivo/função:** `PaymentListener.run`; persistência local
@@ -276,15 +278,48 @@ Critério: **confirmado** quando o caminho executável ou contrato prova o compo
 
 ## BUG-029 — Estilos visuais fragmentados entre telas
 
-**Status:** mitigação inicial em 16 de agosto de 2026; migração das demais telas pendente.
+**Status:** corrigido em 27 de agosto de 2026.
 
 - **Severidade:** média.
 - **Tipo:** confirmado.
 - **Arquivo/função:** QSS inline em `terminal_screen.py`, `pix.py`, `pagamento.py`, `app_payment_screen.py`, `ConfirmacaoScreen.py`, `OfflineOverlay.py` e folhas em `css/`.
 - **Cenário:** telas equivalentes definem diretamente famílias de azul, vermelho e verde, fontes, paddings e raios diferentes.
 - **Impacto:** identidade inconsistente, estados visualmente ambíguos e manutenção sujeita a divergências.
-- **Correção recomendada:** migrar uma tela por vez para os tokens de `styles/tokens.py` e variantes de `styles/theme.py`, com validação visual e funcional por etapa.
-- **Correção aplicada nesta etapa:** design system central criado e tela de cadastro/ativação migrada, sem alterar as demais telas ou sua lógica.
+- **Correção aplicada:** todas as telas foram migradas aos tokens/temas centrais; folhas QSS sem chamadores foram removidas; tipografia, cards, botões, inputs, loading e estados foram unificados.
+- **Validação:** smoke visual de todas as telas em `768x1360` e render do carrinho/confirmação com texto longo e preço grande.
+
+## BUG-034 — Carrinho iniciava cobrança sem confirmação explícita
+
+**Status:** corrigido em 27 de agosto de 2026.
+
+- **Causa:** “PAGAR AGORA” chamava diretamente o worker Point; “PAGAR NO APP” competia como ação paralela.
+- **Correção:** ação única `FINALIZAR`, nova `ConfirmacaoCompraScreen` ligada ao mesmo Carrinho e início remoto somente por `CONFIRMAR E PAGAR`.
+- **Regressão protegida:** voltar preserva a mesma instância do carrinho e duplo toque é bloqueado ao desabilitar o botão.
+
+## BUG-035 — Teclado legado avançava por atributo inexistente
+
+**Status:** corrigido em 27 de agosto de 2026; rota continua inativa.
+
+- `self.parentrminal` foi substituído por `self.parent.terminal`.
+- Teclas e ações foram ampliadas para toque; o endpoint legado de login continua registrado como incompatível e não foi reativado.
+
+## BUG-036 — Menu administrativo e saída do quiosque sem autenticação
+
+**Status:** corrigido em 28 de agosto de 2026.
+
+- **Causa:** toque longo abria diretamente `ConfiguracaoScreen`; reset ficava exposto e não existia uma saída administrativa explícita.
+- **Correção:** `AdminAuthScreen` obrigatória, senha central por ambiente sem fallback, autorização efêmera, guardas nas ações e opção `Fechar Terminal`.
+- **Hardening:** `Esc` é consumido, `closeEvent` comum é ignorado e o shutdown autorizado para serviços cooperativamente sem resetar compra ou assumir cancelamento financeiro.
+- **Validação:** senha correta/incorreta, cancelar, reautenticação, reset guardado, compra/pagamento ativos, encerramento e ausência de segredo em logs.
+
+## BUG-037 — Resultado de pagamento pequeno e reset aprovado prematuro
+
+**Status:** corrigido em 28 de agosto de 2026.
+
+- **Causa:** atenção, falha e sucesso eram cards no fundo neutro; `ConfirmacaoScreen` apagava a compra automaticamente em cinco segundos.
+- **Impacto:** estados pouco visíveis no totem e impossibilidade de manter referências para CPF/comprovante.
+- **Correção:** estados semânticos fullscreen, SVG branco reutilizável, motivos humanos, retry sem cobrança automática e reset aprovado somente em `FINALIZAR`.
+- **Limite registrado:** integrações pós-compra não existem no backend e não são simuladas pela UI.
 
 ## BUG-030 — Sync somente no startup e paths relativos
 

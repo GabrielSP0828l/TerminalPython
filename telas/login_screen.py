@@ -1,38 +1,41 @@
-from PyQt5.QtWidgets import QWidget, QVBoxLayout, QLabel, QPushButton, QFrame
+from PyQt5.QtWidgets import QWidget, QVBoxLayout, QLabel, QPushButton, QFrame, QSizePolicy
 from PyQt5.QtCore import Qt
 import requests
 
 from config import API_URL
+from styles.theme import Theme
+from styles.tokens import Spacing
 
 
 class LoginScreen(QWidget):
     def __init__(self, parent):
-        super().__init__()
+        super().__init__(parent)
         self.parent = parent
 
-        try:
-            with open("css/login_screen.css", "r", encoding="utf-8") as file:
-                self.setStyleSheet(file.read())
-        except:
-            pass
+        self.setProperty("role", "page")
+        self.setStyleSheet(Theme.page_stylesheet())
 
         root = QVBoxLayout(self)
+        root.setContentsMargins(Spacing.XL, Spacing.XL, Spacing.XL, Spacing.XL)
         card = QFrame()
-        card.setObjectName("card")
+        card.setProperty("role", "card")
+        card.setMaximumWidth(680)
+        card.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)
         layout = QVBoxLayout(card)
+        layout.setContentsMargins(Spacing.XXL, Spacing.XXL, Spacing.XXL, Spacing.XXL)
+        layout.setSpacing(Spacing.LG)
 
         title = QLabel("Como deseja continuar?")
-        title.setObjectName("title")
+        title.setProperty("role", "pageTitle")
         title.setAlignment(Qt.AlignCenter)
 
         btn_identificar = QPushButton("IDENTIFICAR-SE (CPF)")
-        btn_identificar.setObjectName("continue")
-        btn_identificar.setMinimumHeight(80)
+        btn_identificar.setProperty("variant", "primary")
+        btn_identificar.setProperty("primaryAction", True)
         btn_identificar.clicked.connect(lambda: self.parent.setCurrentWidget(self.parent.teclado))
 
         btn_anonimo = QPushButton("CONTINUAR ANÔNIMO")
-        btn_anonimo.setObjectName("anonymous")
-        btn_anonimo.setMinimumHeight(60)
+        btn_anonimo.setProperty("variant", "secondary")
         btn_anonimo.clicked.connect(self.continuar_anonimo)
 
         layout.addWidget(title)

@@ -69,10 +69,22 @@ Voltar para [o índice](00-index.md). Nenhuma melhoria abaixo foi implementada n
 
 ## MEL-010 — Tratar estados internos completos
 
+**Status:** implementada visualmente em 28 de agosto de 2026.
+
 - **Prioridade:** P1
 - **Complexidade:** média
 - **Benefício:** UI coerente para intermediário, aprovado, recusado, cancelado e expirado, sem interpretar detalhes do Mercado Pago.
 - **Arquivos envolvidos:** listener, telas de pagamento/confirmacão e DTO backend.
+- **Implementação:** vermelho fullscreen para falha definitiva, laranja para ação na Point, loading para processamento e verde para aprovado; SVGs são recoloridos em memória e motivos técnicos não chegam ao cliente.
+
+## MEL-027 — CPF e comprovantes pós-compra
+
+**Status:** pendente de contrato backend.
+
+- **Prioridade:** P1.
+- **Motivo:** Order/Pagamento não possuem CPF e não há endpoint de comprovante nem integração WhatsApp; o e-mail existente é exclusivo de identidade.
+- **Interface atual:** preserva quatro ações no sucesso e informa indisponibilidade sem simular persistência/envio.
+- **Próximo passo:** definir endpoints idempotentes por Order/Terminal, modelo de comprovante interno e providers no backend; nunca colocar SMTP/WhatsApp secrets no Terminal.
 
 ## MEL-011 — Lifecycle único pós-ativação
 
@@ -161,12 +173,34 @@ Voltar para [o índice](00-index.md). Nenhuma melhoria abaixo foi implementada n
 
 ## MEL-022 — Design system central e adoção visual gradual
 
-**Status:** fundação e cadastro/ativação concluídos; demais telas pendentes.
+**Status:** concluída globalmente em 27 de agosto de 2026.
 
 - **Prioridade:** P1 para novas telas; P2 para migração das telas estáveis.
 - **Complexidade:** média.
 - **Benefício:** uma única linguagem visual, estados previsíveis e menos QSS/hexadecimais duplicados sem uma reescrita ampla da interface.
-- **Arquivos envolvidos:** `styles/tokens.py`, `styles/theme.py`, `CadastroTerminalScreen.py` e, futuramente, cada tela migrada em etapa própria.
+- **Implementação:** todas as telas usam `styles/tokens.py`/`styles/theme.py`; QSS legado duplicado foi removido; targets, tipografia e estados foram padronizados.
+
+## MEL-025 — Layout portrait e confirmação explícita
+
+**Status:** implementada em 27 de agosto de 2026.
+
+- `768x1360` é a geometria prioritária, mantendo fallback landscape.
+- total e ações permanecem fora do scroll nas telas de compra/confirmacão.
+- `Finalizar` abre resumo sem rede; `Confirmar e pagar` inicia o Point atual.
+- `start.sh` permite rotação Wayland opcional sem saída hardcoded e sem bloquear startup.
+- pendência operacional: validar transform 90/270 e calibração touch no hardware final.
+
+## MEL-026 — Proteção integral do menu administrativo
+
+**Status:** implementada em 28 de agosto de 2026.
+
+- preserva o toque longo e a `ConfiguracaoScreen` existentes;
+- exige `TERMINAL_ADMIN_PASSWORD` antes de mostrar qualquer opção;
+- reutiliza o teclado alfanumérico touchscreen e mascara o campo;
+- descarta a autorização ao sair e exige senha em cada novo acesso;
+- mantém o reset recuperável e acrescenta `Fechar Terminal` com aviso contextual;
+- bloqueia `Esc`/fechamento comum e centraliza shutdown cooperativo e idempotente;
+- não reseta compra nem cancela cobrança em andamento.
 
 ## MEL-023 — Coalescer invalidações de catálogo em tempo real
 

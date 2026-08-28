@@ -63,7 +63,10 @@ class CompraSession(QObject):
         normalized = str(status or "").strip().upper()
         if not self.order_id or str(order_id) != self.order_id:
             return "IGNORED"
+        self.last_status = normalized
         if normalized in self.APPROVED:
+            if self.state in {"APPROVED", "SUCCESS"}:
+                return "DUPLICATE_APPROVED"
             self.payment_in_flight = False
             self._timer.stop()
             self._set_state("APPROVED")
@@ -84,7 +87,15 @@ class CompraSession(QObject):
         self.order_id = None
         self.payment_id = None
         self.attempt_id = None
-        if self.started_at is not None and self.remaining_seconds() > 0:
+        self.last_status = None
+        if self.started_at is not None and self.remaining_seconds() <= 0:
+            # Uma tentativa encerrada/expirada pode ser refeita com o mesmo
+            # carrinho visual, mas passa a ser uma nova geração operacional.
+            self.started_at = self._clock()
+            self.generation = uuid.uuid4().hex
+            self._timer.start()
+            self._emit_remaining()
+        if self.started_at is not None:
             self._set_state("CART_READY")
 
     def mark_timeout_check(self):
@@ -114,7 +125,12 @@ class CompraSession(QObject):
         self.order_id = None
         self.payment_id = None
         self.payment_in_flight = False
+        self.last_status = None
         self.state = "IDLE"
+
+    def stop(self):
+        """Interrompe somente o timer local, preservando o estado para shutdown."""
+        self._timer.stop()
 
     def _set_state(self, state):
         if self.state == state:

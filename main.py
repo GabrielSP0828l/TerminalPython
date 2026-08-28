@@ -8,6 +8,8 @@ os.environ["QT_SCALE_FACTOR"] = "1"
 import sys
 import logging
 
+from PyQt5.QtCore import Qt
+
 from PyQt5.QtWidgets import (
     QApplication, QMainWindow, QStackedWidget,
     QVBoxLayout, QWidget, QSizePolicy, QMessageBox
@@ -20,7 +22,9 @@ from service.TerminalSocket import TerminalSocket
 from service.FactoryResetService import FactoryResetService
 
 from telas.CadastroTerminalScreen import CadastroTerminalScreen
+from telas.AdminAuthScreen import AdminAuthScreen
 from telas.ConfirmacaoScreen import ConfirmacaoScreen
+from telas.ConfirmacaoCompraScreen import ConfirmacaoCompraScreen
 from telas.ConfiguracaoScreen import ConfiguracaoScreen
 from telas.app_payment_screen import AppPaymentScreen
 from telas.bemvindo import TelaBemVindos
@@ -41,6 +45,9 @@ class MainWindow(QMainWindow):
         self.sync_service = None
         self.socket = None
         self.compra_session = CompraSession(self)
+        self._shutdown_authorized = False
+        self._shutdown_started = False
+        self._services_stopped = False
 
         self.setWindowTitle("Terminal Inteligente")
 
@@ -75,6 +82,7 @@ class MainWindow(QMainWindow):
         # self.login = LoginScreen(self)
         self.cadastro_terminal = CadastroTerminalScreen(self)
         self.configuracao = ConfiguracaoScreen(self)
+        self.admin_auth = AdminAuthScreen(self)
         self.offline_overlay = OfflineOverlay(self)
         self.offline_overlay.hide()
 
@@ -83,6 +91,7 @@ class MainWindow(QMainWindow):
         # self.stacked_widget.addWidget(self.login)
         self.stacked_widget.addWidget(self.cadastro_terminal)
         self.stacked_widget.addWidget(self.configuracao)
+        self.stacked_widget.addWidget(self.admin_auth)
 
         # -----------------------------
         # OUTRAS TELAS (lazy init)
@@ -92,6 +101,7 @@ class MainWindow(QMainWindow):
         self.teclado = None
         self.app_payment = None
         self.confirmacao = None
+        self.confirmacao_compra = None
 
         # self.internet_monitor = InternetMonitor(interval=3)
         # self.internet_monitor.status_changed.connect(self.handle_internet)
@@ -132,8 +142,10 @@ class MainWindow(QMainWindow):
         self.teclado = TecladoScreen(self)
         self.app_payment = AppPaymentScreen(self)
         self.confirmacao = ConfirmacaoScreen(self)
+        self.confirmacao_compra = ConfirmacaoCompraScreen(self)
 
         self.stacked_widget.addWidget(self.confirmacao)
+        self.stacked_widget.addWidget(self.confirmacao_compra)
         self.stacked_widget.addWidget(self.app_payment)
         self.stacked_widget.addWidget(self.teclado)
         self.stacked_widget.addWidget(self.terminal)
@@ -153,16 +165,69 @@ class MainWindow(QMainWindow):
         self._operacao_iniciada = True
 
     def closeEvent(self, event):
+        if not self._shutdown_authorized:
+            event.ignore()
+            return
+        self._parar_servicos()
+        event.accept()
+
+    def abrir_configuracoes(self):
+        return_widget = self.stacked_widget.currentWidget()
+        self.admin_auth.iniciar(return_widget)
+        self.stacked_widget.setCurrentWidget(self.admin_auth)
+
+    def abrir_menu_admin_autenticado(self, return_widget):
+        self.configuracao.entrar(return_widget)
+        self.stacked_widget.setCurrentWidget(self.configuracao)
+
+    def cancelar_autenticacao_admin(self, return_widget):
+        self.stacked_widget.setCurrentWidget(return_widget or self.welcome)
+
+    def encerrar_menu_admin(self, return_widget):
+        self.stacked_widget.setCurrentWidget(return_widget or self.welcome)
+
+    def encerrar_terminal(self):
+        if self._shutdown_started:
+            return
+        self._shutdown_started = True
+        self._shutdown_authorized = True
+        self._parar_servicos()
+        app = QApplication.instance()
+        if app is not None:
+            app.quit()
+
+    def _parar_servicos(self):
+        if self._services_stopped:
+            return
+        self._services_stopped = True
+        self.compra_session.stop()
+        self.welcome.stop()
+        self.cadastro_terminal.activation_timer.stop()
+        if self.cadastro_terminal.activation_worker.isRunning():
+            self.cadastro_terminal.activation_worker.requestInterruption()
+            self.cadastro_terminal.activation_worker.wait(500)
+        if self.confirmacao is not None:
+            self.confirmacao.stop()
+        if self.pagamento is not None:
+            self.pagamento.parar_workers()
+        if self.app_payment is not None:
+            self.app_payment.parar_espera()
         if self.terminal is not None:
+            self.terminal.timer_foco.stop()
             self.terminal.listener.stop()
         if self.sync_service is not None:
             self.sync_service.stop()
         if self.socket is not None:
             self.socket.stop()
-        super().closeEvent(event)
+        internet_monitor = getattr(self, "internet_monitor", None)
+        if internet_monitor is not None:
+            internet_monitor.stop()
 
-    def abrir_configuracoes(self):
-        self.stacked_widget.setCurrentWidget(self.configuracao)
+    def keyPressEvent(self, event):
+        if event.key() == Qt.Key_Escape:
+            event.accept()
+            return
+        super().keyPressEvent(event)
 
     def reset_compra(self):
         if self.pagamento is not None:
@@ -177,6 +242,11 @@ class MainWindow(QMainWindow):
     # HELPERS
     # -----------------------------
     def setCurrentWidget(self, widget):
+        if (
+            self.stacked_widget.currentWidget() is self.configuracao
+            and widget is not self.configuracao
+        ):
+            self.configuracao.encerrar_sessao()
         self.stacked_widget.setCurrentWidget(widget)
 
     def currentWidget(self):

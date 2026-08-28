@@ -33,7 +33,7 @@ Estado funcional verificado em 24 de agosto de 2026. O Terminal está adaptado a
 
 ## Validação e limites
 
-- 45 testes Python passaram, inclusive Qt offscreen;
+- 72 testes Python passaram, inclusive recuperação de pagamento e Qt offscreen;
 - compilação dos módulos alterados passou;
 - endpoint real configurado respondeu HTTP 200 e retornou `syncAt`;
 - SQLite canônico: `/home/jefiro/Documentos/projetos/TerminalPython/db/terminal.db`;

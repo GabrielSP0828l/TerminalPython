@@ -27,7 +27,7 @@ O Python só registra sucesso após validar tipo, UUID e presença de `lastPing`
 
 `PaymentListener(QThread)` conecta em `{WS_URL}/payment-socket/{terminalId}`. O socket possui timeout de leitura, fechamento cooperativo e reconexão a cada cinco segundos. Sinais chegam à UI por queued connection.
 
-O backend publica `PaymentEvent` pós-commit. Ao reconectar, `PagamentoScreen` consulta `GET /order/{orderId}/status?terminalId=...`. Eventos só afetam a UI quando `terminalId` e `orderId` correspondem à compra ativa; apenas `APPROVED` libera sucesso.
+O backend publica `PaymentEvent` pós-commit. Ao conectar ou reconectar com compra ativa, `PagamentoScreen` mostra “Verificando pagamento” e consulta `GET /order/{orderId}/status?terminalId=...`; o backend consulta o Mercado Pago em estado não definitivo. Durante a espera existe polling HTTP de 10 segundos. Eventos e respostas só afetam a UI quando `terminalId`/`orderId` correspondem à compra ativa; apenas `APPROVED` libera sucesso.
 
 ## Notificação de catálogo
 

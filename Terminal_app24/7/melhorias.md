@@ -69,10 +69,22 @@ Voltar para [o índice](00-index.md). Nenhuma melhoria abaixo foi implementada n
 
 ## MEL-010 — Tratar estados internos completos
 
+**Status:** implementada visualmente em 28 de agosto de 2026.
+
 - **Prioridade:** P1
 - **Complexidade:** média
 - **Benefício:** UI coerente para intermediário, aprovado, recusado, cancelado e expirado, sem interpretar detalhes do Mercado Pago.
 - **Arquivos envolvidos:** listener, telas de pagamento/confirmacão e DTO backend.
+- **Implementação:** falha definitiva vermelha, ação Point laranja, aprovação verde, SVG branco em runtime e processamento em loading neutro.
+
+## MEL-027 — CPF e comprovantes pós-compra
+
+**Status:** pendente de contrato backend.
+
+- não existem CPF em Order/Pagamento nem endpoints de comprovante;
+- não existe integração WhatsApp; e-mail atual é de identidade;
+- os quatro botões estão presentes, mas informam indisponibilidade sem simular sucesso;
+- próximo passo: contrato idempotente por Order/Terminal e serviços de entrega no backend.
 
 ## MEL-011 — Lifecycle único pós-ativação
 
@@ -161,12 +173,32 @@ Voltar para [o índice](00-index.md). Nenhuma melhoria abaixo foi implementada n
 
 ## MEL-022 — Design system central e adoção visual gradual
 
-**Status:** fundação e cadastro/ativação concluídos; demais telas pendentes.
+**Status:** concluída globalmente em 27 de agosto de 2026.
 
 - **Prioridade:** P1 para novas telas; P2 para migração das telas estáveis.
 - **Complexidade:** média.
 - **Benefício:** uma única linguagem visual, estados previsíveis e menos QSS/hexadecimais duplicados sem uma reescrita ampla da interface.
-- **Arquivos envolvidos:** `styles/tokens.py`, `styles/theme.py`, `CadastroTerminalScreen.py` e, futuramente, cada tela migrada em etapa própria.
+- **Implementação:** todas as telas usam tokens/temas centrais; QSS duplicado foi removido; tipografia, touch targets, cards, loading e estados foram unificados.
+
+## MEL-025 — Portrait e confirmação explícita
+
+**Status:** implementada em 27 de agosto de 2026.
+
+- layout prioritário `768x1360`, com landscape utilizável;
+- lista rolável e total/ações fixos;
+- confirmação visual antes do Point, sem cópia do carrinho;
+- rotação Wayland opcional e não bloqueante em `start.sh`;
+- pendência: validar saída, transform e calibração touch no hardware final.
+
+## MEL-026 — Menu administrativo autenticado
+
+**Status:** implementada em 28 de agosto de 2026.
+
+- mesmo toque longo e mesma `ConfiguracaoScreen`;
+- senha obrigatória de ambiente antes de qualquer opção;
+- autorização descartada ao sair;
+- reset preservado e nova opção `Fechar Terminal`;
+- aviso para compra/pagamento ativo e shutdown cooperativo sem cancelamento financeiro local.
 
 ## MEL-023 — Coalescer invalidações de catálogo em tempo real
 

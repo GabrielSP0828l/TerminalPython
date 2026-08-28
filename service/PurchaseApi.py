@@ -101,7 +101,9 @@ class PointCheckoutWorker(QThread):
 
     def run(self):
         try:
-            self.succeeded.emit(self.api_factory().start_point(self.payload))
+            result = self.api_factory().start_point(self.payload)
+            if not self.isInterruptionRequested():
+                self.succeeded.emit(result)
         except PurchaseApiError as error:
             self.failed.emit(str(error), error.stage, error.ambiguous, error.context)
         except Exception:
@@ -120,7 +122,9 @@ class OrderStatusWorker(QThread):
 
     def run(self):
         try:
-            self.succeeded.emit(self.api_factory().get_order(self.order_id, self.terminal_id))
+            result = self.api_factory().get_order(self.order_id, self.terminal_id)
+            if not self.isInterruptionRequested():
+                self.succeeded.emit(result)
         except PurchaseApiError as error:
             self.failed.emit(str(error))
 
@@ -136,7 +140,9 @@ class PointResumeWorker(QThread):
 
     def run(self):
         try:
-            self.succeeded.emit(self.api_factory().resume_point(self.cart_id))
+            result = self.api_factory().resume_point(self.cart_id)
+            if not self.isInterruptionRequested():
+                self.succeeded.emit(result)
         except PurchaseApiError as error:
             self.failed.emit(str(error))
 
@@ -152,6 +158,8 @@ class AppCheckoutWorker(QThread):
 
     def run(self):
         try:
-            self.succeeded.emit(self.api_factory().create_app_checkout(self.payload))
+            result = self.api_factory().create_app_checkout(self.payload)
+            if not self.isInterruptionRequested():
+                self.succeeded.emit(result)
         except PurchaseApiError as error:
             self.failed.emit(str(error))

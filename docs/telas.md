@@ -1,160 +1,84 @@
 # Telas e navegação
 
-Voltar para [o índice](00-index.md).
+Voltar para [[00-index]]. Padrão em [[design-system]] e portrait em [[layout-vertical]].
 
-## Padrão visual obrigatório
+## Container e fullscreen
 
-Novas telas e alterações visuais devem seguir o [Design System](design-system.md). Cores, tipografia, espaçamentos e raios são definidos em `styles/tokens.py`; variantes reutilizáveis de componentes são fornecidas por `styles/theme.py`. Hexadecimais e QSS completos não devem ser duplicados dentro das telas quando já existir um token ou uma variante semântica.
+`MainWindow` contém um único `QStackedWidget` expansível. Somente a janela raiz usa `showFullScreen()`; páginas não abrem janelas independentes. O display/compositor determina a orientação real.
 
-A adoção é gradual. Nesta etapa, `CadastroTerminalScreen` é a primeira tela integralmente ligada ao tema oficial. As demais telas continuam preservadas até migrações isoladas e testadas.
+## Inventário revisado
 
-`PagamentoScreen` e `ConfirmacaoScreen` também adotam o tema oficial nos novos estados Point.
+| Tela | Função | Navegação ativa | Situação visual |
+|---|---|---:|---|
+| `TelaBemVindos` | entrada e acesso local à manutenção | sim | tema central, portrait |
+| `AdminAuthScreen` | senha obrigatória antes da administração | sim | tema central, teclado alfanumérico reutilizado |
+| `CadastroTerminalScreen` | QR e polling de ativação | sim | tema central, reflow portrait/landscape |
+| `ConfiguracaoScreen` | menu administrativo, reset e encerramento | sim, após senha | tema central |
+| `TerminalScreen` | scanner, lista, total e Finalizar | sim | tema central, lista rolável |
+| `ConfirmacaoCompraScreen` | resumo antes do Point | sim | nova; lê o carrinho atual |
+| `PagamentoScreen` | preparação, instrução Point, processamento e falha | sim | páginas fullscreen semânticas |
+| `ConfirmacaoScreen` | resultado aprovado e ações pós-compra | sim | verde fullscreen; reset somente em Finalizar |
+| `OfflineOverlay` | indisponibilidade e reconexão | monitor hoje desativado | tema central |
+| `AppPaymentScreen` | checkout legado por QR | sem entrada no carrinho | preservada e migrada visualmente |
+| `LoginScreen` | identificação legada | não | preservada e migrada visualmente |
+| `TecladoScreen` | teclado da identificação legada | não | preservada, touch targets corrigidos |
 
-## Container principal e fullscreen
+Não existe `PixScreen` fonte no worktree atual; apenas bytecode histórico indicava uma implementação removida.
 
-A aplicação possui uma única janela de nível superior: `MainWindow(QMainWindow)`, em `main.py`. Seu `centralWidget` contém um `QStackedWidget` dentro de `QVBoxLayout` sem margins ou spacing. O stacked usa `QSizePolicy.Expanding` nos dois eixos.
+## Acesso administrativo
 
-Todas as telas são páginas `QWidget` adicionadas ao mesmo `QStackedWidget`. Portanto nenhuma página chama `show()`, `showFullScreen()` ou cria janela própria. A navegação troca somente `setCurrentWidget()` e preserva o estado fullscreen da janela principal.
-
-No entrypoint, a janela é aberta uma única vez com:
-
-```python
-window.showFullScreen()
-```
-
-O `window.show()` redundante que existia depois dessa chamada foi removido para deixar um único mecanismo de exibição.
-
-## Resolução e adaptação
-
-Não existe arquivo versionado de configuração de vídeo do Raspberry Pi que fixe a resolução. O código contém referência histórica a `1024x600`, e essa resolução foi adotada como validação mínima em paisagem. Também é validado o modo retrato `600x1024`.
-
-Scaling explícito no startup:
-
-```text
-QT_AUTO_SCREEN_SCALE_FACTOR=0
-QT_SCALE_FACTOR=1
-```
-
-O cadastro não fixa tamanho próprio. Ele herda a área disponível do stacked e reorganiza o conteúdo conforme a largura.
-
-## CadastroTerminalScreen
-
-- **Arquivo:** `telas/CadastroTerminalScreen.py`.
-- **Classe:** `CadastroTerminalScreen(QWidget)`.
-- **Abertura:** criada por `MainWindow`; selecionada como primeira página quando `Terminal.is_activated()` é falso.
-- **Pai:** `MainWindow` durante construção; depois gerenciada pelo `QStackedWidget`.
-- **Política:** `QSizePolicy.Expanding` horizontal e vertical.
-- **Layout raiz:** `QVBoxLayout`, sem constraint fixa, margins de 24 px e card com stretch.
-- **Card:** `QFrame#activationCard`, expansível nos dois eixos.
-- **Conteúdo:** título e subtítulo no topo; corpo em `QGridLayout` responsivo.
-
-### Comportamento responsivo
-
-Para largura igual ou superior a 760 px:
+O acesso existente foi preservado: toque longo de dois segundos no logotipo da `TelaBemVindos`. O sinal de `HoldToExitLabel` continua chamando `MainWindow.abrir_configuracoes()`, mas esse método agora abre primeiro `AdminAuthScreen`:
 
 ```text
-Título / subtítulo
-QR Code | identificação + status
+toque longo no logotipo
+  -> ACESSO RESTRITO
+      -> senha incorreta: mensagem e permanência na autenticação
+      -> cancelar: volta exatamente à página anterior
+      -> senha correta: ConfiguracaoScreen existente
+          -> Restaurar padrões de fábrica
+          -> Fechar Terminal
+          -> Voltar: encerra a sessão administrativa
 ```
 
-Para largura inferior a 760 px:
+A senha vem de `TERMINAL_ADMIN_PASSWORD` no ambiente. Não existe fallback ou senha hardcoded; configuração vazia bloqueia a entrada. O campo usa `QLineEdit.Password`, o teclado alfanumérico touchscreen existente com alternância `ABC/abc` e comparação sem logs. Ao sair do menu, a autorização é descartada. Cada novo toque longo exige nova senha.
 
-```text
-Título / subtítulo
-QR Code
-identificação + status
-```
+“Restaurar padrões de fábrica” preserva o marcador/backup recuperável existente e a confirmação final. “Fechar Terminal” pede apenas confirmação, com aviso específico para compra ou pagamento ativo; nenhuma cobrança é cancelada localmente. O encerramento para timers, workers, listener de pagamento, sync, heartbeat e sockets antes de `QApplication.quit()`.
 
-O QR mantém proporção e é recalculado no `resizeEvent`; não possui tamanho fixo. O limite considera largura e altura disponíveis para evitar corte em `1024x600`, `800x480` e orientação retrato.
+`Esc` e solicitações comuns de fechamento da janela não encerram o quiosque. A saída normal pela interface é o menu autenticado.
 
-## Referências visuais
-
-### TelaBemVindos
-
-Usada como referência de:
-
-- página e card expansíveis;
-- navegação como página do stacked;
-- fundo azul-escuro;
-- centralização e espaçamento;
-- ausência de geometry fixa na página.
-
-### TerminalScreen
-
-Usada como referência de:
-
-- tipografia `Segoe UI`;
-- gradiente `#071c33` → `#03111f`;
-- azul `#169dff` e texto secundário `#8dd4ff`;
-- border-radius entre 12 e 18 px;
-- aproveitamento integral do container.
-
-O cadastro não introduz uma identidade visual independente.
-
-## Componentes do cadastro
-
-- título e subtítulo com alinhamento central;
-- QR em label expansível, com fundo/borda branca;
-- identificação em fonte monoespaçada;
-- status expansível e com variante visual de erro;
-- não existem inputs ou botões nessa página: o cadastro administrativo ocorre pelo QR e a ativação é detectada por polling.
-- o stylesheet vem de `Theme.activation_stylesheet()`; estados de status usam a propriedade dinâmica `state` (`info`, `loading`, `success` ou `error`).
-
-## Navegação
-
-```text
-Aplicação
-  -> reset pendente (se existir)
-  -> valida terminal.json
-      -> não ativado: CadastroTerminalScreen
-      -> ativado: TelaBemVindos
-
-CadastroTerminalScreen
-  -> backend responde activated=true
-  -> persiste terminal
-  -> inicia operação
-  -> TelaBemVindos
-```
-
-## Fluxo de compra
+## Fluxo ativo
 
 ```text
 TelaBemVindos
-  -> TerminalScreen (scanner e lista)
-      -> PAGAR AGORA: PagamentoScreen
-          -> loading
-          -> aguardando maquininha/confirmação
-          -> aprovado: ConfirmacaoScreen -> reset -> TelaBemVindos
-          -> não confirmado: TerminalScreen com itens preservados
-      -> PAGAR NO APP: AppPaymentScreen -> TerminalScreen ao cancelar
+  -> TerminalScreen
+      -> FINALIZAR
+          -> ConfirmacaoCompraScreen
+              -> VOLTAR: TerminalScreen, mesmo carrinho
+              -> CONFIRMAR E PAGAR: PagamentoScreen
+                  -> preparando Point
+                  -> aguardando maquininha/backend
+                  -> aprovado: ConfirmacaoScreen
+                  -> falha: TENTAR NOVAMENTE -> TerminalScreen
 ```
 
-### TerminalScreen
+`PAGAR NO APP` e `PAGAR AGORA` não existem mais na tela da compra. `AppPaymentScreen` não foi apagada porque ainda representa um fluxo legado separado; não há rota ativa até ela.
 
-Quantidade é incrementada somente por scans repetidos. Os controles manuais `+` e `-` foram removidos. `x` remove a linha inteira. O primeiro scan inicia o prazo global.
+## Carrinho
 
-### PagamentoScreen
+A lista ocupa a área flexível e usa cards com nome quebrável, quantidade, preço, código e subtotal. O botão remover mede 56 × 56. Scanner/peso permanecem operacionais. Total, “Cancelar compra” e “Finalizar” ficam visíveis fora do scroll. `Finalizar` não cria Carrinho remoto, Order ou cobrança.
 
-A antiga seleção Crédito/Débito/PIX foi removida. A classe é agora uma única página fullscreen de preparação e espera Point. Exibe loading, instrução física para a maquininha, countdown global e mensagem de falha segura. Não há janela independente.
+## Confirmação pré-pagamento
 
-### ConfirmacaoScreen
+`ConfirmacaoCompraScreen` não possui `Carrinho`. A propriedade `carrinho` sempre retorna `MainWindow.terminal.carrinho`. `mostrar_resumo()` reconstrói apenas widgets de apresentação com quantidade total, linhas e total atual. Voltar preserva itens. Confirmar desabilita imediatamente a ação e chama o método Point já existente.
 
-Tela existente reutilizada para “Pagamento aprovado / Compra concluída”. Usa o design system, permanece cinco segundos e chama `MainWindow.reset_compra()` antes de liberar uma nova compra.
+## Pagamento e resultado
 
-### AppPaymentScreen
+Preparação mostra loading antes do worker HTTP. Depois de uma resposta Point válida com `orderId`, `WAITING_PAYMENT`/`ACTION_REQUIRED` exibem laranja fullscreen, `alert.svg` branco e a instrução para pressionar o botão verde. `PROCESSING` volta a um loading neutro. Perda de conexão continua em reconciliação e não vira recusa.
 
-Preservada para “Pagar no App”. A rede usa worker Qt, o QR é aplicado na UI thread e o countdown compartilha `CompraSession`.
+`REJECTED`, `FAILED`, `CANCELED/CANCELLED`, `EXPIRED` e `REFUNDED` exibem vermelho fullscreen, `error.svg` branco, motivo humano e “TENTAR NOVAMENTE” no rodapé. A ação invalida os IDs da tentativa anterior e retorna ao carrinho preservado; nunca cria cobrança automaticamente.
 
-A troca de página não altera o window state. Se o cadastro voltar a ser primeira tela após reset, ele ocupa novamente toda a área do stacked.
+`APPROVED`/equivalentes correlacionados abrem verde fullscreen com `checked.svg` branco, total e quatro ações: `FINALIZAR`, `ADICIONAR CPF`, `ENVIAR COMPROVANTE POR E-MAIL` e `ENVIAR COMPROVANTE POR WHATSAPP`. Não existe mais reset após cinco segundos. Eventos aprovados duplicados são idempotentes e não interrompem a ação em curso. Como o backend atual não possui os três contratos pós-compra, esses botões informam indisponibilidade sem persistir dados ou simular envio; o pagamento permanece aprovado.
 
-## Testes de layout
+## Testes visuais
 
-`tests/test_cadastro_layout.py` cobre:
-
-- expansão em `1024x600`;
-- reflow em `600x1024`;
-- reflow após resize em runtime;
-- política expansível da página/card;
-- título, subtítulo, QR, identificação e status dentro dos limites visíveis.
-
-Um smoke test adicional instancia `MainWindow` não ativada, aplica fullscreen e confirma que o cadastro é a página atual e que o stacked acompanha o `centralWidget`.
+Os testes Qt offscreen cobrem todas as páginas acima em `768x1360`, targets visíveis de pelo menos 56 px, nome longo, preço grande, lista/resumo, erro e overlay. Cadastro também continua coberto em `600x1024`, `1024x600` e `800x480`.

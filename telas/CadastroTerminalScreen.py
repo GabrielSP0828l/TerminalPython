@@ -35,7 +35,8 @@ class ActivationCheckThread(QThread):
 
     def run(self):
         if not API_URL:
-            self.status_changed.emit("Servidor não configurado. Verifique a instalação.", True)
+            if not self.isInterruptionRequested():
+                self.status_changed.emit("Servidor não configurado. Verifique a instalação.", True)
             return
 
         try:
@@ -45,11 +46,13 @@ class ActivationCheckThread(QThread):
             )
 
             if response.status_code == 404:
-                self.status_changed.emit("Aguardando liberação do terminal...", False)
+                if not self.isInterruptionRequested():
+                    self.status_changed.emit("Aguardando liberação do terminal...", False)
                 return
 
             if response.status_code != 200:
-                self.status_changed.emit("Não foi possível consultar a ativação.", True)
+                if not self.isInterruptionRequested():
+                    self.status_changed.emit("Não foi possível consultar a ativação.", True)
                 logger.warning(
                     "Consulta de ativação falhou: status=%s",
                     response.status_code
@@ -61,12 +64,15 @@ class ActivationCheckThread(QThread):
                 raise ValueError("Resposta de ativação não é um objeto JSON")
 
             if data.get("activated") is True:
-                self.activation_found.emit(data)
+                if not self.isInterruptionRequested():
+                    self.activation_found.emit(data)
             else:
-                self.status_changed.emit("Aguardando liberação do terminal...", False)
+                if not self.isInterruptionRequested():
+                    self.status_changed.emit("Aguardando liberação do terminal...", False)
 
         except (requests.RequestException, ValueError) as error:
-            self.status_changed.emit("Sem conexão com o servidor. Tentando novamente...", True)
+            if not self.isInterruptionRequested():
+                self.status_changed.emit("Sem conexão com o servidor. Tentando novamente...", True)
             logger.warning("Falha ao consultar ativação: %s", error)
 
 
@@ -167,7 +173,7 @@ class CadastroTerminalScreen(QWidget):
         layout.addWidget(self.body, 1)
         root.addWidget(self.card, 1)
 
-        self._aplicar_layout_responsivo(self.width())
+        self._aplicar_layout_responsivo(self.width(), self.height())
 
     def _gerar_qrcode(self):
         qr = qrcode.QRCode(version=1, box_size=10, border=2)
@@ -191,11 +197,11 @@ class CadastroTerminalScreen(QWidget):
 
     def resizeEvent(self, event):
         super().resizeEvent(event)
-        self._aplicar_layout_responsivo(event.size().width())
+        self._aplicar_layout_responsivo(event.size().width(), event.size().height())
         self._redimensionar_qrcode()
 
-    def _aplicar_layout_responsivo(self, width):
-        mode = "portrait" if width < 760 else "landscape"
+    def _aplicar_layout_responsivo(self, width, height):
+        mode = "portrait" if height > width or width < 760 else "landscape"
         if mode == self._layout_mode:
             return
 

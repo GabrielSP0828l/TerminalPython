@@ -20,8 +20,19 @@ MainWindow (lifecycle da aplicação)
 │   ├── PRODUCT_SYNC_REQUIRED → SyncService
 │   └── sync ao conectar/reconectar
 └── QStackedWidget / telas
+    ├── TerminalScreen / Carrinho único
+    ├── AdminAuthScreen / senha efêmera antes da administração
+    ├── ConfirmacaoCompraScreen / view do mesmo Carrinho
+    ├── PagamentoScreen / workers Point
+    └── ConfirmacaoScreen / resultado, ações pós-compra e reset explícito
 ```
 
 Configuração, `.env`, identidade, banco e cursor usam paths derivados da raiz do código, independentemente do diretório de execução. Sync e heartbeat começam somente depois de `Terminal.is_activated()` e continuam durante todas as telas, inclusive pagamento. HTTP/SQLite rodam fora da thread Qt. O scanner consulta SQLite a cada leitura; não existe cache paralelo a invalidar. Itens já presentes no carrinho mantêm o snapshot de produto/preço capturado no scan, enquanto a sync afeta leituras futuras.
 
 O backend continua sendo fonte de verdade para terminal, condomínio, empresa, catálogo, disponibilidade, estoque e status financeiro. Veja [[sincronizacao]], [[heartbeat]], [[sqlite]], [[api-backend]] e [[websocket]].
+
+O design visual está centralizado em `styles/tokens.py` e `styles/theme.py`. A UI é portrait-first (`768x1360`), mas continua expansível em landscape. A rotação real é responsabilidade do compositor; `start.sh` oferece configuração opcional via `wlr-randr` sem hardcode de saída e não impede o startup se a ferramenta faltar.
+
+Os estados Point usam `PaymentStateWidget` fullscreen. `styles/svg_icons.py` resolve `icon/` pela raiz e recolore os SVGs em memória com `QSvgRenderer`, preservando os assets pretos. `CompraSession` guarda o último status interno para a mensagem humana e trata `APPROVED` duplicado de forma idempotente. O reset aprovado é exclusivamente disparado por `FINALIZAR`.
+
+O toque longo no logotipo continua sendo o acesso administrativo, agora roteado por `AdminAuthScreen`. `TERMINAL_ADMIN_PASSWORD` vem apenas do ambiente; autorização termina ao sair da `ConfiguracaoScreen`. O shutdown administrativo é centralizado em `MainWindow`, para timers, workers, sockets, sync e heartbeat, e não altera/cancela estado financeiro remoto.

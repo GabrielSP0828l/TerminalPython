@@ -78,6 +78,38 @@ class PaymentFlowTest(unittest.TestCase):
         self.assertTrue(self.parent.compra_session.payment_in_flight)
         self.assertIn("Aguardando", self.screen.loading.text())
 
+    def test_reconnect_checks_backend_and_approved_opens_success(self):
+        with patch.object(self.screen, "reconciliar_estado") as reconcile:
+            self.screen.verificar_apos_reconexao()
+        reconcile.assert_called_once()
+        self.assertEqual("VERIFICANDO PAGAMENTO", self.screen.title.text())
+
+        self.screen._status_received("order-a", {
+            "orderId": "order-a", "paymentId": "payment-a",
+            "status": "APPROVED", "reconciled": True,
+        })
+
+        self.assertTrue(self.parent.confirmacao.shown)
+        self.assertIs(self.parent.confirmacao, self.parent.current)
+        self.assertEqual("payment-a", self.parent.compra_session.payment_id)
+
+    def test_reconnect_pending_keeps_payment_in_flight(self):
+        self.screen._status_received("order-a", {
+            "orderId": "order-a", "status": "WAITING_PAYMENT", "reconciled": True,
+        })
+
+        self.assertTrue(self.parent.compra_session.payment_in_flight)
+        self.assertNotEqual("CART_READY", self.parent.compra_session.state)
+
+    def test_reconnect_rejected_shows_error_state(self):
+        self.screen._status_received("order-a", {
+            "orderId": "order-a", "status": "REJECTED", "reconciled": True,
+        })
+
+        self.assertEqual("CART_READY", self.parent.compra_session.state)
+        self.assertEqual("Pagamento recusado", self.screen.error_reason.text())
+        self.assertIs(self.screen.error_page, self.screen.pages.currentWidget())
+
 
 if __name__ == "__main__":
     unittest.main()

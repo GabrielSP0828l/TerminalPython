@@ -17,6 +17,7 @@ Estado funcional verificado em 24 de agosto de 2026. O Terminal usa sincronizaç
 - [Melhorias propostas](melhorias.md)
 - [Telas e navegação](telas.md)
 - [[design-system]] — paleta, tipografia e componentes oficiais
+- [[layout-vertical]] — portrait, rotação Wayland e fallback landscape
 
 ## Escopo e fontes
 
@@ -28,7 +29,7 @@ O arquivo `../app247/24por7_contexto/terminal-python.md` citado no `AGENTS.md` n
 
 - Nenhuma cobrança real foi criada.
 - A interface foi validada por testes Qt offscreen; não foi operada no hardware físico.
-- A suíte automatizada contém 45 testes e o endpoint de sync configurado foi chamado diretamente em FULL e INCREMENTAL.
+- A suíte automatizada inclui testes de fluxo, integrações e layout Qt portrait; nenhuma cobrança real é criada.
 - O repositório já continha mudanças do usuário; elas foram preservadas.
 
 ## Conclusão executiva

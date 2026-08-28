@@ -11,7 +11,7 @@ Todas as operações de compra usam timeout `(connect=5s, read=20s)` em `Purchas
 | COMPATÍVEL | `WS /terminal-socket` | `{terminalId,status}` a cada 10s | `HEARTBEAT_ACK {terminalId,status,lastPing}` após persistência | `TerminalSocket` |
 | COMPATÍVEL | `POST /carrinho` | `CarrinhoRequest {terminalId, items}` | `CarrinhoResponseDTO` | `PurchaseApi` |
 | COMPATÍVEL | `POST /pagamento/terminal/{carrinhoId}` | sem body | `PointPaymentResponse` | `PurchaseApi.start_point/resume_point` |
-| COMPATÍVEL | `GET /order/{orderId}/status?terminalId=...` | sem body | `PointPaymentResponse` correlacionado | `PurchaseApi.get_order` |
+| COMPATÍVEL | `GET /order/{orderId}/status?terminalId=...` | sem body | `PaymentStatusResponse` correlacionado/reconciliado | `PurchaseApi.get_order` |
 | COMPATÍVEL | `GET /checkout/carrinho?idCarrinho=...` | sem body | sessão de checkout | `PurchaseApi.create_app_checkout` |
 | COMPATÍVEL | `GET /checkout/qrcode?id=...` | sem body | `image/png` | `PurchaseApi.create_app_checkout` |
 | ENDPOINT LEGADO | `POST /usuarios/anonimo` | tela sem rota ativa | endpoint ausente | `LoginScreen`, não navegável |
@@ -33,6 +33,14 @@ Todas as operações de compra usam timeout `(connect=5s, read=20s)` em `Purchas
 ```
 
 O Python consome somente o status interno. Status Mercado Pago e detalhes ficam para diagnóstico/backend.
+
+No status, `paymentId`, `updatedAt` e `reconciled` são informativos. `reconciled=true` significa consulta remota feita pelo backend, não aprovação.
+
+## CPF e comprovantes pós-compra
+
+A inspeção do backend atual não encontrou campos de CPF na Order/Pagamento nem endpoints para associar CPF ou enviar comprovante por e-mail/WhatsApp. O `EmailService` existente atende autenticação, recuperação e onboarding; ele não é contrato de comprovante. Também não existe integração WhatsApp.
+
+Consequentemente o Terminal não faz chamada, não guarda esses dados localmente e não simula sucesso. Contratos futuros devem ser idempotentes, correlacionados por `orderId`/Terminal, manter credenciais de mensageria no backend e distinguir falha de envio de falha financeira. Nenhum endpoint foi criado nesta alteração visual.
 
 ## Carrinho
 

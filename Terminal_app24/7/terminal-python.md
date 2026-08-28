@@ -19,6 +19,9 @@ O Terminal é cliente PyQt5 do backend Spring Boot. Mantém interface física, a
 | Concorrência | worker único com `sync_in_progress + sync_pending` |
 | Heartbeat | canal separado, ACK após persistência de `lastPing` |
 | Pagamento | `PAYMENT_STATUS` separado do evento de catálogo e correlacionado |
+| Interface | design system único, targets touch e portrait `768x1360` |
+| Confirmação | `Finalizar` abre resumo; Point somente em `Confirmar e pagar` |
+| Administração | toque longo → senha obrigatória → menu existente |
 
 ## Lifecycle
 
@@ -31,6 +34,18 @@ MainWindow pós-ativação
 ```
 
 HTTP/SQLite não executam na thread da UI. O scanner consulta o SQLite em cada scan, então commits passam a valer sem reinício. Produto já capturado no carrinho mantém seu snapshot/preço; sync altera o catálogo para leituras futuras.
+
+## Navegação da compra
+
+`TerminalScreen -> ConfirmacaoCompraScreen -> PagamentoScreen -> ConfirmacaoScreen`. A confirmação pré-pagamento não duplica o carrinho. “Pagar no App” não aparece mais no carrinho; a classe legada foi preservada sem rota ativa.
+
+Todas as páginas usam o tema central. Total/ações permanecem fora do scroll e o display deve ser girado pelo sistema, não por widgets Qt. `start.sh` aceita `DISPLAY_ORIENTATION=vertical`, saída/transform opcionais e fallback seguro.
+
+## Administração local
+
+O toque longo de dois segundos no logotipo foi preservado. Antes de mostrar `ConfiguracaoScreen`, `AdminAuthScreen` exige a senha de `TERMINAL_ADMIN_PASSWORD`, mascarada e digitável pelo teclado virtual compartilhado. Senha ausente bloqueia o menu. Senha incorreta não revela detalhes. Cancelar preserva a página/compra anterior e sair do menu invalida a autorização.
+
+O menu mantém o reset recuperável e inclui `Fechar Terminal`. Compra/pagamento ativo gera aviso contextual e não causa cancelamento Mercado Pago. Ao confirmar, o lifecycle cooperativo para recursos e chama `QApplication.quit()`; `Esc` e fechamento comum não saem do quiosque.
 
 ## Limites preservados
 

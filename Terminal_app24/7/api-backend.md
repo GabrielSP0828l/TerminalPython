@@ -11,7 +11,7 @@ Todas as operações de compra usam timeout `(connect=5s, read=20s)` em `Purchas
 | COMPATÍVEL | `WS /terminal-socket` | `{terminalId,status}` a cada 10s | `HEARTBEAT_ACK {terminalId,status,lastPing}` após persistência | `TerminalSocket` |
 | COMPATÍVEL | `POST /carrinho` | `CarrinhoRequest {terminalId, items}` | `CarrinhoResponseDTO` | `PurchaseApi` |
 | COMPATÍVEL | `POST /pagamento/terminal/{carrinhoId}` | sem body | `PointPaymentResponse` | `PurchaseApi.start_point/resume_point` |
-| COMPATÍVEL | `GET /order/{orderId}/status?terminalId=...` | sem body | `PointPaymentResponse` correlacionado | `PurchaseApi.get_order` |
+| COMPATÍVEL | `GET /order/{orderId}/status?terminalId=...` | sem body | `PaymentStatusResponse` correlacionado/reconciliado | `PurchaseApi.get_order` |
 | COMPATÍVEL | `GET /checkout/carrinho?idCarrinho=...` | sem body | sessão de checkout | `PurchaseApi.create_app_checkout` |
 | COMPATÍVEL | `GET /checkout/qrcode?id=...` | sem body | `image/png` | `PurchaseApi.create_app_checkout` |
 | ENDPOINT LEGADO | `POST /usuarios/anonimo` | tela sem rota ativa | endpoint ausente | `LoginScreen`, não navegável |
@@ -33,6 +33,14 @@ Todas as operações de compra usam timeout `(connect=5s, read=20s)` em `Purchas
 ```
 
 O Python consome somente o status interno. Status Mercado Pago e detalhes ficam para diagnóstico/backend.
+
+No endpoint de status, a resposta também inclui `paymentId`, `updatedAt` e `reconciled`. `reconciled=true` informa que o backend consultou a Order Point nessa requisição; não significa aprovação. O Terminal continua decidindo a tela exclusivamente por `status`.
+
+## CPF e comprovantes
+
+O backend real não expõe CPF em Order/Pagamento, associação de CPF pós-compra, comprovante por e-mail ou WhatsApp. O `EmailService` atual serve autenticação/onboarding e não deve ser reutilizado implicitamente como comprovante. Não existe provider WhatsApp.
+
+O Terminal não chama endpoint inexistente, não persiste esses dados localmente e não simula envio. A implementação futura deve ser idempotente por `orderId` e Terminal, manter credenciais no backend e tratar falha de entrega sem alterar o estado financeiro aprovado.
 
 ## Carrinho
 
