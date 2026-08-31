@@ -22,10 +22,12 @@ class PaymentListener(QThread):
         self.is_running = True
         self.ws = None
         self._has_connected = False
+        self.connection_state = "DISCONNECTED"
 
     def _notify_connected(self):
         origin = "WEBSOCKET_RECONNECT" if self._has_connected else "WEBSOCKET_CONNECTED"
         self._has_connected = True
+        self.connection_state = "CONNECTED"
         logging.getLogger(__name__).info("[WEBSOCKET] conectado")
         self.connected.emit()
         self.sync_requested.emit(origin)
@@ -53,6 +55,10 @@ class PaymentListener(QThread):
                 self.ws = WebSocket()
                 self.ws.settimeout(5)
 
+                logging.getLogger(__name__).info(
+                    "[PAYMENT-WS] conectando socket nativo terminalId=%s configured=%s",
+                    self.terminal_id, bool(WS_URL),
+                )
                 self.ws.connect(
                     f"{WS_URL}/payment-socket/{self.terminal_id}"
                 )
@@ -80,6 +86,7 @@ class PaymentListener(QThread):
 
             except Exception as e:
                 if self.is_running:
+                    self.connection_state = "RECONNECTING"
                     logging.getLogger(__name__).warning("WebSocket de pagamento desconectado: %s", e)
                     self.disconnected.emit()
                     self.sleep(5)
@@ -87,6 +94,7 @@ class PaymentListener(QThread):
     def stop(self):
 
         self.is_running = False
+        self.connection_state = "DISCONNECTED"
         if self.ws is not None:
             try:
                 self.ws.close()

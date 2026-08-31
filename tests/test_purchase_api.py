@@ -1,12 +1,23 @@
 import unittest
+import os
 
-from service.PurchaseApi import PurchaseApi
+os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
+
+from PyQt5.QtTest import QSignalSpy
+from PyQt5.QtWidgets import QApplication
+
+from service.PurchaseApi import (
+    PointCheckoutWorker,
+    PurchaseApi,
+    PurchaseApiError,
+)
 
 
 class FakeResponse:
     def __init__(self, data=None, content=b"png"):
         self._data = data
         self.content = content
+        self.status_code = 200
 
     def raise_for_status(self):
         return None
@@ -30,6 +41,10 @@ class FakeSession:
 
 
 class PurchaseApiTest(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        cls.app = QApplication.instance() or QApplication([])
+
     def test_point_uses_current_backend_contract(self):
         http = FakeSession([
             FakeResponse({"carrinhoId": "cart-1"}),
@@ -52,6 +67,38 @@ class PurchaseApiTest(unittest.TestCase):
         self.assertEqual("GET", method)
         self.assertTrue(url.endswith("/order/order-1/status"))
         self.assertEqual({"terminalId": "terminal-1"}, kwargs["params"])
+
+    def test_point_worker_emits_timeout_and_always_finishes(self):
+        class TimeoutApi:
+            def start_point(self, _payload):
+                raise PurchaseApiError(
+                    "demorou", "payment", ambiguous=True, timed_out=True
+                )
+
+        worker = PointCheckoutWorker({}, api_factory=TimeoutApi)
+        timed_out = QSignalSpy(worker.timed_out)
+        finished = QSignalSpy(worker.finished)
+        worker.start()
+        self.assertTrue(worker.wait(1000))
+        self.app.processEvents()
+
+        self.assertEqual(1, len(timed_out))
+        self.assertEqual(1, len(finished))
+
+    def test_point_worker_converts_unexpected_exception_to_error_and_finishes(self):
+        class BrokenApi:
+            def start_point(self, _payload):
+                raise RuntimeError("falha simulada")
+
+        worker = PointCheckoutWorker({}, api_factory=BrokenApi)
+        failed = QSignalSpy(worker.failed)
+        finished = QSignalSpy(worker.finished)
+        worker.start()
+        self.assertTrue(worker.wait(1000))
+        self.app.processEvents()
+
+        self.assertEqual(1, len(failed))
+        self.assertEqual(1, len(finished))
 
 
 if __name__ == "__main__":

@@ -2,7 +2,7 @@ import time
 import uuid
 import logging
 
-from PyQt5.QtCore import QObject, QTimer, pyqtSignal
+from PyQt5.QtCore import QObject, QTimer, Qt, pyqtSignal
 
 
 logger = logging.getLogger(__name__)
@@ -27,6 +27,7 @@ class CompraSession(QObject):
         self._clock = clock or time.monotonic
         self.duration_seconds = int(duration_seconds or self.SESSION_LIMIT_SECONDS)
         self._timer = QTimer(self)
+        self._timer.setTimerType(Qt.PreciseTimer)
         self._timer.setInterval(1000)
         self._timer.timeout.connect(self._tick)
         self.reset()
@@ -62,25 +63,38 @@ class CompraSession(QObject):
         self.cart_id = None
         self.order_id = None
         self.payment_id = None
+        self.payment_attempt_id = None
         self._set_state("STARTING_PAYMENT")
         return self.attempt_id
 
-    def set_remote_ids(self, cart_id=None, order_id=None, payment_id=None):
+    def set_remote_ids(self, cart_id=None, order_id=None, payment_id=None,
+                       payment_attempt_id=None):
         if cart_id:
             self.cart_id = str(cart_id)
         if order_id:
             self.order_id = str(order_id)
         if payment_id:
             self.payment_id = str(payment_id)
+        if payment_attempt_id:
+            self.payment_attempt_id = str(payment_attempt_id)
 
     def mark_waiting(self):
         if self.state not in {"APPROVED", "SUCCESS"}:
             self._set_state("WAITING_PAYMENT")
 
-    def apply_status(self, order_id, status):
+    def apply_status(self, order_id, status, payment_attempt_id=None):
         normalized = str(status or "").strip().upper()
         if not self.order_id or str(order_id) != self.order_id:
             return "IGNORED"
+        if (payment_attempt_id and self.payment_attempt_id
+                and str(payment_attempt_id) != self.payment_attempt_id):
+            logger.warning(
+                "[PAYMENT] evento ignorado por tentativa divergente orderId=%s expected=%s received=%s",
+                order_id, self.payment_attempt_id, payment_attempt_id,
+            )
+            return "IGNORED"
+        if payment_attempt_id and not self.payment_attempt_id:
+            self.payment_attempt_id = str(payment_attempt_id)
         self.last_status = normalized
         if normalized in self.APPROVED:
             if self.state in {"APPROVED", "SUCCESS"}:
@@ -105,6 +119,7 @@ class CompraSession(QObject):
         self.cart_id = None
         self.order_id = None
         self.payment_id = None
+        self.payment_attempt_id = None
         self.attempt_id = None
         self.last_status = None
         if self.started_at is not None and self.remaining_seconds() > 0:
@@ -153,6 +168,7 @@ class CompraSession(QObject):
         self.cart_id = None
         self.order_id = None
         self.payment_id = None
+        self.payment_attempt_id = None
         self.payment_in_flight = False
         self.last_status = None
         self.active = False

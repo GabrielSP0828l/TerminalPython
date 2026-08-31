@@ -1,3 +1,6 @@
+from model.Money import decimal_value
+
+
 class Item:
 
     def __init__(
@@ -21,7 +24,7 @@ class Item:
 
             return (
                 self.produto.preco *
-                self.received_weight
+                decimal_value(self.received_weight)
             )
 
         return (

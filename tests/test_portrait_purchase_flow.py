@@ -121,7 +121,7 @@ class PortraitPurchaseFlowTest(unittest.TestCase):
         self.assertEqual([0, 1, 2, 0], columns)
         self.assertEqual([(0, 0), (0, 1), (0, 2), (1, 0)], positions)
         self.assertTrue(all(250 <= card.width() <= 292 for card in cards))
-        self.assertTrue(all(card.height() == 224 for card in cards))
+        self.assertTrue(all(card.height() == 280 for card in cards))
         self.assertGreaterEqual(
             cards[3].y(), cards[0].y() + cards[0].height() + 12
         )
@@ -173,9 +173,11 @@ class PortraitPurchaseFlowTest(unittest.TestCase):
         self.parent.confirmacao_compra.mostrar_resumo()
         self.parent.confirmacao_compra.voltar()
         self.assertIs(cart, self.terminal.carrinho)
+        self.parent.stacked_widget.setCurrentWidget(self.parent.confirmacao_compra)
         self.parent.confirmacao_compra.confirmar()
         self.parent.pagamento.iniciar_pagamento.assert_called_once()
         self.assertFalse(self.parent.confirmacao_compra.btn_confirmar.isEnabled())
+        self.assertFalse(self.parent.confirmacao_compra.btn_voltar.isEnabled())
 
     def test_offline_overlay_fits_portrait_parent(self):
         host = QWidget()

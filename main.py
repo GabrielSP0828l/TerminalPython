@@ -21,6 +21,7 @@ from service.SyncService import SyncService
 from service.TerminalSocket import TerminalSocket
 from service.FactoryResetService import FactoryResetService
 from service.InternetMonitor import InternetMonitor
+from service.TelemetryService import TelemetryService
 
 from telas.CadastroTerminalScreen import CadastroTerminalScreen
 from telas.AdminAuthScreen import AdminAuthScreen
@@ -46,6 +47,7 @@ class MainWindow(QMainWindow):
         self.sync_service = None
         self.socket = None
         self.internet_monitor = None
+        self.telemetry_service = None
         self._network_settings_active = False
         self.compra_session = CompraSession(self)
         self._expiring_checkout_generation = None
@@ -215,6 +217,16 @@ class MainWindow(QMainWindow):
         self.internet_monitor = InternetMonitor(interval=3)
         self.internet_monitor.status_changed.connect(self.handle_internet)
         self.internet_monitor.start()
+        self.telemetry_service = TelemetryService(
+            sync_service=self.sync_service,
+            purchase_session=self.compra_session,
+            websocket_state_provider=lambda: (
+                self.terminal.listener.connection_state
+                if self.terminal is not None else "DISCONNECTED"
+            ),
+            screen_provider=lambda: QApplication.primaryScreen(),
+        )
+        self.telemetry_service.start()
         self._operacao_iniciada = True
 
     def closeEvent(self, event):
@@ -271,6 +283,9 @@ class MainWindow(QMainWindow):
             self.pagamento.parar_workers()
         if self.app_payment is not None:
             self.app_payment.parar_espera()
+        telemetry_service = getattr(self, "telemetry_service", None)
+        if telemetry_service is not None:
+            telemetry_service.stop()
         if self.terminal is not None:
             self.terminal.timer_foco.stop()
             self.terminal.listener.stop()
@@ -384,14 +399,20 @@ if __name__ == "__main__":
             "[TERMINAL] UUID carregado: %s", activated_terminal.terminalId
         )
     app = QApplication(sys.argv)
-    screen = app.primaryScreen()
-    print("Screen size:", screen.size(), flush=True)
-    print("Available geometry:", screen.availableGeometry(), flush=True)
+    #screen = app.primaryScreen()
+    #print("Screen size:", screen.size(), flush=True)
+    #print("Available geometry:", screen.availableGeometry(), flush=True)
     window = MainWindow()
 
     # cursor oculto (modo terminal)
     #app.setOverrideCursor(Qt.BlankCursor)
+    window.setFixedSize(1024, 600)
+    #window.showFullScreen()
+    screen = app.primaryScreen().availableGeometry()
 
-    window.showFullScreen()
+    width = min(1024, screen.width())
+    height = min(600, screen.height())
 
+    window.setFixedSize(width, height)
+    window.show()
     sys.exit(app.exec_())

@@ -128,7 +128,20 @@ class CompraSessionTest(unittest.TestCase):
         self.session.set_remote_ids(order_id="order-a")
         self.session.mark_timeout_check()
         self.assertEqual("APPROVED", self.session.apply_status("order-a", "APPROVED"))
-        self.assertEqual("APPROVED", self.session.state)
+
+    def test_event_from_old_payment_attempt_is_ignored(self):
+        self.session.start_if_needed()
+        self.session.begin_payment()
+        self.session.set_remote_ids(
+            order_id="order-a", payment_attempt_id="attempt-current"
+        )
+
+        self.assertEqual(
+            "IGNORED",
+            self.session.apply_status("order-a", "APPROVED", "attempt-old"),
+        )
+        self.assertTrue(self.session.payment_in_flight)
+        self.assertEqual("STARTING_PAYMENT", self.session.state)
 
 
 if __name__ == "__main__":

@@ -53,7 +53,8 @@ class PaymentStateScreensTest(unittest.TestCase):
         attempt = self.parent.compra_session.begin_payment()
         self.screen.current_attempt = attempt
         self.screen._point_started(attempt, {
-            "cartId": "cart-a", "orderId": "order-a", "status": "WAITING_PAYMENT"
+            "cartId": "cart-a", "orderId": "order-a", "status": "WAITING_PAYMENT",
+            "mercadoPagoStatus": "AT_TERMINAL",
         })
 
     def tearDown(self):

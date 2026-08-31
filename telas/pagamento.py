@@ -28,6 +28,7 @@ class PagamentoScreen(QWidget):
     ATTENTION_RECHECK_MS = 90000
     FAILURE_RETURN_MS = 8000
     FINAL_RECONCILIATION_GRACE_MS = 30000
+    MAX_RECONCILIATION_FAILURES = 3
     FAILURE_MESSAGES = {
         "REJECTED": "Pagamento recusado",
         "FAILED": "Não foi possível concluir o pagamento",
@@ -46,6 +47,7 @@ class PagamentoScreen(QWidget):
         self.resume_worker = None
         self.timeout_pending = False
         self.timeout_abandoned = False
+        self.reconciliation_failures = 0
 
         self.setObjectName("pointPaymentScreen")
         self.setStyleSheet(Theme.payment_stylesheet())
@@ -163,16 +165,19 @@ class PagamentoScreen(QWidget):
     def iniciar_pagamento(self, cart_payload, total_text):
         attempt = self.parent.compra_session.begin_payment()
         if attempt is None:
-            return
+            logger.warning("[PAYMENT-UI] worker não iniciado: tentativa já ativa")
+            return False
         self.current_attempt = attempt
         self.timeout_pending = False
         self.timeout_abandoned = False
+        self.reconciliation_failures = 0
         self.total_final.setText(total_text)
         self._show_loading(
             "PREPARANDO PAGAMENTO",
             "Preparando pagamento...",
             "Aguarde só um momento.",
         )
+        logger.info("[PAYMENT-UI] navegando para PREPARANDO PAGAMENTO")
         self.parent.setCurrentWidget(self)
 
         self.point_worker = PointCheckoutWorker(cart_payload, parent=self)
@@ -183,7 +188,16 @@ class PagamentoScreen(QWidget):
             lambda message, stage, ambiguous, context, token=attempt:
             self._point_failed(token, message, stage, ambiguous, context)
         )
+        self.point_worker.timed_out.connect(
+            lambda message, stage, ambiguous, context, token=attempt:
+            self._point_timeout(token, message, stage, ambiguous, context)
+        )
+        self.point_worker.finished.connect(
+            lambda token=attempt: self._point_worker_finished(token)
+        )
+        logger.info("[PAYMENT-UI] worker iniciado")
         self.point_worker.start()
+        return True
 
     def _show_loading(self, title, message, instructions=""):
         self.failure_return_timer.stop()
@@ -209,19 +223,42 @@ class PagamentoScreen(QWidget):
     def _point_started(self, attempt, data):
         if attempt != self.current_attempt:
             return
+        logger.info("[PAYMENT-UI] success recebido")
         payment = data.get("pagamento") or {}
         self.parent.compra_session.set_remote_ids(
             data.get("cartId"), data.get("orderId"),
-            data.get("paymentId") or data.get("transactionId") or payment.get("pagamentoId")
+            data.get("transactionId") or payment.get("transactionId"),
+            data.get("paymentAttemptId") or data.get("paymentId")
+            or payment.get("pagamentoId"),
         )
         self.parent.compra_session.mark_waiting()
-        self._show_attention()
+        self.reconciliation_failures = 0
         self.poll_timer.start(self.POLL_INTERVAL_MS)
         self._apply_payload(data)
+
+    def _point_timeout(self, attempt, message, stage, ambiguous, context):
+        logger.warning("[PAYMENT-UI] timeout recebido stage=%s", stage)
+        self._point_failed(attempt, message, stage, ambiguous, context)
+
+    def _point_worker_finished(self, attempt):
+        logger.info("[PAYMENT-UI] finished recebido")
+        worker = self.point_worker
+        if (
+            attempt == self.current_attempt
+            and worker is not None
+            and not worker.outcome_emitted
+            and not worker.isInterruptionRequested()
+        ):
+            logger.error("[PAYMENT-UI] worker terminou sem outcome; encerrando loading")
+            self._point_failed(
+                attempt, "Não foi possível preparar o pagamento",
+                "worker_finished", False, {}
+            )
 
     def _point_failed(self, attempt, message, stage, ambiguous, context):
         if attempt != self.current_attempt:
             return
+        logger.warning("[PAYMENT-UI] error recebido stage=%s ambiguous=%s", stage, ambiguous)
         logger.warning(
             "Falha ao iniciar Point: stage=%s ambiguous=%s message=%s",
             stage, ambiguous, message,
@@ -230,7 +267,18 @@ class PagamentoScreen(QWidget):
             self.parent.compra_session.set_remote_ids(
                 context.get("cartId"), context.get("orderId")
             )
+        if stage == "price_changed":
+            self.parent.terminal.aplicar_precos_atualizados(context)
+            self.parent.terminal.solicitar_sync_produtos("PRICE_CHANGED")
+            self._safe_failure(
+                "Os preços foram atualizados. Revise o carrinho e confirme novamente."
+            )
+            return
         if ambiguous and self.parent.compra_session.cart_id:
+            self.reconciliation_failures += 1
+            if self.reconciliation_failures > self.MAX_RECONCILIATION_FAILURES:
+                self._abandon_to_background_reconciliation()
+                return
             self.parent.compra_session.mark_waiting()
             self._show_loading(
                 "CONFIRMANDO PAGAMENTO",
@@ -252,19 +300,27 @@ class PagamentoScreen(QWidget):
             logger.warning("Evento de pagamento ignorado por terminal divergente")
             return
         status = data.get("status") or data.get("paid")
-        self._apply_status(data.get("orderId"), status, data.get("transactionId"))
+        self._apply_status(
+            data.get("orderId"), status, data.get("transactionId"),
+            data.get("mercadoPagoStatus"),
+            data.get("paymentAttemptId") or data.get("paymentId"),
+        )
 
     def _apply_payload(self, data):
         payment = data.get("pagamento") or {}
         status = data.get("status") or payment.get("status")
         self._apply_status(
             data.get("orderId"), status,
-            data.get("paymentId") or data.get("transactionId") or payment.get("transactionId"),
+            data.get("transactionId") or payment.get("transactionId"),
+            data.get("mercadoPagoStatus"),
+            data.get("paymentAttemptId") or data.get("paymentId")
+            or payment.get("pagamentoId"),
         )
 
-    def _apply_status(self, order_id, status, transaction_id=None):
+    def _apply_status(self, order_id, status, transaction_id=None,
+                      mercado_pago_status=None, payment_attempt_id=None):
         session = self.parent.compra_session
-        result = session.apply_status(order_id, status)
+        result = session.apply_status(order_id, status, payment_attempt_id)
         if result != "IGNORED" and transaction_id:
             session.set_remote_ids(payment_id=transaction_id)
         if result == "APPROVED":
@@ -297,14 +353,25 @@ class PagamentoScreen(QWidget):
                     "Aguarde e não retire o cartão até a maquininha orientar.",
                 )
             else:
-                # Mantém também o estado textual legado coerente para leitores
-                # de acessibilidade, embora a página visível seja a laranja.
-                self.loading.setText("Aguardando interação com a maquininha...")
-                self._show_attention()
+                remote = str(mercado_pago_status or "").strip().upper()
+                if remote in {"AT_TERMINAL", "ACTION_REQUIRED"}:
+                    logger.info("[PAYMENT-UI] navegando para instrução da maquininha status=%s", remote)
+                    self.loading.setText("Aguardando interação com a maquininha...")
+                    self._show_attention()
+                else:
+                    logger.info("[PAYMENT-UI] cobrança criada; aguardando entrega à Point status=%s", remote or "PENDING")
+                    self._show_loading(
+                        "ENVIANDO PARA A MAQUININHA",
+                        "Aguardando a maquininha receber a cobrança...",
+                        "Verifique se ela está ligada e conectada.",
+                    )
 
     def reconciliar_estado(self):
         order_id = self.parent.compra_session.order_id
         if not order_id:
+            if self.parent.compra_session.state == "RECONCILIATION_PENDING":
+                self.poll_timer.stop()
+                return
             if self.parent.compra_session.cart_id:
                 self._retomar_inicio_point()
             return
@@ -388,6 +455,10 @@ class PagamentoScreen(QWidget):
         ):
             return
         logger.warning("Não foi possível reconciliar pagamento: %s", message)
+        self.reconciliation_failures += 1
+        if self.reconciliation_failures > self.MAX_RECONCILIATION_FAILURES:
+            self._abandon_to_background_reconciliation()
+            return
         self._show_loading(
             "CONFIRMANDO PAGAMENTO",
             "Verificando o pagamento com o servidor...",
@@ -500,7 +571,7 @@ class PagamentoScreen(QWidget):
 
     def _abandon_to_background_reconciliation(self):
         session = self.parent.compra_session
-        if not self.timeout_pending or not session.payment_in_flight:
+        if not session.payment_in_flight:
             return
         if not session.order_id and not session.cart_id:
             if self.point_worker is not None and self.point_worker.isRunning():
@@ -512,8 +583,9 @@ class PagamentoScreen(QWidget):
         session.mark_reconciliation_pending()
         self.operation_timer.stop()
         self.parent.setCurrentWidget(self.parent.welcome)
-        self.poll_timer.start(self.POLL_INTERVAL_MS)
-        self.reconciliar_estado()
+        # Não manter a tela nem um polling infinito. O WebSocket/reconexão e o
+        # reconciliador do backend retomam a tentativa posteriormente.
+        self.poll_timer.stop()
 
     def _finish_expired_session(self):
         generation = self.parent.compra_session.generation

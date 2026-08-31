@@ -101,6 +101,15 @@ class WifiService:
         logger.info("[WIFI] redes encontradas=%s", len(networks))
         return WifiSnapshot(status, tuple(networks))
 
+    def status(self):
+        """Leitura leve para telemetria, sem scan ativo nem acesso a segredos."""
+        self._ensure_available()
+        enabled = self._wifi_enabled()
+        interface = self._wifi_interface()
+        if not enabled:
+            return WifiStatus(False, False, interface)
+        return self._status_for(interface)
+
     def connect(self, network, password=None):
         self._ensure_available()
         interface = self._wifi_interface()

@@ -1,5 +1,7 @@
 # Heartbeat do terminal
 
+Heartbeat e telemetria permanecem separados. O heartbeat padrão continua a cada 10 segundos (`HEARTBEAT_INTERVAL_SECONDS`) e responde somente se o Terminal está vivo. Após o ACK persistido, o backend renova presença Redis com TTL e mantém `lastPing` como fallback. A telemetria padrão a cada 60 segundos descreve saúde e não aumenta o payload do heartbeat. Veja [[telemetria]].
+
 Voltar para [o índice](00-index.md). Visão dos sockets em [[websocket]] e API em [[api-backend]].
 
 ## Lifecycle e frequência

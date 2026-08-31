@@ -18,6 +18,11 @@ MainWindow / showFullScreen
 ├── SyncService ── catálogo SQLite fora da UI
 ├── InternetMonitor ── disponibilidade do backend / OfflineOverlay
 ├── TerminalSocket ── heartbeat
+├── TelemetryService (thread daemon)
+│   ├── SystemMetricsCollector ── /proc, /sys, vcgencmd
+│   ├── NetworkMetricsCollector ── nmcli + GET /terminal/health
+│   ├── ApplicationMetricsCollector ── sync/compra/socket
+│   └── DisplayMetricsCollector ── geometria Qt
 └── PaymentListener ── pagamento + invalidação de catálogo
 ```
 
@@ -26,6 +31,10 @@ O design system é centralizado em `styles/tokens.py` e `styles/theme.py`. As p�
 `PaymentStateWidget` compõe ícone/título/mensagem/ações para estados fullscreen. `styles/svg_icons.py` resolve assets pela raiz e usa `QSvgRenderer` + máscara `SourceIn` para recolorir SVG em runtime. `CompraSession.last_status` mantém somente o status interno necessário ao motivo humano e rejeita `APPROVED` duplicado sem reconstruir a tela. O reset aprovado migrou do timer para a ação explícita `FINALIZAR`.
 
 O backend continua fonte de verdade para identidade organizacional, catálogo/disponibilidade, estoque, Carrinho/Items persistidos, Order, Pagamento e status financeiro. A nova confirmação é exclusivamente UI e não modifica DTOs/endpoints.
+
+Preços usam `Decimal` em memória e `TEXT` decimal no SQLite. O backend calcula promoções; o Terminal somente persiste/exibe o resultado e envia a expectativa precisa para a proteção contra divergência. Veja [[promocoes]] e [[product-sync]].
+
+Telemetria é a menor prioridade operacional e nunca participa do fluxo financeiro. Ela usa referências dos serviços reais, roda fora da UI, descarta falhas/amostras offline e não monitora hardware da Point. Veja [[telemetria]] e [[network]].
 
 ## Administração e shutdown
 

@@ -1,5 +1,7 @@
 from model.Item import Item
 from model.Terminal import Terminal
+from decimal import Decimal
+from model.Money import format_brl
 
 
 class Carrinho:
@@ -15,7 +17,7 @@ class Carrinho:
 
         for i in self.items:
 
-            if i.produto.codigo == item.produto.codigo:
+            if i.produto.id == item.produto.id:
                 i.quantidade += item.quantidade
 
                 return
@@ -27,7 +29,7 @@ class Carrinho:
 
         self.items = [
             item for item in self.items
-            if item.produto.codigo != codigo_produto
+            if item.produto.codigo != codigo_produto and item.produto.id != codigo_produto
         ]
 
     # limpar carrinho
@@ -43,17 +45,17 @@ class Carrinho:
     # total do carrinho
     def total(self):
 
-        return sum(
+        return sum((
             item.produto.preco * item.quantidade
             for item in self.items
-        )
+        ), Decimal("0"))
 
     # busca item
     def buscar_item(self, codigo_produto):
 
         for item in self.items:
 
-            if item.produto.codigo == codigo_produto:
+            if item.produto.codigo == codigo_produto or item.produto.id == codigo_produto:
                 return item
 
         return None
@@ -85,7 +87,7 @@ class Carrinho:
     # total formatado
     def total_formatado(self):
 
-        return f"R$ {self.total():.2f}"
+        return format_brl(self.total())
 
     def to_dict(self):
 
@@ -98,9 +100,15 @@ class Carrinho:
                 {
                     "productId": item.produto.id,
 
-                    "quantity": item.quantidade,
+                    "quantity": str(item.quantidade),
 
-                    "receivedWeight": item.received_weight
+                    "receivedWeight": (
+                        str(item.received_weight) if item.received_weight is not None else None
+                    ),
+
+                    "expectedUnitPrice": str(item.produto.preco),
+
+                    "codigoBarras": item.produto.codigo
                 }
 
                 for item in self.items

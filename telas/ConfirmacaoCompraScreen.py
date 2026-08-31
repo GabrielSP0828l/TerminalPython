@@ -1,3 +1,5 @@
+import logging
+
 from PyQt5.QtCore import Qt
 from PyQt5.QtWidgets import (
     QFrame,
@@ -12,6 +14,10 @@ from PyQt5.QtWidgets import (
 from styles.theme import Theme
 from styles.tokens import Spacing, TouchSize
 from telas.SessionTimerLabel import SessionTimerLabel
+from model.Money import format_brl
+
+
+logger = logging.getLogger(__name__)
 
 
 class ConfirmacaoCompraScreen(QWidget):
@@ -126,7 +132,12 @@ class ConfirmacaoCompraScreen(QWidget):
             name.setWordWrap(True)
             quantity = QLabel(f"Qtd: {cart_item.quantidade}")
             quantity.setProperty("role", "confirmationProductQuantity")
-            price = QLabel(f"R$ {cart_item.subtotal():.2f}".replace(".", ","))
+            if cart_item.produto.em_promocao:
+                original = cart_item.produto.preco_original * cart_item.quantidade
+                details.addWidget(QLabel(
+                    f"De {format_brl(original)} · PROMOÇÃO".replace(".", ",")
+                ))
+            price = QLabel(format_brl(cart_item.subtotal()).replace(".", ","))
             price.setProperty("role", "confirmationProductPrice")
             price.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
             details.addWidget(name)
@@ -142,16 +153,24 @@ class ConfirmacaoCompraScreen(QWidget):
         self.parent_app.setCurrentWidget(self.parent_app.terminal)
 
     def confirmar(self):
+        logger.info("[PAYMENT-UI] confirmar clicado")
         if (
             not self._checkout_interactions_enabled
             or not self.parent_app.compra_session.can_accept_checkout_actions()
             or self.carrinho.vazio()
             or not self.btn_confirmar.isEnabled()
         ):
+            logger.warning("[PAYMENT-UI] confirmar ignorado por estado inválido")
             return
         self.btn_confirmar.setEnabled(False)
+        self.btn_voltar.setEnabled(False)
         self.btn_confirmar.setText("PREPARANDO...")
-        self.parent_app.terminal.iniciar_pagamento_confirmado()
+        started = self.parent_app.terminal.iniciar_pagamento_confirmado()
+        if not started:
+            logger.error("[PAYMENT-UI] inicialização recusada antes do worker")
+            self.btn_confirmar.setText("CONFIRMAR E PAGAR")
+            self.btn_confirmar.setEnabled(True)
+            self.btn_voltar.setEnabled(True)
 
     def set_checkout_interactions_enabled(self, enabled):
         self._checkout_interactions_enabled = bool(enabled)

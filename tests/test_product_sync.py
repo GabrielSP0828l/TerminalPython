@@ -20,6 +20,10 @@ def product(product_id="product-1", code="111", price=4.0, active=True):
     return {
         "id": product_id,
         "codigo": code,
+        "codigoInterno": f"SKU-{product_id}",
+        "codigosBarras": [{
+            "codigo": code, "tipo": "EAN", "principal": True, "ativo": True,
+        }],
         "nome": f"Produto {code}",
         "descricao": "Descrição",
         "preco": price,
@@ -52,7 +56,7 @@ class FakeResponse:
         self.payload = payload
         self.status_code = status_code
 
-    def json(self):
+    def json(self, **kwargs):
         if isinstance(self.payload, Exception):
             raise self.payload
         return self.payload
@@ -153,12 +157,42 @@ class ProductSyncTest(unittest.TestCase):
             self.assertTrue(service.sincronizar_produtos())
 
             database = DatabaseProdutos(root / "db" / "terminal.db")
-            self.assertEqual(9.5, database.buscar_por_codigo("111")[3])
+            self.assertEqual("9.500000", database.buscar_por_codigo("111")[4])
             self.assertIsNone(database.buscar_por_codigo("222"))
             self.assertIsNotNone(database.buscar_por_codigo("333"))
             database.close()
             self.assertEqual(SYNC_2, service.get_last_sync())
             self.assertEqual(SYNC_1, service.session.calls[1]["params"]["lastSync"])
+
+    def test_incremental_replaces_all_barcodes_atomically(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            initial_product = product(code="111")
+            initial_product["codigosBarras"].append({
+                "codigo": "112", "tipo": "EAN", "principal": False, "ativo": True,
+            })
+            changed_product = product(code="222")
+            changed_product["codigosBarras"] = [{
+                "codigo": "222", "tipo": "EAN", "principal": True, "ativo": True,
+            }]
+            service = self.make_service(root, [
+                FakeResponse(response(SYNC_1, True, [upsert(initial_product)])),
+                FakeResponse(response(SYNC_2, False, [upsert(changed_product)])),
+            ])
+
+            self.assertTrue(service.sincronizar_produtos())
+            database = DatabaseProdutos(root / "db" / "terminal.db")
+            self.assertIsNotNone(database.buscar_por_codigo("111"))
+            self.assertIsNotNone(database.buscar_por_codigo("112"))
+            database.close()
+
+            self.assertTrue(service.sincronizar_produtos())
+            database = DatabaseProdutos(root / "db" / "terminal.db")
+            self.assertIsNone(database.buscar_por_codigo("111"))
+            self.assertIsNone(database.buscar_por_codigo("112"))
+            self.assertEqual("product-1", database.buscar_por_codigo("222")[0])
+            self.assertEqual(1, len(database.listar_codigos("product-1")))
+            database.close()
 
     def test_full_sync_deactivates_products_absent_from_complete_state(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -293,7 +327,7 @@ class ProductSyncTest(unittest.TestCase):
             self.assertFalse(service.sincronizar_produtos())
 
             database = DatabaseProdutos(db_path)
-            self.assertEqual(10, database.buscar_por_codigo("111")[3])
+            self.assertEqual("10.000000", database.buscar_por_codigo("111")[4])
             self.assertIsNotNone(database.buscar_por_codigo("222"))
             self.assertIsNone(database.buscar_por_codigo("333"))
             database.close()
@@ -332,7 +366,7 @@ class ProductSyncTest(unittest.TestCase):
             service.stop()
 
             database = DatabaseProdutos(root / "db" / "terminal.db")
-            self.assertEqual(7, database.buscar_por_codigo("111")[3])
+            self.assertEqual("7.000000", database.buscar_por_codigo("111")[4])
             database.close()
 
 

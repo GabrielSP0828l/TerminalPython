@@ -34,11 +34,19 @@ Não há chamada HTTP ao tocar em `Finalizar`. A primeira operação remota acon
 2. `POST /pagamento/terminal/{carrinhoId}` cria/reutiliza Order e inicia Point;
 3. resposta inicial válida muda a UI para atenção laranja e instrui o cliente na Point;
 4. WebSocket e `GET /order/{orderId}/status?terminalId=...` reconciliam o estado;
+
+A confirmação usa uma guarda própria para a tela `ConfirmacaoCompraScreen`. Ela não reutiliza a guarda do carrinho, pois aquela exige que `TerminalScreen` seja a tela atual. Ao confirmar, ambos os botões são bloqueados e a navegação para `PagamentoScreen` ocorre antes de iniciar o worker, exibindo imediatamente `tube-spinner.svg`.
+
+O fluxo registra marcos `[PAYMENT-UI]`, `[PAYMENT-HTTP]` e `[PAYMENT-WORKER]`. O worker Point emite `succeeded`, `failed` ou `timed_out` e sempre termina pelo sinal nativo `finished`; se terminar sem outcome, a UI converte isso em erro operacional e encerra o loading.
 5. `PROCESSING` mantém loading; somente `APPROVED` correlacionado abre o sucesso verde;
 6. falha definitiva abre erro vermelho e “Tentar novamente” retorna ao carrinho;
 7. no sucesso, a compra permanece em memória até `FINALIZAR` executar o reset central.
 
-Falha de comunicação antes de conhecer o resultado usa mensagem operacional neutra, não “recusado”. Timeout com IDs remotos continua reconciliando. Falha definitiva preserva os itens, invalida os IDs antigos e uma nova cobrança só pode começar novamente pelo fluxo de confirmação. O Python não contém credenciais Mercado Pago nem interpreta status externos diretamente.
+Antes de persistir/cobrar, o backend recalcula cada item. O Terminal envia `expectedUnitPrice` com seis casas. Se o preço atual aumentou, `409 PRICE_CHANGED` substitui os valores locais pelos retornados, mostra a alteração e exige que o cliente revise e confirme novamente. O total local usa `Decimal`; o texto de duas casas nunca alimenta o cálculo.
+
+Falha de comunicação antes de conhecer o resultado usa mensagem operacional neutra, não “recusado”. Timeout com IDs remotos continua reconciliando. A reconciliação possui limite de falhas; ao excedê-lo, a tela sai do loading, mantém a sessão bloqueada (`RECONCILIATION_PENDING`) e não dispara novo POST, aguardando WebSocket/reconciliação do backend. Falha definitiva preserva os itens, invalida os IDs antigos e uma nova cobrança só pode começar novamente pelo fluxo de confirmação. O Python não contém credenciais Mercado Pago nem interpreta status externos diretamente.
+
+Depois de receber `PENDING`, `CREATED` ou `AT_TERMINAL`, o Terminal inicia consulta moderada a cada 10 segundos pelo endpoint de status. O WebSocket antecipa a atualização, mas não é a única fonte. A fase visual possui timeout operacional de 30 segundos e nunca cria outra cobrança para obter status.
 
 ## Pós-aprovação
 

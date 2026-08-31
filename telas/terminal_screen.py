@@ -1,4 +1,5 @@
 import logging
+from decimal import Decimal
 
 from PyQt5.QtCore import Qt, QTimer
 from PyQt5.QtGui import QFontMetrics
@@ -23,6 +24,7 @@ from model.Produtos import Produtos
 from styles.theme import Theme
 from styles.tokens import Spacing, TouchSize
 from telas.SessionTimerLabel import SessionTimerLabel
+from model.Money import format_brl, persisted
 
 
 logger = logging.getLogger(__name__)
@@ -31,7 +33,7 @@ logger = logging.getLogger(__name__)
 class ProductCard(QFrame):
     """Card touchscreen que apresenta somente dados úteis ao consumidor."""
 
-    HEIGHT = 224
+    HEIGHT = 280
 
     def __init__(self, item, remove_callback, parent=None):
         super().__init__(parent)
@@ -51,6 +53,12 @@ class ProductCard(QFrame):
         self.price = QLabel()
         self.price.setProperty("role", "productCardPrice")
         self.price.setAlignment(Qt.AlignCenter)
+        self.original_price = QLabel()
+        self.original_price.setProperty("role", "productCardOriginalPrice")
+        self.original_price.setAlignment(Qt.AlignCenter)
+        self.promotion_badge = QLabel("PROMOÇÃO")
+        self.promotion_badge.setProperty("role", "promotionBadge")
+        self.promotion_badge.setAlignment(Qt.AlignCenter)
         self.quantity = QLabel()
         self.quantity.setProperty("role", "productCardQuantity")
         self.quantity.setAlignment(Qt.AlignVCenter | Qt.AlignLeft)
@@ -65,7 +73,9 @@ class ProductCard(QFrame):
         bottom.addWidget(self.quantity, 1)
         bottom.addWidget(remove)
         layout.addWidget(self.name)
+        layout.addWidget(self.original_price)
         layout.addWidget(self.price)
+        layout.addWidget(self.promotion_badge, alignment=Qt.AlignHCenter)
         layout.addStretch(1)
         layout.addLayout(bottom)
         self.update_item(item)
@@ -76,7 +86,23 @@ class ProductCard(QFrame):
         self._update_display_name()
         self.name.setToolTip(self.full_name)
         self.name.setAccessibleName(self.full_name)
-        self.price.setText(f"R$ {item.subtotal():.2f}".replace(".", ","))
+        if item.produto.em_promocao:
+            original_subtotal = item.produto.preco_original * item.quantidade
+            self.original_price.setText(
+                f"De {format_brl(original_subtotal)}".replace(".", ",")
+            )
+            self.original_price.show()
+            self.promotion_badge.setText(
+                str(item.produto.promocao_nome or "PROMOÇÃO").upper()
+            )
+            self.promotion_badge.show()
+            self.price.setText(
+                f"Por {format_brl(item.subtotal())}".replace(".", ",")
+            )
+        else:
+            self.original_price.hide()
+            self.promotion_badge.hide()
+            self.price.setText(format_brl(item.subtotal()).replace(".", ","))
         self.quantity.setText(f"Qtd: {item.quantidade}")
 
     def set_card_width(self, width):
@@ -130,7 +156,7 @@ class TerminalScreen(QWidget):
         self.db = DatabaseProdutos()
         self.carrinho = Carrinho()
         self.linhas = {}
-        self.total = 0.0
+        self.total = Decimal("0")
         self.id_contador = 1
         self.peso_total_venda = 0.0
         self._grid_columns = 3
@@ -347,7 +373,7 @@ class TerminalScreen(QWidget):
                 widget.deleteLater()
         self.empty_label = None
         self._show_empty_state()
-        self.total = 0.0
+        self.total = Decimal("0")
         self.id_contador = 1
         self.peso_total_venda = 0.0
         self.atualizar_interface()
@@ -387,14 +413,26 @@ class TerminalScreen(QWidget):
 
     def iniciar_pagamento_confirmado(self):
         """Único ponto visual que encaminha o carrinho atual ao fluxo Point."""
-        if (
-            self.parent_app
-            and self._can_accept_checkout_action()
-            and not self.carrinho.vazio()
-        ):
-            self.parent_app.pagamento.iniciar_pagamento(
-                self.carrinho.to_dict(), self.totalBox.text()
-            )
+        if self.parent_app is None:
+            logger.error("[PAYMENT-UI] início recusado: parent ausente")
+            return False
+        if not self._checkout_interactions_enabled:
+            logger.warning("[PAYMENT-UI] início recusado: interações bloqueadas")
+            return False
+        if self.parent_app.stacked_widget.currentWidget() is not self.parent_app.confirmacao_compra:
+            logger.warning("[PAYMENT-UI] início recusado: tela atual não é confirmação")
+            return False
+        if not self.parent_app.compra_session.can_accept_checkout_actions():
+            logger.warning("[PAYMENT-UI] início recusado: sessão indisponível")
+            return False
+        if self.parent_app.compra_session.payment_in_flight or self.carrinho.vazio():
+            logger.warning("[PAYMENT-UI] início recusado: pagamento ativo ou carrinho vazio")
+            return False
+
+        logger.info("[PAYMENT-UI] navegando para preparação do pagamento")
+        return self.parent_app.pagamento.iniciar_pagamento(
+            self.carrinho.to_dict(), self.totalBox.text()
+        )
 
     def cancelar_venda(self):
         if self.parent_app and self._can_accept_checkout_action():
@@ -438,12 +476,14 @@ class TerminalScreen(QWidget):
                 self.codigo_barras.clear()
                 return
 
-            if codigo in self.linhas:
-                item = self.carrinho.buscar_item(codigo)
+            item_existente = self.carrinho.buscar_item(produto.id)
+            if item_existente is not None:
+                codigo_existente = item_existente.produto.codigo
+                item = item_existente
                 item.quantidade += 1
-                _, label, _ = self.linhas[codigo]
+                _, label, _ = self.linhas[codigo_existente]
                 self.atualizar_interface()
-                self.atualizar_linha(codigo, label)
+                self.atualizar_linha(codigo_existente, label)
                 self.codigo_barras.clear()
                 self.codigo_barras.setFocus()
                 return
@@ -478,6 +518,20 @@ class TerminalScreen(QWidget):
                 "Não foi possível ler o produto",
                 "Tente escanear novamente. Se o problema continuar, chame o responsável.",
             )
+
+    def aplicar_precos_atualizados(self, payload):
+        for change in (payload or {}).get("items", []):
+            product_id = str(change.get("produtoId") or "")
+            for item in self.carrinho.listar_itens():
+                if str(item.produto.id) != product_id:
+                    continue
+                item.produto.preco_original = persisted(change.get("precoOriginal"))
+                item.produto.preco = persisted(change.get("precoAtual"))
+                item.produto.em_promocao = bool(change.get("emPromocao"))
+                item.produto.promocao_id = change.get("promocaoId")
+                item.produto.promocao_nome = change.get("promocaoNome")
+                self.atualizar_linha(item.produto.codigo, None)
+        self.atualizar_interface()
 
     def mostrar_aviso(self, titulo, mensagem):
         QMessageBox.warning(self, titulo, mensagem, QMessageBox.Ok)

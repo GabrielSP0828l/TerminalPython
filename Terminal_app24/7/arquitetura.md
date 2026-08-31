@@ -16,6 +16,11 @@ MainWindow (lifecycle da aplicação)
 ├── TerminalSocket (thread)
 │   ├── heartbeat a cada 10 s
 │   └── ACK após persistência de lastPing
+├── TelemetryService (thread daemon, padrão 60 s)
+│   ├── SystemMetricsCollector ── /proc, /sys, vcgencmd
+│   ├── NetworkMetricsCollector ── nmcli + health HTTP
+│   ├── ApplicationMetricsCollector ── sync/compra/socket
+│   └── DisplayMetricsCollector ── geometria Qt
 ├── PaymentListener (QThread)
 │   ├── PAYMENT_STATUS → fluxo de pagamento
 │   ├── PRODUCT_SYNC_REQUIRED → SyncService
@@ -33,6 +38,8 @@ O ramo administrativo reutiliza a mesma `ConfiguracaoScreen`: `WifiScreen -> Wif
 Configuração, `.env`, identidade, banco e cursor usam paths derivados da raiz do código, independentemente do diretório de execução. Sync e heartbeat começam somente depois de `Terminal.is_activated()` e continuam durante todas as telas, inclusive pagamento. HTTP/SQLite rodam fora da thread Qt. O scanner consulta SQLite a cada leitura; não existe cache paralelo a invalidar. Itens já presentes no carrinho mantêm o snapshot de produto/preço capturado no scan, enquanto a sync afeta leituras futuras.
 
 O backend continua sendo fonte de verdade para terminal, condomínio, empresa, catálogo, disponibilidade, estoque e status financeiro. Veja [[sincronizacao]], [[heartbeat]], [[sqlite]], [[api-backend]] e [[websocket]].
+
+A telemetria é secundária, não participa do checkout e não observa hardware da Point. Falha de coleta ou POST não atravessa a thread do serviço nem altera a UI. Veja [[telemetria]].
 
 O design visual está centralizado em `styles/tokens.py` e `styles/theme.py`. A UI é portrait-first (`768x1360`), mas continua expansível em landscape. A rotação real é responsabilidade do compositor; `start.sh` reaplica a orientação salva pelo `DisplayService`, sem hardcode de saída, e não impede o startup se a ferramenta faltar.
 

@@ -8,6 +8,8 @@ Todas as operações de compra usam timeout `(connect=5s, read=20s)` em `Purchas
 | --- | --- | --- | --- | --- |
 | COMPATÍVEL | `GET /terminal/serial/{serial}` | sem body; timeout 5s | `TerminalActivationResponse` | `ActivationCheckThread` |
 | COMPATÍVEL | `GET /produtos/sync?uuidTerminal={uuid}&lastSync={Instant opcional}` | sem body; timeout 10s | `ProdutoSyncResponse {syncAt, fullSync, changes}` | `SyncService` |
+| COMPATÍVEL | `GET /terminal/health` | sem body; timeout 3s | health leve + latência medida localmente | `NetworkMetricsCollector` |
+| COMPATÍVEL | `POST /terminal/telemetry` | UUID + blocos system/network/application/display; timeout 5s | estado aceito e classificação atual | `TelemetryService` |
 | COMPATÍVEL | `WS /terminal-socket` | `{terminalId,status}` a cada 10s | `HEARTBEAT_ACK {terminalId,status,lastPing}` após persistência | `TerminalSocket` |
 | COMPATÍVEL | `POST /carrinho` | `CarrinhoRequest {terminalId, items}` | `CarrinhoResponseDTO` | `PurchaseApi` |
 | COMPATÍVEL | `POST /pagamento/terminal/{carrinhoId}` | sem body | `PointPaymentResponse` | `PurchaseApi.start_point/resume_point` |

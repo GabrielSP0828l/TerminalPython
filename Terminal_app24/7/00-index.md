@@ -20,6 +20,7 @@ Estado funcional verificado em 28 de agosto de 2026. O Terminal está adaptado a
 - [[sqlite]] — schema, cache, sync, reset e estado persistido.
 - [[sincronizacao]] — FULL/INCREMENTAL, UPSERT/REMOVE, cursor e coalescência.
 - [[heartbeat]] — sinal de vida confirmado após persistência.
+- [[telemetria]] — saúde do Raspberry/Terminal Python, coleta leve e limites.
 - [[compatibilidade-backend]] — divergências `COM-001` em diante entre terminal e backend.
 
 ## Auditoria e evolução

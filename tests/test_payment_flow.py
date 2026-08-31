@@ -133,13 +133,15 @@ class PaymentFlowTest(unittest.TestCase):
         self.assertEqual("VERIFICANDO PAGAMENTO", self.screen.title.text())
 
         self.screen._status_received("order-a", {
-            "orderId": "order-a", "paymentId": "payment-a",
+            "orderId": "order-a", "paymentId": "attempt-a",
+            "paymentAttemptId": "attempt-a", "transactionId": "payment-a",
             "status": "APPROVED", "reconciled": True,
         })
 
         self.assertTrue(self.parent.confirmacao.shown)
         self.assertIs(self.parent.confirmacao, self.parent.current)
         self.assertEqual("payment-a", self.parent.compra_session.payment_id)
+        self.assertEqual("attempt-a", self.parent.compra_session.payment_attempt_id)
 
     def test_reconnect_pending_keeps_payment_in_flight(self):
         self.screen._status_received("order-a", {
@@ -157,6 +159,22 @@ class PaymentFlowTest(unittest.TestCase):
         self.assertEqual("CART_READY", self.parent.compra_session.state)
         self.assertEqual("Pagamento recusado", self.screen.error_reason.text())
         self.assertIs(self.screen.error_page, self.screen.pages.currentWidget())
+
+    def test_ambiguous_reconciliation_is_bounded_and_does_not_retry_forever(self):
+        self.screen.reconciliation_failures = self.screen.MAX_RECONCILIATION_FAILURES
+        self.screen.timeout_pending = False
+        self.screen._status_failed("order-a", "offline")
+
+        self.assertEqual("RECONCILIATION_PENDING", self.parent.compra_session.state)
+        self.assertFalse(self.screen.poll_timer.isActive())
+        self.assertIs(self.parent.welcome, self.parent.current)
+
+    def test_pending_without_order_does_not_post_again_after_reconciliation_abandon(self):
+        self.parent.compra_session.order_id = None
+        self.parent.compra_session.mark_reconciliation_pending()
+        with patch.object(self.screen, "_retomar_inicio_point") as resume:
+            self.screen.reconciliar_estado()
+        resume.assert_not_called()
 
 
 if __name__ == "__main__":

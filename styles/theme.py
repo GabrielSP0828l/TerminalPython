@@ -220,6 +220,18 @@ class Theme:
                 color: {Colors.TEXT_PRIMARY}; font-size: {FontSize.PRODUCT_PRICE}px;
                 font-weight: {FontWeight.EXTRA_BOLD};
             }}
+            QLabel[role="productCardOriginalPrice"] {{
+                color: {Colors.TEXT_SECONDARY}; font-size: {FontSize.SMALL}px;
+                text-decoration: line-through;
+            }}
+            QLabel[role="promotionBadge"] {{
+                color: {Colors.PAYMENT_STATE_FOREGROUND};
+                background-color: {Colors.SUCCESS};
+                border-radius: {Radius.SMALL}px;
+                padding: 3px {Spacing.SM}px;
+                font-size: {FontSize.CAPTION}px;
+                font-weight: {FontWeight.BOLD};
+            }}
             QLabel[role="productCardQuantity"] {{
                 color: {Colors.TEXT_SECONDARY}; font-size: {FontSize.PRODUCT_QUANTITY}px;
                 font-weight: {FontWeight.BOLD};

@@ -1,19 +1,29 @@
+import logging
+
 import requests
 from PyQt5.QtCore import QThread, pyqtSignal
 
-from config import API_URL
+from config import (
+    API_URL,
+    PAYMENT_CONNECT_TIMEOUT_SECONDS,
+    PAYMENT_READ_TIMEOUT_SECONDS,
+)
+
+
+logger = logging.getLogger(__name__)
 
 
 class PurchaseApiError(RuntimeError):
-    def __init__(self, message, stage, ambiguous=False, context=None):
+    def __init__(self, message, stage, ambiguous=False, context=None, timed_out=False):
         super().__init__(message)
         self.stage = stage
         self.ambiguous = ambiguous
         self.context = context or {}
+        self.timed_out = bool(timed_out)
 
 
 class PurchaseApi:
-    TIMEOUT = (5, 20)
+    TIMEOUT = (PAYMENT_CONNECT_TIMEOUT_SECONDS, PAYMENT_READ_TIMEOUT_SECONDS)
 
     def __init__(self, base_url=API_URL, session=None):
         self.base_url = (base_url or "").rstrip("/")
@@ -23,14 +33,44 @@ class PurchaseApi:
         if not self.base_url:
             raise PurchaseApiError("Servidor não configurado", stage)
         try:
+            logger.info("[PAYMENT-HTTP] enviando request para backend method=%s path=%s", method, path)
             response = self.http.request(
                 method, f"{self.base_url}{path}", timeout=self.TIMEOUT, **kwargs
             )
+            logger.info("[PAYMENT-HTTP] backend respondeu status=%s path=%s",
+                        getattr(response, "status_code", "unknown"), path)
+            if getattr(response, "status_code", 200) == 409:
+                try:
+                    payload = response.json()
+                except ValueError:
+                    payload = {}
+                if payload.get("code") == "PRICE_CHANGED":
+                    raise PurchaseApiError(
+                        payload.get("message") or "O preço da compra foi atualizado",
+                        "price_changed", False, payload
+                    )
             response.raise_for_status()
-            return response.json()
+            try:
+                payload = response.json()
+            except ValueError as error:
+                logger.warning("[PAYMENT-HTTP] JSON inesperado status=%s path=%s",
+                               getattr(response, "status_code", "unknown"), path)
+                raise PurchaseApiError(
+                    "Resposta inválida do servidor", stage, ambiguous
+                ) from error
+            logger.info("[PAYMENT-HTTP] resposta parseada path=%s", path)
+            return payload
+        except PurchaseApiError:
+            raise
         except requests.Timeout as error:
-            raise PurchaseApiError("Tempo de resposta excedido", stage, ambiguous) from error
-        except (requests.RequestException, ValueError) as error:
+            logger.warning("[PAYMENT-HTTP] timeout path=%s", path)
+            raise PurchaseApiError(
+                "Tempo de resposta excedido", stage, ambiguous, timed_out=True
+            ) from error
+        except requests.RequestException as error:
+            status = getattr(getattr(error, "response", None), "status_code", None)
+            logger.warning("[PAYMENT-HTTP] falha status=%s path=%s errorType=%s",
+                           status, path, error.__class__.__name__)
             raise PurchaseApiError("Falha de comunicação com o servidor", stage, ambiguous) from error
 
     def start_point(self, cart_payload):
@@ -44,7 +84,7 @@ class PurchaseApi:
                 "POST", f"/pagamento/terminal/{cart_id}", "payment", ambiguous=True
             )
         except PurchaseApiError as error:
-            error.context = {"cartId": cart_id}
+            error.context = {**error.context, "cartId": cart_id}
             raise
         if not isinstance(point_result, dict) or not point_result.get("orderId"):
             raise PurchaseApiError(
@@ -93,23 +133,43 @@ class PurchaseApi:
 class PointCheckoutWorker(QThread):
     succeeded = pyqtSignal(dict)
     failed = pyqtSignal(str, str, bool, dict)
+    timed_out = pyqtSignal(str, str, bool, dict)
 
     def __init__(self, payload, api_factory=PurchaseApi, parent=None):
         super().__init__(parent)
         self.payload = payload
         self.api_factory = api_factory
+        self.outcome_emitted = False
 
     def run(self):
+        logger.info("[PAYMENT-UI] worker iniciado")
         try:
             result = self.api_factory().start_point(self.payload)
             if not self.isInterruptionRequested():
+                self.outcome_emitted = True
+                logger.info("[PAYMENT-WORKER] success emitido")
                 self.succeeded.emit(result)
         except PurchaseApiError as error:
             if not self.isInterruptionRequested():
-                self.failed.emit(str(error), error.stage, error.ambiguous, error.context)
+                self.outcome_emitted = True
+                if error.timed_out:
+                    logger.warning("[PAYMENT-WORKER] timeout emitido stage=%s", error.stage)
+                    self.timed_out.emit(
+                        str(error), error.stage, error.ambiguous, error.context
+                    )
+                else:
+                    logger.warning("[PAYMENT-WORKER] error emitido stage=%s", error.stage)
+                    self.failed.emit(
+                        str(error), error.stage, error.ambiguous, error.context
+                    )
         except Exception:
+            logger.exception("[PAYMENT-WORKER] exception não prevista")
             if not self.isInterruptionRequested():
+                self.outcome_emitted = True
+                logger.warning("[PAYMENT-WORKER] error emitido stage=unknown")
                 self.failed.emit("Não foi possível preparar o pagamento", "unknown", False, {})
+        finally:
+            logger.info("[PAYMENT-WORKER] finished emitido")
 
 
 class OrderStatusWorker(QThread):
@@ -130,6 +190,12 @@ class OrderStatusWorker(QThread):
         except PurchaseApiError as error:
             if not self.isInterruptionRequested():
                 self.failed.emit(str(error))
+        except Exception:
+            logger.exception("[PAYMENT-WORKER] status exception não prevista")
+            if not self.isInterruptionRequested():
+                self.failed.emit("Não foi possível verificar o pagamento")
+        finally:
+            logger.info("[PAYMENT-WORKER] status finished emitido")
 
 
 class PointResumeWorker(QThread):
@@ -149,6 +215,12 @@ class PointResumeWorker(QThread):
         except PurchaseApiError as error:
             if not self.isInterruptionRequested():
                 self.failed.emit(str(error))
+        except Exception:
+            logger.exception("[PAYMENT-WORKER] retomada exception não prevista")
+            if not self.isInterruptionRequested():
+                self.failed.emit("Não foi possível verificar o início do pagamento")
+        finally:
+            logger.info("[PAYMENT-WORKER] retomada finished emitido")
 
 
 class AppCheckoutWorker(QThread):
@@ -168,3 +240,9 @@ class AppCheckoutWorker(QThread):
         except PurchaseApiError as error:
             if not self.isInterruptionRequested():
                 self.failed.emit(str(error))
+        except Exception:
+            logger.exception("[PAYMENT-WORKER] checkout app exception não prevista")
+            if not self.isInterruptionRequested():
+                self.failed.emit("Não foi possível preparar o checkout")
+        finally:
+            logger.info("[PAYMENT-WORKER] checkout app finished emitido")
