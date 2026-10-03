@@ -87,7 +87,7 @@ class PortraitScreensTest(unittest.TestCase):
         parent.compra_session.begin_payment()
         screen._safe_failure("Não foi possível concluir o pagamento.")
         self.assertEqual("PAGAMENTO NÃO CONCLUÍDO", screen.title.text())
-        self.assertEqual("TENTAR NOVAMENTE", screen.btn_voltar.text())
+        self.assertEqual("VOLTAR À COMPRA", screen.btn_voltar.text())
         self.assertFalse(screen.loading_spinner.isVisible())
 
 

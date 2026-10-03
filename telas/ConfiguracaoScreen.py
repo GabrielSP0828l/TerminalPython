@@ -12,6 +12,7 @@ from PyQt5.QtWidgets import (
 )
 
 from service.FactoryResetService import FactoryResetService
+from service.TerminalLifecycleService import TerminalResetPolicy
 from styles.theme import Theme
 from styles.tokens import Spacing
 from telas.DisplayScreen import DisplayScreen
@@ -27,6 +28,7 @@ class ConfiguracaoScreen(QWidget):
         self.parent_app = parent
         self.reset_service = FactoryResetService()
         self._authenticated = False
+        self._pre_activation = False
         self._return_widget = None
         self._carregar_estilo()
         self._montar_interface()
@@ -45,7 +47,7 @@ class ConfiguracaoScreen(QWidget):
         menu_root.setContentsMargins(Spacing.LG, Spacing.MD, Spacing.LG, Spacing.MD)
         menu_root.setAlignment(Qt.AlignCenter)
 
-        self.wifi_screen = WifiScreen(self.parent_app, self.show_menu, parent=self)
+        self.wifi_screen = WifiScreen(self.parent_app, self._wifi_back, parent=self)
         self.display_screen = DisplayScreen(self.parent_app, self.show_menu, parent=self)
         self.pages.addWidget(self.menu_page)
         self.pages.addWidget(self.wifi_screen)
@@ -104,8 +106,17 @@ class ConfiguracaoScreen(QWidget):
 
     def entrar(self, return_widget):
         self._authenticated = True
+        self._pre_activation = False
         self._return_widget = return_widget
         self.show_menu()
+
+    def entrar_pre_ativacao(self, return_widget):
+        """Libera apenas rede para que um equipamento novo consiga ativar."""
+        self._authenticated = False
+        self._pre_activation = True
+        self._return_widget = return_widget
+        self.pages.setCurrentWidget(self.wifi_screen)
+        self.wifi_screen.show_page()
 
     def encerrar_sessao(self):
         self.stop_workers()
@@ -115,10 +126,21 @@ class ConfiguracaoScreen(QWidget):
         if set_network_settings is not None:
             set_network_settings(False)
         self._authenticated = False
+        self._pre_activation = False
         self._return_widget = None
 
     def show_menu(self):
+        if not self._authenticated:
+            return
         self.pages.setCurrentWidget(self.menu_page)
+
+    def _wifi_back(self):
+        if self._pre_activation:
+            return_widget = self._return_widget
+            self.encerrar_sessao()
+            self.parent_app.encerrar_menu_admin(return_widget)
+            return
+        self.show_menu()
 
     def abrir_wifi(self):
         if not self._authenticated:
@@ -148,6 +170,17 @@ class ConfiguracaoScreen(QWidget):
 
     def confirmar_reset(self):
         if not self._authenticated:
+            return
+        if TerminalResetPolicy.has_unresolved_payment(
+            self.parent_app.compra_session
+        ):
+            logger.warning("[SECURITY] RESET_BLOCKED_ACTIVE_PAYMENT")
+            QMessageBox.warning(
+                self,
+                "Reset bloqueado",
+                "Existe um pagamento ativo ou com resultado incerto. "
+                "Reconcilie o pagamento antes de restaurar o Terminal.",
+            )
             return
         confirmed = self._confirm_action(
             "Restaurar padrões",

@@ -6,7 +6,9 @@ import unittest
 from pathlib import Path
 
 from model.Terminal import Terminal
+from service.TerminalAuth import TerminalCredentialStore
 from service.TerminalSocket import TerminalSocket
+from service.BackendClient import terminal_access_state
 
 
 class FakeWebSocket:
@@ -19,8 +21,9 @@ class FakeWebSocket:
     def settimeout(self, timeout):
         self.timeout = timeout
 
-    def connect(self, url):
+    def connect(self, url, **kwargs):
         self.url = url
+        self.connect_options = kwargs
         if self.connected_event:
             self.connected_event.set()
 
@@ -35,6 +38,9 @@ class FakeWebSocket:
 
 
 class TerminalHeartbeatTest(unittest.TestCase):
+    def tearDown(self):
+        terminal_access_state.set("OPERATIONAL")
+
     def save_terminal(self, root, active=True):
         path = root / "terminal.json"
         Terminal.from_dict({
@@ -56,6 +62,7 @@ class TerminalHeartbeatTest(unittest.TestCase):
             service = TerminalSocket(
                 ws_url="ws://backend", terminal_path=terminal_path,
                 websocket_factory=lambda: socket,
+                credential_store=self.save_credential(Path(directory)),
             )
             service._connect()
             service._send_and_confirm(service._load_active_terminal())
@@ -63,6 +70,11 @@ class TerminalHeartbeatTest(unittest.TestCase):
             self.assertEqual(
                 {"terminalId": "terminal-a", "status": "ONLINE"}, socket.sent[0]
             )
+            self.assertIn(
+                "X-Terminal-Token: tdc_test_heartbeat",
+                socket.connect_options["header"],
+            )
+            self.assertTrue(socket.connect_options["suppress_origin"])
 
     def test_offline_retries_and_recovers_without_stopping_service(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -86,6 +98,7 @@ class TerminalHeartbeatTest(unittest.TestCase):
                 ws_url="ws://backend", terminal_path=terminal_path,
                 interval_seconds=0.01, retry_seconds=0.01,
                 websocket_factory=factory,
+                credential_store=self.save_credential(Path(directory)),
             )
             service.start()
             self.assertTrue(recovered.wait(1))
@@ -102,6 +115,37 @@ class TerminalHeartbeatTest(unittest.TestCase):
                 websocket_factory=lambda: FakeWebSocket({}),
             )
             self.assertIsNone(service._load_active_terminal())
+
+    def test_unauthorized_handshake_enters_safe_mode_without_retry_loop(self):
+        class Unauthorized(RuntimeError):
+            status_code = 401
+
+        with tempfile.TemporaryDirectory() as directory:
+            terminal_path = self.save_terminal(Path(directory))
+            attempts = []
+
+            def factory():
+                attempts.append(True)
+                raise Unauthorized("unauthorized")
+
+            service = TerminalSocket(
+                ws_url="ws://backend",
+                terminal_path=terminal_path,
+                retry_seconds=0.01,
+                websocket_factory=factory,
+                credential_store=self.save_credential(Path(directory)),
+            )
+            thread = service.start()
+            thread.join(timeout=1)
+            self.assertFalse(thread.is_alive())
+            self.assertEqual("AUTH_REQUIRED", service.connection_state)
+            self.assertEqual(1, len(attempts))
+
+    @staticmethod
+    def save_credential(root):
+        store = TerminalCredentialStore(root / "device-credential")
+        store.install("tdc_test_heartbeat")
+        return store
 
 
 if __name__ == "__main__":

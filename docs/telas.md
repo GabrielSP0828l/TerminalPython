@@ -93,8 +93,11 @@ Preparação mostra loading antes do worker HTTP. Depois de uma resposta Point v
 
 `REJECTED`, `FAILED`, `CANCELED/CANCELLED`, `EXPIRED` e `REFUNDED` exibem vermelho fullscreen, `error.svg` branco, motivo humano e “TENTAR NOVAMENTE” no rodapé. A ação invalida os IDs da tentativa anterior e retorna ao carrinho preservado; nunca cria cobrança automaticamente.
 
-`APPROVED`/equivalentes correlacionados abrem verde fullscreen com `checked.svg` branco, total e quatro ações: `FINALIZAR`, `ADICIONAR CPF`, `ENVIAR COMPROVANTE POR E-MAIL` e `ENVIAR COMPROVANTE POR WHATSAPP`. Não existe mais reset após cinco segundos. Eventos aprovados duplicados são idempotentes e não interrompem a ação em curso. Como o backend atual não possui os três contratos pós-compra, esses botões informam indisponibilidade sem persistir dados ou simular envio; o pagamento permanece aprovado.
+`APPROVED`/equivalentes correlacionados abrem verde fullscreen com `checked.svg` branco, total e quatro ações: `FINALIZAR`, `ADICIONAR CPF`, `ENVIAR COMPROVANTE POR E-MAIL` e `ENVIAR COMPROVANTE POR WHATSAPP`. Eventos aprovados duplicados são idempotentes e não interrompem a ação em curso. WhatsApp/e-mail abrem teclado virtual touch e enviam pelo Spring em worker; CPF permanece desabilitado porque ainda não existe contrato para associá-lo à Order. O timeout separado de 120 segundos pausa enquanto há entrada ou envio em andamento.
 
 ## Testes visuais
 
 Os testes Qt offscreen cobrem todas as páginas acima em `768x1360`, targets visíveis de pelo menos 56 px, nome longo, preço grande, grid/resumo, erro e overlay. O carrinho possui validação específica em `1024×600` para três colunas, dimensões, fontes e ausência de scroll horizontal. Cadastro também continua coberto em `600x1024`, `1024x600` e `800x480`. O menu, Wi-Fi, teclado de símbolos e orientação possuem cobertura adicional em `1024×600`.
+# Hardening de kiosk e pré-ativação (27/09/2026)
+
+Produção abre fullscreen real e bloqueia ESC/close acidental; desenvolvimento permanece em janela `1024x600`. A tela de ativação ganhou acesso direto somente ao Wi-Fi, sem liberar reset, display ou saída administrativa. Falha de integridade e recovery sem identidade possuem telas bloqueantes próprias. Veja [[terminal-kiosk-mode]] e [[terminal-local-state-recovery]].

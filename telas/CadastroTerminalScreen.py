@@ -10,6 +10,7 @@ from PyQt5.QtWidgets import (
     QFrame,
     QGridLayout,
     QLabel,
+    QPushButton,
     QSizePolicy,
     QVBoxLayout,
     QWidget,
@@ -18,6 +19,14 @@ from PyQt5.QtWidgets import (
 from config import API_URL
 from model.Terminal import Terminal
 from service.TerminalInfo import TerminalInfo
+from service.TerminalLifecycleService import TerminalLifecycleApi
+from service.TerminalAuth import (
+    LegacyTerminalAuthDisabled,
+    TerminalCredentialMissing,
+    TerminalCredentialStore,
+    migrate_legacy_credential,
+)
+from service.BackendClient import terminal_access_state
 from styles.theme import Theme
 from styles.tokens import Spacing
 
@@ -29,9 +38,10 @@ class ActivationCheckThread(QThread):
     activation_found = pyqtSignal(dict)
     status_changed = pyqtSignal(str, bool)
 
-    def __init__(self, serial_number, parent=None):
+    def __init__(self, serial_number, parent=None, lifecycle_api=None):
         super().__init__(parent)
         self.serial_number = serial_number
+        self.lifecycle_api = lifecycle_api or TerminalLifecycleApi()
 
     def run(self):
         if not API_URL:
@@ -40,6 +50,9 @@ class ActivationCheckThread(QThread):
             return
 
         try:
+            # Se o processo anterior concluiu um reset, confirma ao backend antes de
+            # procurar uma nova ativação. Falha aqui mantém o recibo para nova tentativa.
+            self.lifecycle_api.confirm_pending_reset()
             response = requests.get(
                 f"{API_URL}/terminal/serial/{self.serial_number}",
                 timeout=5
@@ -64,6 +77,34 @@ class ActivationCheckThread(QThread):
                 raise ValueError("Resposta de ativação não é um objeto JSON")
 
             if data.get("activated") is True:
+                terminal_id = data.get("terminalId") or data.get("uuid")
+                if not terminal_id:
+                    raise ValueError("Ativacao sem terminalId")
+                if not TerminalCredentialStore().load():
+                    try:
+                        migrate_legacy_credential(
+                            terminal_id, API_URL, requests
+                        )
+                    except LegacyTerminalAuthDisabled:
+                        if not self.isInterruptionRequested():
+                            self.status_changed.emit(
+                                "Terminal liberado. Aguardando instalacao segura "
+                                "da credencial individual.",
+                                False,
+                            )
+                        return
+                    except (TerminalCredentialMissing, RuntimeError, ValueError) as error:
+                        logger.warning(
+                            "Provisionamento da credencial individual falhou: %s",
+                            error,
+                        )
+                        if not self.isInterruptionRequested():
+                            self.status_changed.emit(
+                                "Terminal liberado, mas a credencial individual "
+                                "ainda nao foi provisionada.",
+                                True,
+                            )
+                        return
                 if not self.isInterruptionRequested():
                     self.activation_found.emit(data)
             else:
@@ -122,12 +163,13 @@ class CadastroTerminalScreen(QWidget):
         layout.setContentsMargins(Spacing.XXL, Spacing.XL, Spacing.XXL, Spacing.XL)
         layout.setSpacing(Spacing.MD)
 
-        self.title = QLabel("ATIVAÇÃO DO TERMINAL")
+        self.title = QLabel("APP 24/7")
         self.title.setObjectName("activationTitle")
         self.title.setAlignment(Qt.AlignCenter)
 
         self.subtitle = QLabel(
-            "Escaneie o QR Code no painel administrativo para vincular este equipamento."
+            "Terminal não configurado. Escaneie o QR Code no painel administrativo "
+            "para ativar este equipamento."
         )
         self.subtitle.setObjectName("activationSubtitle")
         self.subtitle.setAlignment(Qt.AlignCenter)
@@ -150,6 +192,17 @@ class CadastroTerminalScreen(QWidget):
         self.status_label.setWordWrap(True)
         self.status_label.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)
 
+        self.wifi_button = QPushButton("CONFIGURAR WI-FI")
+        self.wifi_button.setProperty("variant", "secondary")
+        if self.parent_app is not None and hasattr(
+            self.parent_app, "abrir_wifi_pre_ativacao"
+        ):
+            self.wifi_button.clicked.connect(
+                self.parent_app.abrir_wifi_pre_ativacao
+            )
+        else:
+            self.wifi_button.setEnabled(False)
+
         self.details_panel = QWidget(self.card)
         self.details_panel.setObjectName("activationDetails")
         details_layout = QVBoxLayout(self.details_panel)
@@ -158,6 +211,7 @@ class CadastroTerminalScreen(QWidget):
         details_layout.addStretch(1)
         details_layout.addWidget(self.info_label)
         details_layout.addWidget(self.status_label)
+        details_layout.addWidget(self.wifi_button)
         details_layout.addStretch(1)
 
         self.body = QWidget(self.card)
@@ -240,8 +294,18 @@ class CadastroTerminalScreen(QWidget):
         )
 
     def verificar_ativacao(self):
-        if Terminal.is_activated():
+        if terminal_access_state.get() in {"AUTH_REQUIRED", "FORBIDDEN"}:
+            self._atualizar_status(
+                "Operacao bloqueada. Apos o reprovisionamento administrativo, "
+                "reinicie o Terminal.",
+                True,
+            )
+            return
+        if Terminal.is_activated() and TerminalCredentialStore().load():
             self.activation_timer.stop()
+            terminal_access_state.set("OPERATIONAL")
+            self.parent_app.iniciar_operacao_terminal()
+            self.parent_app.setCurrentWidget(self.parent_app.welcome)
             return
 
         if self.activation_worker.isRunning():
@@ -272,6 +336,7 @@ class CadastroTerminalScreen(QWidget):
             return
 
         self.activation_timer.stop()
+        terminal_access_state.set("OPERATIONAL")
         self._atualizar_status("Terminal ativado com sucesso.", False, state="success")
         self.parent_app.iniciar_operacao_terminal()
         self.parent_app.setCurrentWidget(self.parent_app.welcome)

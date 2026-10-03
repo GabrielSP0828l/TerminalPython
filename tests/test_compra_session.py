@@ -129,6 +129,15 @@ class CompraSessionTest(unittest.TestCase):
         self.session.mark_timeout_check()
         self.assertEqual("APPROVED", self.session.apply_status("order-a", "APPROVED"))
 
+    def test_approval_wins_while_cancellation_is_pending(self):
+        self.session.begin_payment()
+        self.session.set_remote_ids(order_id="order-a")
+        self.assertTrue(self.session.mark_cancelling())
+
+        self.assertEqual("APPROVED", self.session.apply_status("order-a", "APPROVED"))
+        self.assertEqual("APPROVED", self.session.state)
+        self.assertFalse(self.session.cancellation_requested)
+
     def test_event_from_old_payment_attempt_is_ignored(self):
         self.session.start_if_needed()
         self.session.begin_payment()

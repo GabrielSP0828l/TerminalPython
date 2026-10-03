@@ -6,10 +6,11 @@ from model.Money import format_brl
 
 class Carrinho:
 
-    def __init__(self):
-        terminal = Terminal.load()
-
-        self.terminal_id = terminal.uuidTerminal
+    def __init__(self, terminal_id=None):
+        terminal = Terminal.load() if terminal_id is None else None
+        self.terminal_id = terminal_id or (
+            terminal.uuidTerminal if terminal is not None else None
+        )
 
         self.items = []
 
@@ -90,6 +91,14 @@ class Carrinho:
         return format_brl(self.total())
 
     def to_dict(self):
+
+        if self.terminal_id is None:
+            terminal = Terminal.load()
+            self.terminal_id = (
+                terminal.uuidTerminal if terminal is not None else None
+            )
+        if self.terminal_id is None:
+            raise ValueError("Terminal ainda não está ativado")
 
         return {
 

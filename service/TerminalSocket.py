@@ -12,6 +12,8 @@ from config import (
     WS_URL,
 )
 from model.Terminal import Terminal
+from service.TerminalAuth import terminal_auth_headers
+from service.BackendClient import terminal_access_state
 
 
 logger = logging.getLogger(__name__)
@@ -27,6 +29,7 @@ class TerminalSocket:
         retry_seconds=HEARTBEAT_RETRY_SECONDS,
         ack_timeout_seconds=HEARTBEAT_ACK_TIMEOUT_SECONDS,
         websocket_factory=websocket.WebSocket,
+        credential_store=None,
     ):
         self.ws_url = (ws_url or "").rstrip("/")
         self.terminal_path = terminal_path
@@ -34,9 +37,11 @@ class TerminalSocket:
         self.retry_seconds = retry_seconds
         self.ack_timeout_seconds = ack_timeout_seconds
         self.websocket_factory = websocket_factory
+        self.credential_store = credential_store
         self.ws = None
         self._thread = None
         self._stop_event = threading.Event()
+        self.connection_state = "DISCONNECTED"
 
     def start(self):
         if self._thread is not None and self._thread.is_alive():
@@ -61,7 +66,18 @@ class TerminalSocket:
             raise ValueError("WS_URL não configurada")
         self.ws = self.websocket_factory()
         self.ws.settimeout(self.ack_timeout_seconds)
-        self.ws.connect(f"{self.ws_url}/terminal-socket")
+        headers = terminal_auth_headers(store=self.credential_store)
+        connect_options = {}
+        if headers:
+            connect_options["header"] = [
+                f"{name}: {value}" for name, value in headers.items()
+            ]
+        self.ws.connect(
+            f"{self.ws_url}/terminal-socket",
+            suppress_origin=True,
+            **connect_options,
+        )
+        self.connection_state = "CONNECTED"
         logger.info("[HEARTBEAT] Conectado ao backend")
 
     def _send_and_confirm(self, terminal):
@@ -97,6 +113,15 @@ class TerminalSocket:
                     self._stop_event.wait(self.interval_seconds)
             except Exception as error:
                 if not self._stop_event.is_set():
+                    if self._is_auth_failure(error):
+                        self.connection_state = "AUTH_REQUIRED"
+                        terminal_access_state.set("AUTH_REQUIRED")
+                        logger.error(
+                            "[HEARTBEAT] credencial individual recusada; "
+                            "reprovisionamento administrativo necessario"
+                        )
+                        return
+                    self.connection_state = "RECONNECTING"
                     logger.warning("[HEARTBEAT] Backend indisponível: %s", error)
                     self._stop_event.wait(self.retry_seconds)
             finally:
@@ -110,8 +135,14 @@ class TerminalSocket:
             except Exception as error:
                 logger.debug("Falha ao fechar WebSocket de heartbeat: %s", error)
 
+    @staticmethod
+    def _is_auth_failure(error):
+        return getattr(error, "status_code", None) == 401
+
     def stop(self):
         self._stop_event.set()
+        if self.connection_state != "AUTH_REQUIRED":
+            self.connection_state = "DISCONNECTED"
         self._close_socket()
         if self._thread and self._thread.is_alive():
             self._thread.join(timeout=2)

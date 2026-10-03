@@ -35,7 +35,7 @@ class MoneyAndPromotionsTest(unittest.TestCase):
             preco="10.165750", preco_original="10.990000",
             em_promocao=True, categoria="BEBIDA",
         )
-        cart = Carrinho()
+        cart = Carrinho(terminal_id="terminal-test")
         cart.adicionar_item(Item(product))
 
         payload = cart.to_dict()

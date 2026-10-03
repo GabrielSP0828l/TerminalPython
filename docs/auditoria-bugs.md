@@ -321,7 +321,7 @@ Critério: **confirmado** quando o caminho executável ou contrato prova o compo
 - **Causa:** atenção, falha e sucesso eram cards no fundo neutro; `ConfirmacaoScreen` apagava a compra automaticamente em cinco segundos.
 - **Impacto:** estados pouco visíveis no totem e impossibilidade de manter referências para CPF/comprovante.
 - **Correção:** estados semânticos fullscreen, SVG branco reutilizável, motivos humanos, retry sem cobrança automática e reset aprovado somente em `FINALIZAR`.
-- **Limite registrado:** integrações pós-compra não existem no backend e não são simuladas pela UI.
+- **Estado atual:** WhatsApp/e-mail usam o endpoint Spring em worker; CPF continua desabilitado por ausência de contrato.
 
 ## BUG-038 — Carrinho parecia lista e perdia legibilidade no display de 7 polegadas
 
@@ -375,3 +375,6 @@ Critério: **confirmado** quando o caminho executável ou contrato prova o compo
 - **Cenário real:** zero produtos locais + cursor válido resultavam em `fullSync=false, changes=[]` e novo avanço do cursor.
 - **Correção:** `catalog_sync_state` transacional, contagem esperada e FULL obrigatório para estado ausente/inconsistente; remoção do `print(response.json())` solto.
 - **Validação:** FULL real sem cursor retornou zero porque o condomínio possui zero associações, marcou o cache como válido e permitiu incremental vazio subsequente.
+# Status do hardening P0/P1 (27/09/2026)
+
+Corrigidos: reset durante pagamento, aplicação destrutiva de reset no boot, recovery com identidade ausente, SQLite corrompido apagável, fullscreen de produção, Wi-Fi pré-ativação e referências órfãs dos workers principais. Autenticação deixou de depender apenas de UUID, mas permanece parcial até existir credencial individual revogável por Terminal. Veja [[terminal-review-2026-09]].

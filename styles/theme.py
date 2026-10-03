@@ -560,6 +560,17 @@ class Theme:
             QWidget[paymentState] QPushButton[variant="stateSecondary"]:pressed {{
                 background-color: {Colors.BACKGROUND_SECONDARY};
             }}
+            QWidget[paymentState] QPushButton[variant="stateDanger"] {{
+                min-height: {TouchSize.SECONDARY_BUTTON}px;
+                background-color: {Colors.PAYMENT_ACTION_DANGER};
+                color: {Colors.PAYMENT_STATE_FOREGROUND};
+                border: 2px solid {Colors.PAYMENT_STATE_FOREGROUND};
+                font-size: {FontSize.H3}px;
+                font-weight: {FontWeight.EXTRA_BOLD};
+            }}
+            QWidget[paymentState] QPushButton[variant="stateDanger"]:pressed {{
+                background-color: {Colors.ERROR_HOVER};
+            }}
             QWidget#paymentLoadingPage {{
                 background-color: {Colors.BACKGROUND_PRIMARY};
             }}
@@ -579,7 +590,7 @@ class Theme:
 
     @classmethod
     def confirmation_stylesheet(cls):
-        return cls.payment_stylesheet() + f"""
+        return cls.payment_stylesheet() + cls.keyboard_stylesheet() + f"""
             QLabel#postPaymentNoticeTitle {{
                 color: {Colors.PAYMENT_STATE_FOREGROUND};
                 font-size: {FontSize.H1}px;
@@ -588,5 +599,26 @@ class Theme:
             QLabel#postPaymentNoticeMessage {{
                 color: {Colors.PAYMENT_STATE_FOREGROUND};
                 font-size: {FontSize.BODY}px;
+            }}
+            QLabel#receiptInputError {{
+                min-height: 28px;
+                color: {Colors.PAYMENT_STATE_FOREGROUND};
+                font-size: {FontSize.SMALL}px;
+                font-weight: {FontWeight.BOLD};
+            }}
+            QWidget#receiptInputPage QPushButton[key="true"] {{
+                min-height: 48px;
+                min-width: 48px;
+                padding: 0 {Spacing.XS}px;
+                font-size: {FontSize.SMALL}px;
+            }}
+            QWidget#receiptInputPage QLineEdit {{
+                min-height: 58px;
+                font-size: {FontSize.H3}px;
+            }}
+            QWidget[paymentState] QPushButton:disabled {{
+                background-color: {Colors.BORDER};
+                color: {Colors.TEXT_SECONDARY};
+                border-color: {Colors.TEXT_SECONDARY};
             }}
         """

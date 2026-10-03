@@ -2,5 +2,6 @@ PyQt5==5.15.11
 pyqt5_sip==12.18.0
 python-dotenv==1.2.3
 qrcode==8.2
+Pillow==12.2.0
 Requests==2.34.2
 websocket_client==1.9.0

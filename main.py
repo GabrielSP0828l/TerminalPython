@@ -12,16 +12,30 @@ from PyQt5.QtCore import Qt, QTimer
 
 from PyQt5.QtWidgets import (
     QApplication, QMainWindow, QStackedWidget,
-    QVBoxLayout, QWidget, QSizePolicy, QMessageBox
+    QVBoxLayout, QWidget, QSizePolicy, QMessageBox, QLabel
 )
 
 from model.Terminal import Terminal
 from model.CompraSession import CompraSession
+from database.ActivePaymentStore import ActivePaymentStore
 from service.SyncService import SyncService
 from service.TerminalSocket import TerminalSocket
-from service.FactoryResetService import FactoryResetService
+from service.FactoryResetService import (
+    FactoryResetService,
+    ResetBlockedActivePayment,
+    ResetBlockedCriticalState,
+)
+from service.TerminalLifecycleService import (
+    TerminalLifecycleApi,
+    TerminalLifecycleCheckThread,
+    TerminalResetPolicy,
+)
 from service.InternetMonitor import InternetMonitor
 from service.TelemetryService import TelemetryService
+from service.PurchaseApi import ActivePaymentRecoveryWorker
+from service.TerminalAuth import TerminalCredentialStore
+from service.BackendClient import terminal_access_state
+from config import IS_PRODUCTION
 
 from telas.CadastroTerminalScreen import CadastroTerminalScreen
 from telas.AdminAuthScreen import AdminAuthScreen
@@ -39,7 +53,24 @@ class MainWindow(QMainWindow):
 
     def __init__(self):
         super().__init__()
-        FactoryResetService().apply_pending()
+        self.factory_reset_service = FactoryResetService()
+        self._startup_recovery_error = None
+        try:
+            self.factory_reset_service.apply_pending()
+        except ResetBlockedActivePayment:
+            logging.getLogger(__name__).warning(
+                "[TERMINAL-RESET] RESET_BLOCKED_ACTIVE_PAYMENT no startup"
+            )
+        except ResetBlockedCriticalState:
+            self._startup_recovery_error = "SQLITE_INTEGRITY_FAILED"
+            logging.getLogger(__name__).exception(
+                "[LOCAL-STATE] reset bloqueado: estado critico nao verificavel"
+            )
+        self.lifecycle_api = TerminalLifecycleApi(
+            reset_service=self.factory_reset_service
+        )
+        self._lifecycle_worker = None
+        self._factory_reset_pending = None
         self.no_internet_popup = None
         self.is_offline = False
         self._operacao_iniciada = False
@@ -49,11 +80,36 @@ class MainWindow(QMainWindow):
         self.internet_monitor = None
         self.telemetry_service = None
         self._network_settings_active = False
-        self.compra_session = CompraSession(self)
+        try:
+            self.active_payment_store = ActivePaymentStore()
+        except Exception:
+            self.active_payment_store = None
+            self._startup_recovery_error = "SQLITE_INTEGRITY_FAILED"
+            logging.getLogger(__name__).exception(
+                "[LOCAL-STATE] SQLite indisponivel; operacao comercial bloqueada"
+            )
+        self.compra_session = CompraSession(
+            self,
+            payment_store=self.active_payment_store,
+            terminal_id_provider=self._current_terminal_id,
+        )
+        self.compra_session.state_changed.connect(
+            self._retry_pending_factory_reset
+        )
         self._expiring_checkout_generation = None
         self._shutdown_authorized = False
         self._shutdown_started = False
         self._services_stopped = False
+        self.identity_recovery_worker = None
+        self.identity_recovery_timer = QTimer(self)
+        self.identity_recovery_timer.setSingleShot(True)
+        self.identity_recovery_timer.timeout.connect(
+            self._start_identity_recovery
+        )
+        self.device_auth_guard_timer = QTimer(self)
+        self.device_auth_guard_timer.setInterval(1000)
+        self.device_auth_guard_timer.timeout.connect(self._guard_device_auth)
+        self.device_auth_guard_timer.start()
 
         self.setWindowTitle("Terminal Inteligente")
 
@@ -91,6 +147,8 @@ class MainWindow(QMainWindow):
         self.admin_auth = AdminAuthScreen(self)
         self.offline_overlay = OfflineOverlay(self)
         self.offline_overlay.hide()
+        self.local_recovery_screen = self._build_local_recovery_screen()
+        self.identity_recovery_screen = self._build_identity_recovery_screen()
 
 
         self.stacked_widget.addWidget(self.welcome)
@@ -98,6 +156,8 @@ class MainWindow(QMainWindow):
         self.stacked_widget.addWidget(self.cadastro_terminal)
         self.stacked_widget.addWidget(self.configuracao)
         self.stacked_widget.addWidget(self.admin_auth)
+        self.stacked_widget.addWidget(self.local_recovery_screen)
+        self.stacked_widget.addWidget(self.identity_recovery_screen)
 
         # -----------------------------
         # OUTRAS TELAS (lazy init)
@@ -109,12 +169,161 @@ class MainWindow(QMainWindow):
         self.confirmacao = None
         self.confirmacao_compra = None
 
-        if Terminal.is_activated():
+        pending_payment = (
+            self.active_payment_store.load()
+            if self.active_payment_store is not None else None
+        )
+        if self._startup_recovery_error:
+            self.stacked_widget.setCurrentWidget(self.local_recovery_screen)
+        elif pending_payment and not TerminalCredentialStore().load():
+            self.compra_session.restore_pending_payment()
+            self.identity_recovery_status.setText(
+                "Pagamento preservado. A credencial do equipamento precisa ser "
+                "reprovisionada pelo administrador antes da reconciliacao."
+            )
+            self.stacked_widget.setCurrentWidget(self.identity_recovery_screen)
+        elif Terminal.is_activated() and TerminalCredentialStore().load():
             self.iniciar_operacao_terminal()
             self.stacked_widget.setCurrentWidget(self.welcome)
 
+        elif pending_payment:
+            self.compra_session.restore_pending_payment()
+            self.stacked_widget.setCurrentWidget(self.identity_recovery_screen)
+            QTimer.singleShot(0, self._start_identity_recovery)
         else:
+            if Terminal.is_activated() and not TerminalCredentialStore().load():
+                self.cadastro_terminal.activation_timer.start(
+                    self.cadastro_terminal.POLL_INTERVAL_MS
+                )
+                QTimer.singleShot(0, self.cadastro_terminal.verificar_ativacao)
             self.stacked_widget.setCurrentWidget(self.cadastro_terminal)
+
+    def _guard_device_auth(self):
+        state = terminal_access_state.get()
+        if state not in {"AUTH_REQUIRED", "FORBIDDEN"}:
+            return
+        self._set_checkout_interactions_enabled(False)
+        if TerminalResetPolicy.has_unresolved_payment(self.compra_session):
+            self.identity_recovery_status.setText(
+                "Pagamento preservado. Operacao bloqueada ate o administrador "
+                "restaurar a autorizacao deste equipamento."
+            )
+            self.stacked_widget.setCurrentWidget(self.identity_recovery_screen)
+            return
+        message = (
+            "Credencial revogada ou invalida. Solicite reprovisionamento."
+            if state == "AUTH_REQUIRED"
+            else "Terminal sem permissao operacional. Contate o administrador."
+        )
+        self.cadastro_terminal._atualizar_status(message, True)
+        if not self.cadastro_terminal.activation_timer.isActive():
+            self.cadastro_terminal.activation_timer.start(
+                self.cadastro_terminal.POLL_INTERVAL_MS
+            )
+        self.stacked_widget.setCurrentWidget(self.cadastro_terminal)
+
+    def _build_local_recovery_screen(self):
+        page = QWidget(self)
+        layout = QVBoxLayout(page)
+        layout.setContentsMargins(80, 80, 80, 80)
+        message = QMessageBox(
+            QMessageBox.Critical, "Recuperacao necessaria", "", parent=page
+        )
+        message.setText(
+            "O armazenamento local nao passou na verificacao de integridade.\n\n"
+            "Uma nova compra foi bloqueada para preservar possivel estado de "
+            "pagamento. Contate o administrador; o banco nao foi apagado."
+        )
+        message.setStandardButtons(QMessageBox.NoButton)
+        layout.addWidget(message)
+        return page
+
+    def _build_identity_recovery_screen(self):
+        page = QWidget(self)
+        layout = QVBoxLayout(page)
+        layout.setContentsMargins(80, 80, 80, 80)
+        title = QLabel("RECUPERANDO PAGAMENTO", page)
+        title.setAlignment(Qt.AlignCenter)
+        self.identity_recovery_status = QLabel(
+            "A identidade local precisa ser restaurada. Estamos consultando o "
+            "backend antes de permitir outra ativacao ou compra.", page
+        )
+        self.identity_recovery_status.setAlignment(Qt.AlignCenter)
+        self.identity_recovery_status.setWordWrap(True)
+        layout.addStretch(1)
+        layout.addWidget(title)
+        layout.addWidget(self.identity_recovery_status)
+        layout.addStretch(1)
+        return page
+
+    def _start_identity_recovery(self):
+        if self._shutdown_started or self.active_payment_store is None:
+            return
+        if (self.identity_recovery_worker is not None
+                and self.identity_recovery_worker.isRunning()):
+            return
+        terminal_id = self.current_terminal_id()
+        if not terminal_id:
+            self.identity_recovery_status.setText(
+                "O checkpoint nao possui identidade suficiente. Nova compra "
+                "permanece bloqueada; contate o administrador."
+            )
+            return
+        worker = ActivePaymentRecoveryWorker(terminal_id, parent=self)
+        self.identity_recovery_worker = worker
+        worker.succeeded.connect(self._identity_recovery_received)
+        worker.failed.connect(self._identity_recovery_failed)
+        worker.finished.connect(
+            lambda expected=worker: self._identity_recovery_finished(expected)
+        )
+        worker.start()
+
+    def _identity_recovery_received(self, data):
+        session = self.compra_session
+        if isinstance(data, dict) and data.get("orderId"):
+            session.adopt_backend_payment(data)
+            outcome = session.apply_status(
+                data.get("orderId"), data.get("status"),
+                data.get("paymentAttemptId") or data.get("paymentId"),
+            )
+            if outcome in {"APPROVED", "FAILED"}:
+                self._complete_identity_recovery(outcome)
+                return
+            self.identity_recovery_status.setText(
+                "O pagamento remoto ainda esta ativo ou incerto. Outra compra "
+                "permanece bloqueada; nova verificacao sera feita automaticamente."
+            )
+            self.identity_recovery_timer.start(30000)
+            return
+        session.clear_unresolved_after_authoritative_absence()
+        self._complete_identity_recovery("ABSENT")
+
+    def _identity_recovery_failed(self, message):
+        logging.getLogger(__name__).warning(
+            "[PAYMENT-RECOVERY] identidade local ausente; consulta falhou: %s",
+            message,
+        )
+        self.compra_session.mark_reconciliation_pending()
+        self.identity_recovery_status.setText(
+            "Nao foi possivel confirmar o pagamento. O Terminal continua "
+            "bloqueado e tentara novamente."
+        )
+        self.identity_recovery_timer.start(30000)
+
+    def _identity_recovery_finished(self, worker):
+        if self.identity_recovery_worker is worker:
+            self.identity_recovery_worker = None
+        worker.deleteLater()
+
+    def _complete_identity_recovery(self, outcome):
+        logging.getLogger(__name__).warning(
+            "[PAYMENT-RECOVERY] concluida sem identidade local outcome=%s", outcome
+        )
+        self.identity_recovery_timer.stop()
+        self.cadastro_terminal.activation_timer.start(
+            self.cadastro_terminal.POLL_INTERVAL_MS
+        )
+        self.stacked_widget.setCurrentWidget(self.cadastro_terminal)
 
     def handle_internet(self, online):
         if online:
@@ -150,6 +359,11 @@ class MainWindow(QMainWindow):
         if self.terminal is not None:
             return
 
+        terminal_config = Terminal.load()
+        self.compra_session.restore_pending_payment(
+            terminal_config.terminalId if terminal_config is not None else None
+        )
+
         self.terminal = TerminalScreen(self)
         self.pagamento = PagamentoScreen(self)
         self.teclado = TecladoScreen(self)
@@ -165,6 +379,19 @@ class MainWindow(QMainWindow):
         self.stacked_widget.addWidget(self.pagamento)
 
         self.compra_session.expired.connect(self._checkout_session_expired)
+        QTimer.singleShot(0, self.pagamento.recuperar_apos_startup)
+
+    @staticmethod
+    def _current_terminal_id():
+        terminal = Terminal.load()
+        return terminal.terminalId if terminal is not None else None
+
+    def current_terminal_id(self):
+        terminal_id = self._current_terminal_id()
+        if terminal_id or self.active_payment_store is None:
+            return terminal_id
+        snapshot = self.active_payment_store.load()
+        return snapshot.get("terminal_id") if snapshot else None
 
     def _checkout_session_expired(self, generation):
         """Processa uma única expiração e delega só a reconciliação financeira."""
@@ -208,6 +435,9 @@ class MainWindow(QMainWindow):
     def iniciar_operacao_terminal(self):
         if self._operacao_iniciada:
             return
+        if not TerminalCredentialStore().load():
+            terminal_access_state.set("AUTH_REQUIRED")
+            return
 
         self.sync_service = SyncService()
         self.inicializar_terminal()
@@ -229,6 +459,99 @@ class MainWindow(QMainWindow):
         self.telemetry_service.start()
         self._operacao_iniciada = True
 
+        self.terminal.listener.factory_reset_required.connect(
+            self._on_factory_reset_hint, Qt.QueuedConnection
+        )
+        self.terminal.listener.lifecycle_check_requested.connect(
+            self._check_terminal_lifecycle, Qt.QueuedConnection
+        )
+        self.lifecycle_timer = QTimer(self)
+        self.lifecycle_timer.setInterval(60000)
+        self.lifecycle_timer.timeout.connect(
+            lambda: self._check_terminal_lifecycle("PERIODIC_BOOTSTRAP")
+        )
+        self.lifecycle_timer.start()
+        QTimer.singleShot(
+            0, lambda: self._check_terminal_lifecycle("APPLICATION_STARTUP")
+        )
+
+    def _on_factory_reset_hint(self, payload):
+        logging.getLogger(__name__).warning(
+            "[TERMINAL-RESET] aviso WebSocket recebido; confirmando via HTTP"
+        )
+        self._check_terminal_lifecycle("WEBSOCKET_RESET_HINT")
+
+    def _check_terminal_lifecycle(self, origin="BOOTSTRAP"):
+        terminal = Terminal.load()
+        if terminal is None or self._shutdown_started:
+            return
+        if self._lifecycle_worker is not None and self._lifecycle_worker.isRunning():
+            return
+        worker = TerminalLifecycleCheckThread(
+            terminal.terminalId, api=self.lifecycle_api, parent=self
+        )
+        self._lifecycle_worker = worker
+        worker.result_ready.connect(
+            lambda response, source=origin: self._handle_lifecycle_response(
+                response, source
+            )
+        )
+        worker.finished.connect(self._lifecycle_check_finished)
+        worker.start()
+
+    def _lifecycle_check_finished(self):
+        worker = self._lifecycle_worker
+        self._lifecycle_worker = None
+        if worker is not None:
+            worker.deleteLater()
+
+    def _handle_lifecycle_response(self, response, origin):
+        if not isinstance(response, dict):
+            # Timeout, 5xx, offline ou JSON inválido: nunca resetar.
+            return
+        state = response.get("state")
+        if state != "RESET_REQUIRED":
+            return
+        logging.getLogger(__name__).warning(
+            "[TERMINAL-RESET] estado autoritativo recebido origin=%s reason=%s",
+            origin, response.get("reason"),
+        )
+        if TerminalResetPolicy.has_unresolved_payment(self.compra_session):
+            self._factory_reset_pending = response
+            logging.getLogger(__name__).warning(
+                "[TERMINAL-RESET] adiado para reconciliar pagamento em andamento"
+            )
+            if self.terminal is not None:
+                self.terminal.verificar_pagamento_apos_reconexao()
+            return
+        self._execute_factory_reset(response)
+
+    def _retry_pending_factory_reset(self, _state):
+        if self._factory_reset_pending is None:
+            return
+        if TerminalResetPolicy.has_unresolved_payment(self.compra_session):
+            return
+        response, self._factory_reset_pending = self._factory_reset_pending, None
+        self._execute_factory_reset(response)
+
+    def _execute_factory_reset(self, response):
+        terminal = Terminal.load()
+        if terminal is None or self._shutdown_started:
+            return
+        self.lifecycle_api.notify_started(terminal.terminalId)
+        try:
+            self.factory_reset_service.request_reset(
+                terminal_id=terminal.terminalId,
+                reason=response.get("reason") or "RESET_REQUIRED",
+                remote=True,
+            )
+        except OSError:
+            logging.getLogger(__name__).exception(
+                "[TERMINAL-RESET] não foi possível persistir o marcador"
+            )
+            return
+        self.encerrar_terminal()
+
     def closeEvent(self, event):
         if not self._shutdown_authorized:
             event.ignore()
@@ -242,6 +565,12 @@ class MainWindow(QMainWindow):
         return_widget = self.stacked_widget.currentWidget()
         self.admin_auth.iniciar(return_widget)
         self.stacked_widget.setCurrentWidget(self.admin_auth)
+
+    def abrir_wifi_pre_ativacao(self):
+        if Terminal.is_activated() or self._startup_recovery_error:
+            return
+        self.configuracao.entrar_pre_ativacao(self.cadastro_terminal)
+        self.stacked_widget.setCurrentWidget(self.configuracao)
 
     def abrir_menu_admin_autenticado(self, return_widget):
         self.configuracao.entrar(return_widget)
@@ -271,6 +600,16 @@ class MainWindow(QMainWindow):
         self.compra_session.stop()
         self.welcome.stop()
         self.cadastro_terminal.activation_timer.stop()
+        lifecycle_timer = getattr(self, "lifecycle_timer", None)
+        if lifecycle_timer is not None:
+            lifecycle_timer.stop()
+        identity_timer = getattr(self, "identity_recovery_timer", None)
+        if identity_timer is not None:
+            identity_timer.stop()
+        identity_worker = getattr(self, "identity_recovery_worker", None)
+        if identity_worker is not None and identity_worker.isRunning():
+            identity_worker.requestInterruption()
+            identity_worker.wait(25000)
         if self.cadastro_terminal.activation_worker.isRunning():
             self.cadastro_terminal.activation_worker.requestInterruption()
             self.cadastro_terminal.activation_worker.wait(500)
@@ -321,6 +660,12 @@ class MainWindow(QMainWindow):
     # HELPERS
     # -----------------------------
     def setCurrentWidget(self, widget):
+        if (
+            widget is self.terminal
+            and self.compra_session.payment_in_flight
+        ):
+            self.pagamento.mostrar_reconciliacao_pendente(origin="HOME_GUARD")
+            return
         if (
             widget is self.terminal
             and self.compra_session.started_at is not None
@@ -376,12 +721,25 @@ class MainWindow(QMainWindow):
         QTimer.singleShot(250, self._refresh_display_geometry)
 
     def _refresh_display_geometry(self):
-        self.showFullScreen()
+        if IS_PRODUCTION:
+            self.showFullScreen()
+        else:
+            self.showNormal()
+            self.setFixedSize(1024, 600)
         self.central_widget.updateGeometry()
         self.stacked_widget.updateGeometry()
         current = self.stacked_widget.currentWidget()
         if current is not None:
             current.updateGeometry()
+
+
+def present_main_window(window, production=IS_PRODUCTION):
+    """Aplica explicitamente o contrato de janela para dev ou kiosk."""
+    if production:
+        window.showFullScreen()
+    else:
+        window.setFixedSize(1024, 600)
+        window.show()
 # -----------------------------
 # MAIN
 # -----------------------------
@@ -399,20 +757,18 @@ if __name__ == "__main__":
             "[TERMINAL] UUID carregado: %s", activated_terminal.terminalId
         )
     app = QApplication(sys.argv)
-    #screen = app.primaryScreen()
-    #print("Screen size:", screen.size(), flush=True)
-    #print("Available geometry:", screen.availableGeometry(), flush=True)
+    screen = app.primaryScreen()
+    print("Screen size:", screen.size(), flush=True)
+    print("Available geometry:", screen.availableGeometry(), flush=True)
     window = MainWindow()
 
     # cursor oculto (modo terminal)
-    #app.setOverrideCursor(Qt.BlankCursor)
-    window.setFixedSize(1024, 600)
-    #window.showFullScreen()
-    screen = app.primaryScreen().availableGeometry()
+    app.setOverrideCursor(Qt.BlankCursor)
+    present_main_window(window)
+    #screen = app.primaryScreen().availableGeometry()
 
-    width = min(1024, screen.width())
-    height = min(600, screen.height())
+    #width = min(1024, screen.width())
+    #height = min(600, screen.height())
 
-    window.setFixedSize(width, height)
-    window.show()
+    #window.setFixedSize(width, height)
     sys.exit(app.exec_())

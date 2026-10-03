@@ -50,3 +50,6 @@ O reparo de cache vazio não altera este roteamento: `PAYMENT_STATUS` continua e
 ## Limites restantes
 
 Os handshakes continuam sem autenticação criptográfica e as sessões ficam na memória de uma instância do backend. Autenticação de provisionamento e operação multi-instância permanecem pendências.
+# Hardening do handshake (27/09/2026)
+
+`/payment-socket/{terminalId}` e `/terminal-socket` enviam `X-Terminal-Token` no upgrade. O backend rejeita o handshake antes de registrar sessão quando a credencial é ausente/inválida; no socket de pagamento também valida o Terminal do path. O token atual é compartilhado e a migração para credencial revogável por dispositivo continua P0 parcial. Veja [[terminal-device-security]].

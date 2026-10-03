@@ -104,6 +104,80 @@ class VirtualKeyboard(QWidget):
             button.setText(value)
 
 
+class NumericKeyboard(QWidget):
+    """Teclado numérico grande para entradas touch de telefone e CPF."""
+
+    key_pressed = pyqtSignal(str)
+    ROWS = (
+        ("1", "2", "3"),
+        ("4", "5", "6"),
+        ("7", "8", "9"),
+        ("LIMPAR", "0", "⌫"),
+    )
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.target_input = None
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(Spacing.SM)
+        for row in self.ROWS:
+            row_layout = QHBoxLayout()
+            row_layout.setSpacing(Spacing.SM)
+            for key in row:
+                button = QPushButton(key)
+                button.setProperty("key", True)
+                if key in {"LIMPAR", "⌫"}:
+                    button.setProperty("keyType", "special")
+                button.clicked.connect(
+                    lambda checked=False, value=key: self.process_key(value)
+                )
+                row_layout.addWidget(button, 1)
+            layout.addLayout(row_layout)
+
+    def set_target(self, input_field):
+        self.target_input = input_field
+        input_field.setFocus()
+
+    def process_key(self, key):
+        if self.target_input is None:
+            return
+        if key == "⌫":
+            self.target_input.backspace()
+        elif key == "LIMPAR":
+            self.target_input.clear()
+        else:
+            self.target_input.insert(key)
+        self.key_pressed.emit(key)
+
+
+class EmailKeyboard(VirtualKeyboard):
+    """Variação touch focada nos caracteres necessários para e-mail."""
+
+    ALPHA_ROWS = (
+        ("1", "2", "3", "4", "5", "6", "7", "8", "9", "0"),
+        ("q", "w", "e", "r", "t", "y", "u", "i", "o", "p"),
+        ("a", "s", "d", "f", "g", "h", "j", "k", "l", "⌫"),
+        ("z", "x", "c", "v", "b", "n", "m", "@", "_", "-", "LIMPAR"),
+    )
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self._uppercase = False
+        self._apply_rows(self.ALPHA_ROWS)
+        shortcuts = QHBoxLayout()
+        shortcuts.setSpacing(Spacing.SM)
+        for value in (".", ".com", ".com.br", "@gmail.com"):
+            button = QPushButton(value)
+            button.setProperty("key", True)
+            button.setProperty("keyType", "special")
+            button.clicked.connect(
+                lambda checked=False, key=value: self.process_key(key)
+            )
+            shortcuts.addWidget(button)
+        self.layout().addLayout(shortcuts)
+
+
 class TecladoScreen(QWidget):
     def __init__(self, parent):
         super().__init__(parent)

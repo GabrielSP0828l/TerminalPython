@@ -15,9 +15,11 @@ class ConfirmationStub(QWidget):
     def __init__(self):
         super().__init__()
         self.shown = False
+        self.recovered_amount = None
 
-    def mostrar_tela(self):
+    def mostrar_tela(self, recovered_amount=None):
         self.shown = True
+        self.recovered_amount = recovered_amount
 
 
 class ParentStub(QWidget):
@@ -79,7 +81,8 @@ class PaymentFlowTest(unittest.TestCase):
     def test_processing_keeps_waiting(self):
         self.screen._apply_status("order-a", "WAITING_PAYMENT")
         self.assertTrue(self.parent.compra_session.payment_in_flight)
-        self.assertIn("Aguardando", self.screen.loading.text())
+        self.assertIs(self.screen.attention_page, self.screen.pages.currentWidget())
+        self.assertEqual("FINALIZE NA MAQUININHA", self.screen.attention_page.title.text())
 
     def test_global_timeout_without_remote_payment_returns_to_welcome(self):
         self.parent.compra_session.reset()
@@ -91,10 +94,12 @@ class PaymentFlowTest(unittest.TestCase):
 
     def test_global_timeout_with_remote_payment_starts_bounded_reconciliation(self):
         generation = self.parent.compra_session.generation
-        self.screen.tratar_timeout_global(generation)
+        with patch.object(self.screen, "_cancel_payment") as cancel:
+            self.screen.tratar_timeout_global(generation)
+        cancel.assert_called_once()
         self.assertTrue(self.screen.timeout_pending)
         self.assertTrue(self.screen.final_recovery_timer.isActive())
-        self.assertIs(self.screen.loading_page, self.screen.pages.currentWidget())
+        self.assertIs(self.screen.attention_page, self.screen.pages.currentWidget())
 
     def test_timeout_while_point_request_has_no_ids_waits_for_safe_result(self):
         self.parent.compra_session.reset()
@@ -130,7 +135,7 @@ class PaymentFlowTest(unittest.TestCase):
         with patch.object(self.screen, "reconciliar_estado") as reconcile:
             self.screen.verificar_apos_reconexao()
         reconcile.assert_called_once()
-        self.assertEqual("VERIFICANDO PAGAMENTO", self.screen.title.text())
+        self.assertIs(self.screen.attention_page, self.screen.pages.currentWidget())
 
         self.screen._status_received("order-a", {
             "orderId": "order-a", "paymentId": "attempt-a",
@@ -160,21 +165,79 @@ class PaymentFlowTest(unittest.TestCase):
         self.assertEqual("Pagamento recusado", self.screen.error_reason.text())
         self.assertIs(self.screen.error_page, self.screen.pages.currentWidget())
 
-    def test_ambiguous_reconciliation_is_bounded_and_does_not_retry_forever(self):
+    def test_reconciliation_degraded_keeps_visible_recovery_and_slow_polling(self):
         self.screen.reconciliation_failures = self.screen.MAX_RECONCILIATION_FAILURES
         self.screen.timeout_pending = False
         self.screen._status_failed("order-a", "offline")
 
         self.assertEqual("RECONCILIATION_PENDING", self.parent.compra_session.state)
-        self.assertFalse(self.screen.poll_timer.isActive())
+        self.assertTrue(self.screen.poll_timer.isActive())
+        self.assertEqual(
+            self.screen.DEGRADED_POLL_INTERVAL_MS,
+            self.screen.poll_timer.interval(),
+        )
+        self.assertIs(self.screen, self.parent.current)
+        self.assertEqual(
+            "PAGAMENTO AINDA NÃO CONCLUÍDO",
+            self.screen.attention_page.title.text(),
+        )
+        self.assertEqual("CANCELAR COMPRA", self.screen.cancel_payment_button.text())
+
+    def test_cancelamento_confirmado_so_entao_volta_para_home(self):
+        self.assertTrue(self.parent.compra_session.mark_cancelling())
+
+        self.screen._cancel_received("order-a", {
+            "orderId": "order-a", "status": "CANCELLED",
+            "cancellationRequested": True,
+        })
+
+        self.assertEqual(1, self.parent.reset_calls)
         self.assertIs(self.parent.welcome, self.parent.current)
 
-    def test_pending_without_order_does_not_post_again_after_reconciliation_abandon(self):
+    def test_cancelamento_inconclusivo_mantem_bloqueio_e_tela_laranja(self):
+        self.assertTrue(self.parent.compra_session.mark_cancelling())
+        with patch.object(self.screen, "reconciliar_estado") as reconcile:
+            self.screen._cancel_failed("timeout", "order-a")
+
+        self.assertTrue(self.parent.compra_session.payment_in_flight)
+        self.assertTrue(self.parent.compra_session.cancellation_requested)
+        self.assertIs(self.screen.attention_page, self.screen.pages.currentWidget())
+        self.assertFalse(self.screen.cancel_payment_button.isEnabled())
+        reconcile.assert_called_once()
+
+    def test_pending_without_order_reconcilia_no_backend_antes_de_reenviar_cart(self):
         self.parent.compra_session.order_id = None
         self.parent.compra_session.mark_reconciliation_pending()
-        with patch.object(self.screen, "_retomar_inicio_point") as resume:
+        with patch.object(self.screen, "_discover_active_payment") as discover:
             self.screen.reconciliar_estado()
-        resume.assert_not_called()
+        discover.assert_called_once_with("TERMINAL_RECOVERY")
+
+    def test_startup_adopts_backend_attempt_and_rejects_stale_discovery_callback(self):
+        self.parent.compra_session.reset()
+        self.screen.current_attempt = None
+        self.screen._active_recovery_received(None, "STARTUP", {
+            "orderId": "order-restored",
+            "paymentAttemptId": "attempt-restored",
+            "status": "WAITING_PAYMENT",
+            "mercadoPagoStatus": "CREATED",
+        })
+
+        self.assertTrue(self.parent.compra_session.payment_in_flight)
+        self.assertEqual("order-restored", self.parent.compra_session.order_id)
+        self.assertEqual("attempt-restored", self.parent.compra_session.payment_attempt_id)
+
+        current_token = self.parent.compra_session.attempt_id
+        self.screen._active_recovery_received("stale-token", "STARTUP", None)
+        self.assertEqual(current_token, self.parent.compra_session.attempt_id)
+        self.assertTrue(self.parent.compra_session.payment_in_flight)
+
+    def test_recovered_approval_passes_backend_amount_to_success_screen(self):
+        self.screen._status_received("order-a", {
+            "orderId": "order-a", "status": "APPROVED", "amount": "48.90"
+        })
+
+        self.assertTrue(self.parent.confirmacao.shown)
+        self.assertEqual("48.90", self.parent.confirmacao.recovered_amount)
 
 
 if __name__ == "__main__":

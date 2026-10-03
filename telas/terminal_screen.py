@@ -18,6 +18,7 @@ from PyQt5.QtWidgets import (
 
 from database.DatabaseProdutos import DatabaseProdutos
 from database.PaymentListener import PaymentListener
+from database.CustomerLinkStore import CustomerLinkStore
 from model.Carrinho import Carrinho
 from model.Item import Item
 from model.Produtos import Produtos
@@ -25,6 +26,8 @@ from styles.theme import Theme
 from styles.tokens import Spacing, TouchSize
 from telas.SessionTimerLabel import SessionTimerLabel
 from model.Money import format_brl, persisted
+from service.ScannerRouter import ScannerRouter, ScanType
+from service.PurchaseApi import CustomerLinkWorker, CustomerLinkRecoveryWorker
 
 
 logger = logging.getLogger(__name__)
@@ -162,6 +165,11 @@ class TerminalScreen(QWidget):
         self._grid_columns = 3
         self._grid_card_width = self.GRID_MAX_CARD_WIDTH
         self._checkout_interactions_enabled = True
+        self.scanner_router = ScannerRouter()
+        self.customer_link_store = CustomerLinkStore()
+        self.customer_link_worker = None
+        self.customer_recovery_worker = None
+        self.customer_display_name = None
 
         self.listener = PaymentListener(self)
         self.listener.payment_status_signal.connect(
@@ -183,6 +191,7 @@ class TerminalScreen(QWidget):
         self.setAttribute(Qt.WA_StyledBackground, True)
         self.setStyleSheet(Theme.cart_stylesheet())
         self._montar_interface()
+        self._recover_customer_link()
 
         self.timer_foco = QTimer(self)
         self.timer_foco.timeout.connect(self.garantir_foco)
@@ -236,6 +245,13 @@ class TerminalScreen(QWidget):
         scanner_layout.addWidget(self.codigo_barras, 3)
         scanner_layout.addWidget(self.peso_display, 1)
 
+        self.customer_status = QLabel(
+            "Vincule esta compra ao seu App247 — escaneie o QR exibido no aplicativo"
+        )
+        self.customer_status.setProperty("role", "pageSubtitle")
+        self.customer_status.setAlignment(Qt.AlignCenter)
+        self.customer_status.setWordWrap(True)
+
         self.footer_card = QFrame(self)
         self.footer_card.setObjectName("cartFooter")
         footer = QHBoxLayout(self.footer_card)
@@ -271,6 +287,7 @@ class TerminalScreen(QWidget):
 
         root.addWidget(self.header_card)
         root.addWidget(self.scroll, 1)
+        root.addWidget(self.customer_status)
         root.addLayout(scanner_layout)
         root.addWidget(self.footer_card)
 
@@ -359,10 +376,14 @@ class TerminalScreen(QWidget):
             self.parent_app.pagamento.reconciliar_estado()
 
     def verificar_pagamento_apos_reconexao(self):
-        if self.parent_app and self.parent_app.compra_session.payment_in_flight:
+        if self.parent_app:
             self.parent_app.pagamento.verificar_apos_reconexao()
 
     def liberar_tela(self):
+        self.customer_link_store.clear()
+        self.customer_display_name = None
+        if self.parent_app is not None:
+            self.parent_app.compra_session.cart_id = None
         self.carrinho = Carrinho()
         self.linhas.clear()
         while self.productsLayout.count():
@@ -377,6 +398,7 @@ class TerminalScreen(QWidget):
         self.id_contador = 1
         self.peso_total_venda = 0.0
         self.atualizar_interface()
+        self._show_customer_prompt()
 
     def set_checkout_interactions_enabled(self, enabled):
         self._checkout_interactions_enabled = bool(enabled)
@@ -400,6 +422,17 @@ class TerminalScreen(QWidget):
 
     def ir_para_pagamento(self):
         """Abre o resumo; nenhuma chamada remota é iniciada neste toque."""
+        if self.parent_app.compra_session.payment_in_flight:
+            logger.warning(
+                "[PAYMENT-UI] acesso à confirmação bloqueado: pagamento ativo orderId=%s attemptId=%s status=%s",
+                self.parent_app.compra_session.order_id,
+                self.parent_app.compra_session.payment_attempt_id,
+                self.parent_app.compra_session.last_status,
+            )
+            self.parent_app.pagamento.mostrar_reconciliacao_pendente(
+                origin="CART_ACTION"
+            )
+            return
         if not self._can_accept_checkout_action():
             return
         if not self.linhas:
@@ -422,11 +455,22 @@ class TerminalScreen(QWidget):
         if self.parent_app.stacked_widget.currentWidget() is not self.parent_app.confirmacao_compra:
             logger.warning("[PAYMENT-UI] início recusado: tela atual não é confirmação")
             return False
+        if self.parent_app.compra_session.payment_in_flight:
+            logger.warning(
+                "[PAYMENT-UI] início recusado: pagamento ativo orderId=%s attemptId=%s status=%s",
+                self.parent_app.compra_session.order_id,
+                self.parent_app.compra_session.payment_attempt_id,
+                self.parent_app.compra_session.last_status,
+            )
+            self.parent_app.pagamento.mostrar_reconciliacao_pendente(
+                origin="CONFIRM_BUTTON"
+            )
+            return False
         if not self.parent_app.compra_session.can_accept_checkout_actions():
             logger.warning("[PAYMENT-UI] início recusado: sessão indisponível")
             return False
-        if self.parent_app.compra_session.payment_in_flight or self.carrinho.vazio():
-            logger.warning("[PAYMENT-UI] início recusado: pagamento ativo ou carrinho vazio")
+        if self.carrinho.vazio():
+            logger.warning("[PAYMENT-UI] início recusado: carrinho vazio")
             return False
 
         logger.info("[PAYMENT-UI] navegando para preparação do pagamento")
@@ -455,12 +499,18 @@ class TerminalScreen(QWidget):
             self._show_empty_state()
 
     def readProduct(self):
+        scan = self.scanner_router.parse(self.codigo_barras.text())
+        self.codigo_barras.clear()
+        if scan.type == ScanType.UNKNOWN:
+            if scan.value:
+                self.mostrar_aviso("QR não reconhecido", "Use um QR de identificação do App247.")
+            return
+        if scan.type == ScanType.CUSTOMER_LINK_TOKEN:
+            self._link_customer(scan.value)
+            return
         if not self._can_accept_checkout_action():
-            self.codigo_barras.clear()
             return
-        barcode = self.codigo_barras.text().strip()
-        if not barcode:
-            return
+        barcode = scan.value
         try:
             product_tuple = self.db.buscar_por_codigo(barcode)
             if not product_tuple:
@@ -518,6 +568,90 @@ class TerminalScreen(QWidget):
                 "Não foi possível ler o produto",
                 "Tente escanear novamente. Se o problema continuar, chame o responsável.",
             )
+
+    def _link_customer(self, opaque_token):
+        if self.parent_app.compra_session.payment_in_flight:
+            self.mostrar_aviso(
+                "Pagamento em andamento",
+                "Não é possível alterar o cliente enquanto há um pagamento em andamento.",
+            )
+            return
+        if self.customer_link_worker is not None and self.customer_link_worker.isRunning():
+            return
+        if not self.parent_app.compra_session.start_if_needed():
+            return
+        self.customer_status.setText("Identificando cliente...")
+        self.codigo_barras.setEnabled(False)
+        self.customer_link_worker = CustomerLinkWorker(
+            opaque_token,
+            self.carrinho.to_dict(),
+            cart_id=self.parent_app.compra_session.cart_id,
+            parent=self,
+        )
+        self.customer_link_worker.succeeded.connect(self._customer_linked)
+        self.customer_link_worker.failed.connect(self._customer_link_failed)
+        self.customer_link_worker.finished.connect(self._customer_worker_finished)
+        self.customer_link_worker.start()
+
+    def _customer_linked(self, payload):
+        cart_id = str(payload.get("cartId") or "")
+        if not cart_id:
+            self._customer_link_failed("CUSTOMER_LINK_FAILED", "Resposta inválida")
+            return
+        self.parent_app.compra_session.set_remote_ids(cart_id=cart_id)
+        self.customer_link_store.save(cart_id)
+        self.customer_display_name = str(payload.get("displayName") or "Cliente")
+        self.customer_status.setText(
+            f"✓ Compra vinculada a {self.customer_display_name}"
+        )
+
+    def _customer_link_failed(self, code, _message):
+        messages = {
+            "CUSTOMER_LINK_TOKEN_EXPIRED": "QR expirado. Gere um novo QR no aplicativo.",
+            "CUSTOMER_LINK_TOKEN_ALREADY_USED": "Este QR já foi utilizado. Gere um novo QR no aplicativo.",
+            "CUSTOMER_LINK_TENANT_MISMATCH": "Este QR não pode ser usado neste Terminal.",
+            "CUSTOMER_ALREADY_LINKED": "Esta compra já está vinculada a outro cliente.",
+            "CUSTOMER_LINK_PAYMENT_ALREADY_STARTED": "Não é possível alterar o cliente enquanto há um pagamento em andamento.",
+            "CUSTOMER_LINK_RATE_LIMITED": "Aguarde um momento antes de tentar novamente.",
+        }
+        friendly = messages.get(code, "Não foi possível identificar o cliente. Tente novamente.")
+        self._show_customer_prompt()
+        self.mostrar_aviso("Identificação do cliente", friendly)
+
+    def _customer_worker_finished(self):
+        worker = self.customer_link_worker
+        self.customer_link_worker = None
+        if worker is not None:
+            worker.deleteLater()
+        if self._checkout_interactions_enabled:
+            self.codigo_barras.setEnabled(True)
+            self.codigo_barras.setFocus()
+
+    def _show_customer_prompt(self):
+        self.customer_status.setText(
+            "Vincule esta compra ao seu App247 — escaneie o QR exibido no aplicativo"
+        )
+
+    def _recover_customer_link(self):
+        cart_id = self.customer_link_store.load()
+        if not cart_id:
+            return
+        self.customer_status.setText("Recuperando cliente vinculado...")
+        self.customer_recovery_worker = CustomerLinkRecoveryWorker(cart_id, parent=self)
+        self.customer_recovery_worker.succeeded.connect(self._customer_linked)
+        self.customer_recovery_worker.failed.connect(self._customer_recovery_failed)
+        self.customer_recovery_worker.finished.connect(self._customer_recovery_finished)
+        self.customer_recovery_worker.start()
+
+    def _customer_recovery_failed(self):
+        self.customer_link_store.clear()
+        self._show_customer_prompt()
+
+    def _customer_recovery_finished(self):
+        worker = self.customer_recovery_worker
+        self.customer_recovery_worker = None
+        if worker is not None:
+            worker.deleteLater()
 
     def aplicar_precos_atualizados(self, payload):
         for change in (payload or {}).get("items", []):

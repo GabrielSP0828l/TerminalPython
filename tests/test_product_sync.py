@@ -10,6 +10,7 @@ from database.DatabaseProdutos import DatabaseProdutos
 from model.Produtos import Produtos
 from model.Terminal import Terminal
 from service.SyncService import SyncService
+from service.TerminalAuth import TerminalCredentialStore
 
 
 SYNC_1 = "2026-08-24T17:00:00.123Z"
@@ -67,8 +68,10 @@ class FakeSession:
         self.responses = list(responses)
         self.calls = []
 
-    def get(self, url, params, timeout):
-        self.calls.append({"url": url, "params": params, "timeout": timeout})
+    def get(self, url, params, timeout, headers=None):
+        self.calls.append({
+            "url": url, "params": params, "timeout": timeout, "headers": headers,
+        })
         item = self.responses.pop(0)
         if isinstance(item, Exception):
             raise item
@@ -111,6 +114,8 @@ class ProductSyncTest(unittest.TestCase):
             "ativo": True,
             "activated": True,
         }).save(terminal_path)
+        credential_store = TerminalCredentialStore(root / "device-credential")
+        credential_store.install("tdc_test_sync")
         return SyncService(
             api_url="http://backend",
             db_path=root / "db" / "terminal.db",
@@ -119,6 +124,7 @@ class ProductSyncTest(unittest.TestCase):
             interval_seconds=0.02,
             session=FakeSession(responses),
             database_factory=database_factory,
+            credential_store=credential_store,
         )
 
     def test_first_sync_uses_new_endpoint_and_backend_cursor(self):

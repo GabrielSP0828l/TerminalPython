@@ -10,6 +10,7 @@ from service.ApplicationMetricsCollector import ApplicationMetricsCollector
 from service.DisplayMetricsCollector import DisplayMetricsCollector
 from service.NetworkMetricsCollector import NetworkMetricsCollector
 from service.SystemMetricsCollector import SystemMetricsCollector
+from service.BackendClient import BackendClient, BackendHttpError
 
 
 logger = logging.getLogger(__name__)
@@ -21,12 +22,16 @@ class TelemetryService:
                  interval_seconds=TELEMETRY_INTERVAL_SECONDS,
                  timeout_seconds=TELEMETRY_TIMEOUT_SECONDS, session=None,
                  system_collector=None, network_collector=None,
-                 application_collector=None, display_collector=None):
+                 application_collector=None, display_collector=None,
+                 credential_store=None):
         self.api_url = (api_url or "").rstrip("/")
         self.terminal_path = terminal_path
         self.interval_seconds = interval_seconds
         self.timeout_seconds = timeout_seconds
         self.session = session or requests.Session()
+        self.client = BackendClient(
+            self.api_url, self.session, credential_store=credential_store
+        )
         self.system = system_collector or SystemMetricsCollector()
         self.network = network_collector or NetworkMetricsCollector(self.api_url)
         self.application = application_collector or ApplicationMetricsCollector(
@@ -49,15 +54,24 @@ class TelemetryService:
             if terminal is None or not terminal.activated or not terminal.ativo or not self.api_url:
                 return False
             payload = self.build_payload(terminal)
-            response = self.session.post(
-                f"{self.api_url}/terminal/telemetry", json=payload,
+            self.client.request(
+                "POST",
+                "/terminal/telemetry",
+                terminal_id=terminal.terminalId,
+                json=payload,
                 timeout=self.timeout_seconds,
+                expected=(200, 202, 204),
             )
-            response.raise_for_status()
             logger.info("[TELEMETRY] amostra enviada terminal=%s", terminal.terminalId)
             return True
         except requests.RequestException as error:
             logger.warning("[TELEMETRY] envio descartado; nova tentativa no próximo ciclo: %s", error)
+            return False
+        except BackendHttpError as error:
+            logger.warning(
+                "[TELEMETRY] backend recusou amostra status=%s code=%s",
+                error.status, error.code,
+            )
             return False
         except Exception:
             logger.exception("[TELEMETRY] coleta descartada; Terminal continuará operando")

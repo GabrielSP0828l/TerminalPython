@@ -179,6 +179,17 @@ class PortraitPurchaseFlowTest(unittest.TestCase):
         self.assertFalse(self.parent.confirmacao_compra.btn_confirmar.isEnabled())
         self.assertFalse(self.parent.confirmacao_compra.btn_voltar.isEnabled())
 
+    def test_one_hundred_confirmation_signals_start_only_one_worker(self):
+        self._add_item()
+        self.parent.confirmacao_compra.mostrar_resumo()
+        self.parent.stacked_widget.setCurrentWidget(self.parent.confirmacao_compra)
+
+        for _ in range(100):
+            self.parent.confirmacao_compra.confirmar()
+
+        self.parent.pagamento.iniciar_pagamento.assert_called_once()
+        self.assertFalse(self.parent.confirmacao_compra.btn_confirmar.isEnabled())
+
     def test_offline_overlay_fits_portrait_parent(self):
         host = QWidget()
         host.resize(768, 1360)

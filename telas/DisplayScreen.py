@@ -151,7 +151,16 @@ class DisplayScreen(QWidget):
             lambda code, message, expected=token:
             self._worker_failure(expected, failure, code, message)
         )
+        self.worker.finished.connect(
+            lambda expected=token, worker=self.worker:
+            self._worker_finished(expected, worker)
+        )
         self.worker.start()
+
+    def _worker_finished(self, token, worker):
+        if token == self._operation_token and self.worker is worker:
+            self.worker = None
+        worker.deleteLater()
 
     def _worker_success(self, token, callback, result):
         if token == self._operation_token:
@@ -174,3 +183,6 @@ class DisplayScreen(QWidget):
             self.worker.requestInterruption()
             if wait:
                 self.worker.wait(9000)
+        if self.worker is not None and not self.worker.isRunning():
+            worker, self.worker = self.worker, None
+            worker.deleteLater()

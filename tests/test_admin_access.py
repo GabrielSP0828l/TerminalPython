@@ -193,6 +193,19 @@ class AdminAccessTest(unittest.TestCase):
         self.assertTrue(screen._authenticated)
         self.assertIs(screen.menu_page, screen.pages.currentWidget())
 
+    def test_pre_activation_mode_exposes_only_wifi_not_admin_menu(self):
+        parent = AdminParentStub()
+        screen = parent.configuracao
+        with patch.object(screen.wifi_screen, "show_page"):
+            screen.entrar_pre_ativacao(parent.welcome)
+        self.assertFalse(screen._authenticated)
+        self.assertTrue(screen._pre_activation)
+        self.assertIs(screen.wifi_screen, screen.pages.currentWidget())
+
+        screen.show_menu()
+
+        self.assertIs(screen.wifi_screen, screen.pages.currentWidget())
+
 
 if __name__ == "__main__":
     unittest.main()

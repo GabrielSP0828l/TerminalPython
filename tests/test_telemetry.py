@@ -11,6 +11,7 @@ from service.DisplayMetricsCollector import DisplayMetricsCollector
 from service.NetworkMetricsCollector import NetworkMetricsCollector
 from service.SystemMetricsCollector import SystemMetricsCollector
 from service.TelemetryService import TelemetryService
+from service.TerminalAuth import TerminalCredentialStore
 from service.WifiService import WifiStatus
 
 
@@ -38,7 +39,7 @@ class FakeSession:
         self.get_response = get_response or FakeResponse()
         self.calls = []
 
-    def post(self, url, json, timeout):
+    def post(self, url, json, timeout, headers=None):
         self.calls.append((url, json, timeout))
         value = self.posts.pop(0) if self.posts else FakeResponse()
         if isinstance(value, Exception):
@@ -167,6 +168,8 @@ class TelemetryServiceTest(unittest.TestCase):
         Terminal.from_dict({
             "terminalId": "terminal-a", "ativo": True, "activated": True,
         }).save(terminal_path)
+        credential_store = TerminalCredentialStore(root / "device-credential")
+        credential_store.install("tdc_test_telemetry")
         return TelemetryService(
             sync_service=None, purchase_session=None,
             websocket_state_provider=lambda: "CONNECTED", screen_provider=lambda: None,
@@ -176,6 +179,7 @@ class TelemetryServiceTest(unittest.TestCase):
             network_collector=StaticCollector({"backendReachable": True}),
             application_collector=StaticCollector({"version": "1.0.0"}),
             display_collector=StaticCollector({"width": 1024}),
+            credential_store=credential_store,
         )
 
     def test_payload_and_timeout_are_sent_to_backend(self):

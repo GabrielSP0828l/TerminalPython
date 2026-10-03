@@ -1,5 +1,6 @@
 from dataclasses import dataclass
 import json
+import os
 from pathlib import Path
 from typing import Optional
 
@@ -69,6 +70,11 @@ class Terminal:
                 ensure_ascii=False
             )
         temporary_path.replace(terminal_path)
+        try:
+            os.chmod(terminal_path, 0o600)
+        except OSError:
+            # Plataformas sem semantica POSIX continuam usando escrita atomica.
+            pass
 
     @classmethod
     def is_activated(cls, path=TERMINAL_CONFIG_PATH):

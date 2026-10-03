@@ -6,11 +6,31 @@ from unittest.mock import MagicMock, patch
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 from PyQt5.QtCore import Qt
+from PyQt5.QtWidgets import QApplication, QMainWindow
 
-from main import MainWindow
+from main import MainWindow, present_main_window
 
 
 class SafeShutdownTest(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        cls.app = QApplication.instance() or QApplication([])
+
+    def test_development_uses_normal_1024x600_window(self):
+        window = QMainWindow()
+        present_main_window(window, production=False)
+        self.app.processEvents()
+        self.assertFalse(window.isFullScreen())
+        self.assertEqual((1024, 600), (window.width(), window.height()))
+        window.close()
+
+    def test_production_uses_real_fullscreen(self):
+        window = QMainWindow()
+        present_main_window(window, production=True)
+        self.app.processEvents()
+        self.assertTrue(window.isFullScreen())
+        window.close()
+
     def test_escape_is_consumed_in_kiosk_mode(self):
         event = MagicMock()
         event.key.return_value = Qt.Key_Escape

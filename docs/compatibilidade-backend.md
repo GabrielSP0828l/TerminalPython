@@ -6,14 +6,14 @@ Voltar para [o índice](00-index.md).
 
 | Área | Resultado |
 |---|---|
-| Hierarquia empresa → condomínio → terminal | intenção compatível; DTO local legado |
-| Ativação por serial | rota compatível; campos de identidade incompatíveis |
-| Produtos | compatível com `/produtos/sync`, `syncAt`, FULL/INCREMENTAL e aviso WebSocket |
-| Carrinho | body compatível quando UUIDs locais são válidos |
-| Order/cobrança Point | cliente não chama o contrato atual corretamente |
+| Hierarquia empresa → condomínio → terminal | compatível; tenant derivado pelo backend |
+| Ativação por serial | compatível; descoberta pública + credential individual |
+| Produtos | compatível com SKU, múltiplos barcodes, promoção e FULL/INCREMENTAL |
+| Carrinho | compatível; UUID, barcode lido e decimais exatos |
+| Order/cobrança Point | compatível e correlacionada por Order + PaymentAttempt |
 | Mercado Pago | separação de credenciais correta; não há chamada direta no Python |
-| Resultado de pagamento | socket existe, mas publicação/status/correlação incompatíveis |
-| Estoque | cliente não movimenta estoque, correto; não sincroniza disponibilidade por condomínio |
+| Resultado de pagamento | WebSocket + status/reconciliation + recovery SQLite compatíveis |
+| Estoque | disponibilidade por condomínio refletida pelo Product Sync |
 
 ## Incompatibilidades
 
@@ -122,14 +122,15 @@ Voltar para [o índice](00-index.md).
 - **Impacto:** evento antigo/de outra compra pode liberar a compra atual.
 - **Solução:** `CompraSession` guarda Order ativa; evento exige terminal e Order correspondentes.
 
-### COM-013 — Sem recuperação após reconexão
+### COM-013 — Recuperação após reconexão/restart
 
-**Status: PARCIALMENTE RESOLVIDO.**
+**Status: RESOLVIDO no cliente.**
 
 - **Terminal atual:** apenas reconecta o socket.
 - **Backend atual:** mantém estado final no banco, mas não há endpoint terminal-oriented usado para consulta.
 - **Impacto:** evento perdido deixa UI divergente do financeiro.
-- **Solução:** reconnect consulta `GET /order/{orderId}/status?terminalId=...`. Persistência para recuperar após reinício físico continua pendente.
+- **Solução:** reconnect consulta status e o SQLite persiste cart, Order,
+  PaymentAttempt e estados incertos para recuperação após reinício.
 
 ### COM-014 — Cancelamento/timeout apenas local
 
@@ -190,3 +191,15 @@ O cliente valida o lote inteiro, aplica todas as operações numa transação e 
 **Status: RESOLVIDO em 24 de agosto de 2026.**
 
 O cliente podia manter `last_sync.txt` após perda/recriação do SQLite e aceitar incrementais vazios indefinidamente. A tabela `catalog_sync_state` agora registra FULL confirmado e contagem ativa esperada. Ausência do marcador ou divergência local omite `lastSync` e exige `fullSync=true`; FULL legitimamente vazio passa a ser um cache inicializado de zero produtos.
+
+### COM-020 — SKU e código de barras eram o mesmo campo
+
+**Status: RESOLVIDO em 31 de agosto de 2026.**
+
+O SQLite v2 separa `produtos.codigo_interno` de `produto_codigo_barras`. O sync recebe a lista ativa completa, o scanner pesquisa por JOIN e a migração converte o código antigo em barcode principal `LEGACY`. Trocar/remover barcode substitui a lista inteira na mesma transação do produto e do cursor.
+
+### COM-021 — Evento de tentativa antiga podia afetar retry futuro
+
+**Status: RESOLVIDO no contrato atual.**
+
+`PointPaymentResponse`, consulta de status e WebSocket incluem `paymentAttemptId`. `CompraSession` armazena a tentativa corrente e ignora evento divergente. `paymentId` continua apenas como alias legado no status.

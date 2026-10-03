@@ -1,3 +1,25 @@
 .venv/
 venv/
-db/display_orientation
+
+# Configuracao e credenciais locais. Somente o modelo sem valores e versionado.
+.env
+.env.*
+!.env.example
+secrets/
+
+# Estado operacional de uma instalacao fisica.
+runtime/
+data/
+db/
+database/last_sync.txt
+*.db
+*.sqlite
+*.sqlite3
+
+# Logs e artefatos gerados.
+logs/
+*.log
+__pycache__/
+*.py[cod]
+.pytest_cache/
+temp_checkout.png

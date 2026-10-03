@@ -82,7 +82,13 @@ class AppPaymentScreen(QWidget):
         )
         self.checkout_worker.succeeded.connect(self._checkout_ready)
         self.checkout_worker.failed.connect(self._checkout_failed)
+        self.checkout_worker.finished.connect(self._checkout_worker_finished)
         self.checkout_worker.start()
+
+    def _checkout_worker_finished(self):
+        worker, self.checkout_worker = self.checkout_worker, None
+        if worker is not None:
+            worker.deleteLater()
 
     def _checkout_ready(self, data):
         pixmap = QPixmap()
@@ -112,4 +118,7 @@ class AppPaymentScreen(QWidget):
         self.qr_label.clear()
         if self.checkout_worker is not None and self.checkout_worker.isRunning():
             self.checkout_worker.requestInterruption()
-            self.checkout_worker.wait(500)
+            self.checkout_worker.wait(25000)
+        if self.checkout_worker is not None and not self.checkout_worker.isRunning():
+            worker, self.checkout_worker = self.checkout_worker, None
+            worker.deleteLater()

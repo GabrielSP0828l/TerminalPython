@@ -50,7 +50,7 @@ Depois de receber `PENDING`, `CREATED` ou `AT_TERMINAL`, o Terminal inicia consu
 
 ## Pós-aprovação
 
-`APPROVED` não limpa Carrinho, Order ou Payment local imediatamente. A tela verde mantém essas referências para CPF/comprovante e bloqueia uma nova compra. Hoje o backend não possui CPF em Order/Pagamento nem endpoints de comprovante por e-mail/WhatsApp; por isso a UI não grava nem afirma envio. `FINALIZAR` é opcionalmente precedido por essas ações futuras e sempre conclui a experiência por `MainWindow.reset_compra()`.
+`APPROVED` não limpa Carrinho, Order ou Payment local imediatamente. A entrada única de aprovação encerra o timer do checkout e abre o timer separado do pós-compra. A tela verde conserva `orderId`; WhatsApp/e-mail chamam somente `POST /comprovante` no Spring por worker Qt e usam teclado virtual. Entrada/request pausam o timeout. Falha de envio mantém a venda aprovada. CPF permanece desabilitado por ausência de contrato. `FINALIZAR` executa apenas o reset local por `MainWindow.reset_compra(outcome="finalized")`.
 
 ## Fluxos fora da compra principal
 

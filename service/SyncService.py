@@ -17,6 +17,7 @@ from config import (
 from database.DatabaseProdutos import DatabaseProdutos
 from model.Produtos import Produtos
 from model.Terminal import Terminal
+from service.BackendClient import BackendClient, BackendHttpError
 
 
 logger = logging.getLogger(__name__)
@@ -33,6 +34,7 @@ class SyncService:
         interval_seconds=PRODUCT_SYNC_INTERVAL_SECONDS,
         session=None,
         database_factory=DatabaseProdutos,
+        credential_store=None,
     ):
         self.api_url = (api_url or "").rstrip("/")
         self.db_path = Path(db_path).resolve()
@@ -40,6 +42,9 @@ class SyncService:
         self.terminal_path = Path(terminal_path).resolve()
         self.interval_seconds = interval_seconds
         self.session = session or requests.Session()
+        self.client = BackendClient(
+            self.api_url, self.session, credential_store=credential_store
+        )
         self.database_factory = database_factory
 
         self.sync_in_progress = False
@@ -266,8 +271,12 @@ class SyncService:
             params = {"uuidTerminal": terminal.terminalId}
             if last_sync is not None:
                 params["lastSync"] = last_sync
-            response = self.session.get(
-                f"{self.api_url}{endpoint}", params=params, timeout=10
+            response = self.client.request(
+                "GET",
+                endpoint,
+                terminal_id=terminal.terminalId,
+                params=params,
+                timeout=10,
             )
             if response.status_code != 200:
                 logger.warning(
@@ -315,6 +324,18 @@ class SyncService:
         except requests.RequestException as error:
             self._complete_sync("Backend indisponível")
             logger.warning("[SYNC] Backend indisponível; endpoint=%s erro=%s", endpoint, error)
+        except BackendHttpError as error:
+            self._complete_sync(f"HTTP {error.status}")
+            if error.authentication_failed:
+                logger.error(
+                    "[SYNC] credencial individual invalida/revogada; "
+                    "sincronizacao bloqueada"
+                )
+            else:
+                logger.warning(
+                    "[SYNC] backend recusou endpoint=%s status=%s code=%s",
+                    endpoint, error.status, error.code,
+                )
         except (ValueError, TypeError) as error:
             self._complete_sync(str(error))
             logger.warning("[SYNC] Resposta inválida; endpoint=%s erro=%s", endpoint, error)

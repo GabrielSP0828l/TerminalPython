@@ -79,12 +79,10 @@ Voltar para [o índice](00-index.md). Cada item informa explicitamente quando j�
 
 ## MEL-027 — CPF e comprovantes pós-compra
 
-**Status:** pendente de contrato backend.
+**Status:** comprovantes implementados em 13 de setembro de 2026; CPF pendente.
 
-- **Prioridade:** P1.
-- **Motivo:** Order/Pagamento não possuem CPF e não há endpoint de comprovante nem integração WhatsApp; o e-mail existente é exclusivo de identidade.
-- **Interface atual:** preserva quatro ações no sucesso e informa indisponibilidade sem simular persistência/envio.
-- **Próximo passo:** definir endpoints idempotentes por Order/Terminal, modelo de comprovante interno e providers no backend; nunca colocar SMTP/WhatsApp secrets no Terminal.
+- **Implementação:** WhatsApp/e-mail usam o endpoint Spring idempotente, worker Qt, teclado touch, loading e feedback sem alterar pagamento.
+- **Próximo passo:** definir contrato de CPF por Order/Terminal antes de habilitar o botão; nunca persistir significado fiscal apenas no cliente.
 
 ## MEL-011 — Lifecycle único pós-ativação
 
@@ -260,3 +258,6 @@ Voltar para [o índice](00-index.md). Cada item informa explicitamente quando j�
 5. Publicar/consumir estados correlacionados e adicionar consulta após reconexão.
 6. Centralizar rede fora da UI, logging e monitoramento.
 7. Cobrir tudo com testes antes de remover legado.
+# Hardening entregue em 27/09/2026
+
+Implementados incrementalmente: contenção de runtime/segredos, canal autenticado existente, reset fail-closed, recovery financeiro no startup, kiosk por ambiente, Wi-Fi pré-ativação e lifecycle uniforme de workers. A próxima melhoria de segurança é migrar o token interno compartilhado para credencial individual revogável por dispositivo.
