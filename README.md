@@ -120,12 +120,14 @@ Layout esperado:
 /etc/app247/terminal.env
 ```
 
-O instalador não sobrescreve release existente, banco ou configuração:
+O instalador não sobrescreve banco ou configuração. A primeira chamada prepara
+a release e cria `/etc/app247/terminal.env` a partir do template de produção:
 
 ```bash
 sudo APP247_INSTALL_VERSION=1.0.0 \
   APP247_UPDATE_PUBLIC_KEY_SOURCE=/caminho/confiavel/update-public.pem \
   ./scripts/install.sh
+sudoedit /etc/app247/terminal.env
 sudo APP247_INSTALL_VERSION=1.0.0 ./scripts/install.sh --activate
 ```
 
@@ -133,10 +135,24 @@ Crie antes um usuário/grupo de serviço dedicado (`app247` por padrão) ou
 informe `APP247_SERVICE_USER` e `APP247_SERVICE_GROUP`. O script não cria
 contas automaticamente.
 
-Sem `--activate`, a release é apenas copiada. A ativação troca somente o
-symlink `current`, registra a release anterior e não reinicia serviços. Ajuste
-`User=`/`Group=` no exemplo `packaging/systemd/app247-terminal.service` para um
-usuário dedicado da instalação; não há pressuposto de usuário `pi`.
+Sem `--activate`, a release é apenas copiada. A ativação aceita essa mesma
+release preparada, troca atomicamente o symlink, executa o diagnóstico, instala
+a unidade com o usuário/grupo configurados, faz `daemon-reload`, habilita e
+inicia/reinicia o serviço. Falha no diagnóstico restaura o link anterior e não
+inicia a nova versão. Para preparar uma imagem sem controlar o daemon, use
+`APP247_MANAGE_SYSTEMD=false`; a unidade ainda será gerada no diretório indicado.
+
+O diagnóstico também pode ser executado manualmente, como o usuário do serviço:
+
+```bash
+sudo -u app247 /opt/app247/current/app247-terminal --check
+```
+
+Ele valida URLs e placeholders, proteção do arquivo de ambiente, senha
+administrativa, modo legado, assets, acesso ao diretório de dados, integridade
+SQLite, formato/permissões da credencial individual, `GET /terminal/health` e o
+symlink da release. SQLite e credencial ausentes são avisos na primeira ativação;
+os demais erros retornam exit code diferente de zero.
 
 ## Atualização e rollback
 

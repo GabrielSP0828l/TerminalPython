@@ -30,8 +30,16 @@ BUNDLE_ROOT = _bundle_root()
 # Alias legado mantido durante a migração interna. Não deve guardar estado.
 PROJECT_ROOT = SOURCE_ROOT
 
-# Em desenvolvimento, o .env pertence ao repositório. Em uma instalação ele é
-# fornecido pelo systemd via EnvironmentFile=/etc/app247/terminal.env.
+CONFIG_ENV_PATH = Path(
+    os.getenv("APP247_CONFIG_FILE", "/etc/app247/terminal.env")
+).expanduser()
+# Variáveis já presentes no processo sempre vencem. O arquivo de instalação
+# precede o .env do checkout quando ambos existem.
+if CONFIG_ENV_PATH.is_file():
+    load_dotenv(CONFIG_ENV_PATH)
+# Em desenvolvimento, o .env pertence ao repositório. Em uma instalação o mesmo
+# arquivo é injetado pelo systemd, mas também é lido diretamente para que
+# comandos administrativos como ``--check`` funcionem fora da unidade.
 load_dotenv(SOURCE_ROOT / ".env")
 
 

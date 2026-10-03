@@ -7,12 +7,12 @@ from PyQt5.QtWidgets import QApplication
 
 from app247_terminal.application import MainWindow, present_main_window
 from app247_terminal.config.settings import API_URL, DATABASE_PATH
+from app247_terminal.diagnostics import check_installation
 from app247_terminal.models.terminal import Terminal
 from app247_terminal.runtime import prepare_runtime_layout
 from app247_terminal.services.display_service import DisplayService
 from app247_terminal.services.terminal_auth import install_credential_from_stdin
 from app247_terminal.version import APP_VERSION
-from app247_terminal.utils.resources import icon_path, image_path
 
 
 def run() -> int:
@@ -24,10 +24,8 @@ def run() -> int:
         print(APP_VERSION)
         return 0
     if "--check" in sys.argv[1:]:
-        image_path("logo.png")
-        icon_path("checked.svg")
-        print(f"app247-terminal {APP_VERSION}: configuração e assets OK")
-        return 0
+        print(f"app247-terminal {APP_VERSION}: diagnóstico da instalação")
+        return check_installation()
     if "--apply-display" in sys.argv[1:]:
         orientation = os.getenv("DISPLAY_ORIENTATION", "").strip()
         service = DisplayService()

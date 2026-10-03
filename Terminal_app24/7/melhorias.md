@@ -281,3 +281,23 @@ Voltar para [o índice](00-index.md). Cada item informa explicitamente quando j�
 5. Publicar/consumir estados correlacionados e adicionar consulta após reconexão.
 6. Centralizar rede fora da UI, logging e monitoramento.
 7. Cobrir tudo com testes antes de remover legado.
+
+## MEL-032 — Instalação validada e unidade systemd gerenciada
+
+**Status:** implementada em 3 de outubro de 2026.
+
+- prepara e ativa a mesma release em duas etapas sem sobrescrever o artefato;
+- usa template próprio de produção e exige edição antes da ativação;
+- instala a unidade com usuário, grupo e paths resolvidos pelo instalador;
+- executa `daemon-reload`, habilita e inicia/reinicia o serviço;
+- restaura o symlink anterior quando o diagnóstico pré-start falha;
+- preserva modo de staging com `APP247_MANAGE_SYSTEMD=false`.
+
+## MEL-033 — Diagnóstico operacional da instalação
+
+**Status:** implementada em 3 de outubro de 2026.
+
+`app247-terminal --check` agora verifica configuração e placeholders,
+permissões do ambiente, segurança local, assets, diretório de dados, integridade
+SQLite, credencial individual, health do backend e release ativa. O relatório
+separa `OK`, `WARN` e `ERROR` e usa exit code para bloquear ativações inválidas.

@@ -32,9 +32,17 @@ operador instala `python3-venv`, `python3-pyqt5` e `python3-pyqt5.qtsvg`.
 /etc/app247/update-signing-public-key.pem
 ```
 
-`scripts/install.sh` recusa sobrescrever uma release. Sem `--activate`, apenas
-prepara o diretório. Com a opção explícita, troca somente o symlink `current` e
-registra o alvo anterior; não reinicia systemd nem remove estado.
+`scripts/install.sh` recusa sobrescrever uma release durante a preparação, mas
+permite ativar a mesma versão já preparada sem recopiar o artefato. Com
+`--activate`, troca o symlink `current`, executa o diagnóstico da instalação,
+restaura o alvo anterior em caso de erro e, quando aprovado, instala a unidade,
+faz `daemon-reload`, habilita e inicia/reinicia o serviço. O override
+`APP247_MANAGE_SYSTEMD=false` gera a unidade sem operar o daemon.
+
+`app247-terminal --check` valida configuração, paths, assets, SQLite,
+credencial individual, health HTTP e release ativa. Ausência inicial de banco
+ou credencial é aviso; inconsistências que tornam a instalação inoperante
+retornam exit code diferente de zero.
 
 ## Updater e rollback
 

@@ -11,7 +11,7 @@ Todas as operações de compra usam timeout `(connect=5s, read=20s)` em `Purchas
 | COMPATÍVEL | `POST /terminal/{terminalId}/factory-reset/started` | sem body; timeout 5s | 2xx idempotente | `TerminalLifecycleApi` |
 | COMPATÍVEL | `POST /terminal/{terminalId}/factory-reset/completed` | sem body; timeout 5s | 2xx idempotente | recibo persistente no startup/ativação |
 | COMPATÍVEL | `GET /produtos/sync?uuidTerminal={uuid}&lastSync={Instant opcional}` | sem body; timeout 10s | `ProdutoSyncResponse {syncAt, fullSync, changes}` | `SyncService` |
-| COMPATÍVEL | `GET /terminal/health` | sem body; timeout 3s | health leve para alcance/latência | `NetworkMetricsCollector` |
+| COMPATÍVEL | `GET /terminal/health` | sem body; timeout 3s na telemetria e 5s no diagnóstico | health leve para alcance/latência e validação da instalação | `NetworkMetricsCollector`; `app247-terminal --check` |
 | COMPATÍVEL | `POST /terminal/telemetry` | UUID e blocos de saúde; timeout 5s | estado aceito/classificado | `TelemetryService` |
 | COMPATÍVEL | `WS /terminal-socket` | `{terminalId,status}` a cada 10s | `HEARTBEAT_ACK {terminalId,status,lastPing}` após persistência | `TerminalSocket` |
 | COMPATÍVEL | `POST /carrinho` | `CarrinhoRequest {terminalId, items}` | `CarrinhoResponseDTO` | `PurchaseApi` |

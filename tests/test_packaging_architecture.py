@@ -2,6 +2,9 @@ import base64
 import hashlib
 import json
 import os
+import grp
+import pwd
+import subprocess
 import tempfile
 import unittest
 from pathlib import Path
@@ -25,6 +28,61 @@ from updater.version import CURRENT_VERSION, Version
 
 
 class PackagingArchitectureTest(unittest.TestCase):
+    def test_installer_can_prepare_then_activate_and_install_service_unit(self):
+        project_root = Path(__file__).resolve().parents[1]
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            artifact = root / "artifact"
+            artifact.mkdir()
+            executable = artifact / "app247-terminal"
+            executable.write_text("#!/bin/sh\nexit 0\n", encoding="utf-8")
+            executable.chmod(0o755)
+            template = root / "terminal.env"
+            template.write_text(
+                "APP247_ENV=production\n"
+                "APP247_API_URL=https://api.app247.test\n"
+                "APP247_WS_URL=wss://api.app247.test\n"
+                "APP247_DATA_DIR=/var/lib/app247\n",
+                encoding="utf-8",
+            )
+            environment = os.environ.copy()
+            environment.update({
+                "APP247_ARTIFACT_DIR": str(artifact),
+                "APP247_INSTALL_VERSION": "9.9.9-test",
+                "APP247_INSTALL_ROOT": str(root / "opt"),
+                "APP247_DATA_DIR": str(root / "data"),
+                "APP247_CONFIG_DIR": str(root / "etc"),
+                "APP247_CONFIG_TEMPLATE": str(template),
+                "APP247_SYSTEMD_DIR": str(root / "systemd"),
+                "APP247_MANAGE_SYSTEMD": "false",
+                "APP247_SERVICE_USER": pwd.getpwuid(os.getuid()).pw_name,
+                "APP247_SERVICE_GROUP": grp.getgrgid(os.getgid()).gr_name,
+            })
+
+            subprocess.run(
+                [str(project_root / "scripts/install.sh")],
+                check=True,
+                env=environment,
+                capture_output=True,
+                text=True,
+            )
+            subprocess.run(
+                [str(project_root / "scripts/install.sh"), "--activate"],
+                check=True,
+                env=environment,
+                capture_output=True,
+                text=True,
+            )
+
+            current = root / "opt/current"
+            self.assertTrue(current.is_symlink())
+            self.assertEqual(root / "opt/releases/9.9.9-test", current.resolve())
+            unit = (root / "systemd/app247-terminal.service").read_text(encoding="utf-8")
+            self.assertIn(f"EnvironmentFile=-{root}/etc/terminal.env", unit)
+            self.assertIn(f"ExecStart={root}/opt/current/app247-terminal", unit)
+            installed_environment = (root / "etc/terminal.env").read_text(encoding="utf-8")
+            self.assertIn(f"APP247_DATA_DIR={root}/data", installed_environment)
+
     def test_arm64_build_uses_system_pyqt_without_pip_requirement(self):
         project_root = Path(__file__).resolve().parents[1]
         build_script = (project_root / "scripts/build.sh").read_text(encoding="utf-8")

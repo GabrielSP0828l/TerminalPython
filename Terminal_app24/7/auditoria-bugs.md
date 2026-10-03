@@ -372,6 +372,22 @@ Falha, instrução e sucesso eram cards e a aprovação apagava a compra após c
 - **Impacto:** catálogo não mudava durante sessões longas e uma inicialização externa à raiz podia ler/escrever outro estado.
 - **Correção:** paths absolutos centralizados, execução imediata + periódica a cada 300 s, snapshot validado/transacional, UPSERT, desativação de ausentes e cursor pós-commit.
 
+## BUG-042 — Release preparada não podia ser ativada e serviço ficava manual
+
+**Status:** corrigido em 3 de outubro de 2026.
+
+- **Causa:** a segunda chamada do instalador recusava a release existente antes
+  de processar `--activate`; a unidade systemd era apenas um exemplo e nunca era
+  instalada ou habilitada pelo fluxo.
+- **Impacto:** o procedimento documentado falhava e o binário podia ser iniciado
+  fora do systemd, sem `/etc/app247/terminal.env`, exibindo “Servidor não
+  configurado”.
+- **Correção:** ativação idempotente da release preparada, diagnóstico
+  bloqueante, rollback do symlink, geração da unidade e gerenciamento explícito
+  do serviço.
+- **Validação:** teste isolado cobre preparar, ativar, criar symlink e renderizar
+  a unidade sem chamar o systemd real.
+
 ## BUG-031 — Heartbeat opaco, sem confirmação do backend
 
 **Status:** corrigido em 24 de agosto de 2026.

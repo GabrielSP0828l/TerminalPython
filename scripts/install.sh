@@ -6,21 +6,51 @@ ARTIFACT_DIR="${APP247_ARTIFACT_DIR:-$PROJECT_DIR/dist/app247-terminal}"
 VERSION="${APP247_INSTALL_VERSION:-}"
 INSTALL_ROOT="${APP247_INSTALL_ROOT:-/opt/app247}"
 DATA_DIR="${APP247_DATA_DIR:-/var/lib/app247}"
+DATABASE_PATH="${APP247_DB_PATH:-$DATA_DIR/terminal.db}"
+TERMINAL_CONFIG_PATH="${APP247_TERMINAL_CONFIG_PATH:-$DATA_DIR/terminal.json}"
+DEVICE_CREDENTIAL_PATH="${APP247_DEVICE_CREDENTIAL_PATH:-$DATA_DIR/device-credential}"
+DISPLAY_ORIENTATION_PATH="${APP247_DISPLAY_ORIENTATION_PATH:-$DATA_DIR/display_orientation}"
+LAST_SYNC_PATH="${APP247_LAST_SYNC_PATH:-$DATA_DIR/last_sync.txt}"
 CONFIG_DIR="${APP247_CONFIG_DIR:-/etc/app247}"
+CONFIG_FILE="$CONFIG_DIR/terminal.env"
+CONFIG_TEMPLATE="${APP247_CONFIG_TEMPLATE:-$PROJECT_DIR/packaging/terminal.env.production.example}"
 SERVICE_USER="${APP247_SERVICE_USER:-app247}"
 SERVICE_GROUP="${APP247_SERVICE_GROUP:-app247}"
+SYSTEMD_DIR="${APP247_SYSTEMD_DIR:-/etc/systemd/system}"
+SERVICE_NAME="${APP247_SERVICE_NAME:-app247-terminal.service}"
+SERVICE_DESTINATION="$SYSTEMD_DIR/$SERVICE_NAME"
+MANAGE_SYSTEMD="${APP247_MANAGE_SYSTEMD:-true}"
 UPDATE_PUBLIC_KEY_SOURCE="${APP247_UPDATE_PUBLIC_KEY_SOURCE:-}"
 ACTIVATE="false"
 
-if [ "${1:-}" = "--activate" ]; then
-    ACTIVATE="true"
-fi
+for argument in "$@"; do
+    case "$argument" in
+        --activate) ACTIVATE="true" ;;
+        *) echo "Erro: argumento desconhecido: $argument" >&2; exit 1 ;;
+    esac
+done
 if [[ ! "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+([.-][0-9A-Za-z.-]+)?$ ]]; then
     echo "Erro: informe APP247_INSTALL_VERSION (ex.: 1.0.0)." >&2
     exit 1
 fi
 if [ ! -x "$ARTIFACT_DIR/app247-terminal" ]; then
     echo "Erro: artefato onedir inválido em $ARTIFACT_DIR" >&2
+    exit 1
+fi
+if [ ! -f "$CONFIG_TEMPLATE" ]; then
+    echo "Erro: template de configuração ausente: $CONFIG_TEMPLATE" >&2
+    exit 1
+fi
+if [ ! -f "$PROJECT_DIR/packaging/systemd/app247-terminal.service" ]; then
+    echo "Erro: unidade systemd de origem ausente." >&2
+    exit 1
+fi
+if [ "$MANAGE_SYSTEMD" != "true" ] && [ "$MANAGE_SYSTEMD" != "false" ]; then
+    echo "Erro: APP247_MANAGE_SYSTEMD deve ser true ou false." >&2
+    exit 1
+fi
+if [ "$ACTIVATE" = "true" ] && [ "$MANAGE_SYSTEMD" = "true" ] && [ "$(id -u)" -ne 0 ]; then
+    echo "Erro: ativação com gerenciamento do systemd exige execução como root." >&2
     exit 1
 fi
 PUBLIC_KEY_DESTINATION="$CONFIG_DIR/update-signing-public-key.pem"
@@ -36,9 +66,16 @@ if [ -n "$UPDATE_PUBLIC_KEY_SOURCE" ]; then
 fi
 
 RELEASE_DIR="$INSTALL_ROOT/releases/$VERSION"
-if [ -e "$RELEASE_DIR" ]; then
+RELEASE_ALREADY_INSTALLED="false"
+if [ -e "$RELEASE_DIR" ] && [ "$ACTIVATE" != "true" ]; then
     echo "Erro: a release já existe; nada foi sobrescrito: $RELEASE_DIR" >&2
     exit 1
+elif [ -e "$RELEASE_DIR" ]; then
+    if [ ! -x "$RELEASE_DIR/app247-terminal" ]; then
+        echo "Erro: release preparada é inválida: $RELEASE_DIR" >&2
+        exit 1
+    fi
+    RELEASE_ALREADY_INSTALLED="true"
 fi
 
 if [ "$(id -u)" -eq 0 ]; then
@@ -50,18 +87,41 @@ fi
 
 install -d -m 0755 "$INSTALL_ROOT/releases"
 install -d -m 0750 "$DATA_DIR" "$CONFIG_DIR"
-install -d -m 0755 "$RELEASE_DIR"
-cp -a "$ARTIFACT_DIR/." "$RELEASE_DIR/"
+if [ "$RELEASE_ALREADY_INSTALLED" = "false" ]; then
+    install -d -m 0755 "$RELEASE_DIR"
+    cp -a "$ARTIFACT_DIR/." "$RELEASE_DIR/"
+fi
 
-if [ ! -e "$CONFIG_DIR/terminal.env" ]; then
-    install -m 0640 "$PROJECT_DIR/.env.example" "$CONFIG_DIR/terminal.env"
+if [ ! -e "$CONFIG_FILE" ]; then
+    CONFIG_TEMP="$(mktemp)"
+    trap 'rm -f "$CONFIG_TEMP"' EXIT
+    awk \
+        -v data_dir="$DATA_DIR" \
+        -v database_path="$DATABASE_PATH" \
+        -v terminal_config_path="$TERMINAL_CONFIG_PATH" \
+        -v credential_path="$DEVICE_CREDENTIAL_PATH" \
+        -v public_key_path="$PUBLIC_KEY_DESTINATION" \
+        -v orientation_path="$DISPLAY_ORIENTATION_PATH" \
+        -v last_sync_path="$LAST_SYNC_PATH" '
+        /^APP247_DATA_DIR=/ { print "APP247_DATA_DIR=" data_dir; next }
+        /^APP247_DB_PATH=/ { print "APP247_DB_PATH=" database_path; next }
+        /^APP247_TERMINAL_CONFIG_PATH=/ { print "APP247_TERMINAL_CONFIG_PATH=" terminal_config_path; next }
+        /^APP247_DEVICE_CREDENTIAL_PATH=/ { print "APP247_DEVICE_CREDENTIAL_PATH=" credential_path; next }
+        /^APP247_UPDATE_PUBLIC_KEY_PATH=/ { print "APP247_UPDATE_PUBLIC_KEY_PATH=" public_key_path; next }
+        /^APP247_DISPLAY_ORIENTATION_PATH=/ { print "APP247_DISPLAY_ORIENTATION_PATH=" orientation_path; next }
+        /^APP247_LAST_SYNC_PATH=/ { print "APP247_LAST_SYNC_PATH=" last_sync_path; next }
+        { print }
+    ' "$CONFIG_TEMPLATE" > "$CONFIG_TEMP"
+    install -m 0640 "$CONFIG_TEMP" "$CONFIG_FILE"
+    rm -f "$CONFIG_TEMP"
+    trap - EXIT
 fi
 if [ -n "$UPDATE_PUBLIC_KEY_SOURCE" ]; then
     install -m 0644 "$UPDATE_PUBLIC_KEY_SOURCE" "$PUBLIC_KEY_DESTINATION"
 fi
 if [ "$(id -u)" -eq 0 ]; then
     chown "$SERVICE_USER:$SERVICE_GROUP" "$DATA_DIR"
-    chown "root:$SERVICE_GROUP" "$CONFIG_DIR" "$CONFIG_DIR/terminal.env"
+    chown "root:$SERVICE_GROUP" "$CONFIG_DIR" "$CONFIG_FILE"
     if [ -n "$UPDATE_PUBLIC_KEY_SOURCE" ]; then
         chown root:root "$CONFIG_DIR/update-signing-public-key.pem"
     fi
@@ -80,7 +140,81 @@ if [ "$ACTIVATE" = "true" ]; then
     TEMP_LINK="$INSTALL_ROOT/.current-$VERSION-$$"
     ln -s "releases/$VERSION" "$TEMP_LINK"
     mv -Tf "$TEMP_LINK" "$INSTALL_ROOT/current"
-    echo "Release ativada. Reinício/health-check do serviço continua sendo etapa manual."
+
+    restore_previous_release() {
+        if [ -n "$PREVIOUS" ]; then
+            ROLLBACK_LINK="$INSTALL_ROOT/.rollback-$VERSION-$$"
+            ln -s "$PREVIOUS" "$ROLLBACK_LINK"
+            mv -Tf "$ROLLBACK_LINK" "$INSTALL_ROOT/current"
+            echo "Release anterior restaurada: $PREVIOUS" >&2
+        else
+            rm -f "$INSTALL_ROOT/current"
+            echo "Ativação inicial desfeita." >&2
+        fi
+    }
+
+    CHECK_COMMAND=(env
+        "APP247_CONFIG_FILE=$CONFIG_FILE"
+        "APP247_CURRENT_LINK=$INSTALL_ROOT/current"
+        "$RELEASE_DIR/app247-terminal" --check)
+    set +e
+    if [ "$(id -u)" -eq 0 ]; then
+        runuser -u "$SERVICE_USER" -- "${CHECK_COMMAND[@]}"
+    else
+        "${CHECK_COMMAND[@]}"
+    fi
+    CHECK_STATUS=$?
+    set -e
+    if [ "$CHECK_STATUS" -ne 0 ]; then
+        echo "Erro: diagnóstico da nova release falhou." >&2
+        restore_previous_release
+        exit "$CHECK_STATUS"
+    fi
+
+    install -d -m 0755 "$SYSTEMD_DIR"
+    UNIT_TEMP="$(mktemp)"
+    trap 'rm -f "$UNIT_TEMP"' EXIT
+    sed \
+        -e "s|^User=.*|User=$SERVICE_USER|" \
+        -e "s|^Group=.*|Group=$SERVICE_GROUP|" \
+        -e "s|^EnvironmentFile=.*|EnvironmentFile=-$CONFIG_FILE|" \
+        -e "s|^WorkingDirectory=.*|WorkingDirectory=$DATA_DIR|" \
+        -e "s|^ExecStartPre=.*|ExecStartPre=-$INSTALL_ROOT/current/app247-terminal --apply-display|" \
+        -e "s|^ExecStart=.*|ExecStart=$INSTALL_ROOT/current/app247-terminal|" \
+        "$PROJECT_DIR/packaging/systemd/app247-terminal.service" > "$UNIT_TEMP"
+    install -m 0644 "$UNIT_TEMP" "$SERVICE_DESTINATION"
+    rm -f "$UNIT_TEMP"
+    trap - EXIT
+
+    if [ "$MANAGE_SYSTEMD" = "true" ]; then
+        SYSTEMD_STATUS=0
+        systemctl daemon-reload || SYSTEMD_STATUS=$?
+        if [ "$SYSTEMD_STATUS" -eq 0 ]; then
+            systemctl enable "$SERVICE_NAME" || SYSTEMD_STATUS=$?
+        fi
+        if [ "$SYSTEMD_STATUS" -eq 0 ]; then
+            if systemctl is-active --quiet "$SERVICE_NAME"; then
+                systemctl restart "$SERVICE_NAME" || SYSTEMD_STATUS=$?
+            else
+                systemctl start "$SERVICE_NAME" || SYSTEMD_STATUS=$?
+            fi
+        fi
+        if [ "$SYSTEMD_STATUS" -ne 0 ] || ! systemctl is-active --quiet "$SERVICE_NAME"; then
+            echo "Erro: serviço não permaneceu ativo: $SERVICE_NAME" >&2
+            systemctl status "$SERVICE_NAME" --no-pager >&2 || true
+            restore_previous_release
+            if [ -n "$PREVIOUS" ]; then
+                systemctl restart "$SERVICE_NAME" || true
+            else
+                systemctl disable --now "$SERVICE_NAME" || true
+            fi
+            exit 1
+        fi
+        echo "Serviço instalado, habilitado e ativo: $SERVICE_NAME"
+    else
+        echo "Unidade instalada sem controlar o systemd: $SERVICE_DESTINATION"
+    fi
+    echo "Release ativada e diagnóstico concluído: $RELEASE_DIR"
 else
-    echo "Release apenas preparada. Use --activate conscientemente após validação."
+    echo "Release preparada. Edite $CONFIG_FILE e execute novamente com --activate."
 fi
