@@ -5,6 +5,7 @@ Estado funcional verificado em 31 de agosto de 2026. O Terminal usa catálogo SQ
 ## Documentos
 
 - [Arquitetura atual](arquitetura.md)
+- [Build, instalação, updater e rollback](distribuicao-atualizacao.md)
 - [Fluxo real da compra](fluxo-compra.md)
 - [APIs usadas pelo terminal](api-backend.md)
 - [Contratos atuais com o backend](backend-contracts.md)

@@ -3,7 +3,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from model.Terminal import Terminal
+from app247_terminal.models.terminal import Terminal
 
 
 class TerminalTest(unittest.TestCase):

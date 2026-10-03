@@ -9,13 +9,13 @@ from PyQt5.QtCore import Qt
 from PyQt5.QtGui import QColor, QPalette
 from PyQt5.QtWidgets import QApplication, QFrame, QLabel, QStackedWidget, QWidget
 
-from model.CompraSession import CompraSession
-from model.Item import Item
-from model.Produtos import Produtos
-from telas.ConfirmacaoCompraScreen import ConfirmacaoCompraScreen
-from telas.OfflineOverlay import OfflineOverlay
-from telas.pagamento import PagamentoScreen
-from telas.terminal_screen import TerminalScreen
+from app247_terminal.models.purchase_session import CompraSession
+from app247_terminal.models.item import Item
+from app247_terminal.models.product import Produtos
+from app247_terminal.ui.screens.purchase_confirmation import ConfirmacaoCompraScreen
+from app247_terminal.ui.screens.offline_overlay import OfflineOverlay
+from app247_terminal.ui.screens.payment import PagamentoScreen
+from app247_terminal.ui.screens.terminal import TerminalScreen
 
 
 PRODUCT_ROW = (
@@ -50,10 +50,10 @@ class PortraitPurchaseFlowTest(unittest.TestCase):
     def setUp(self):
         self.parent = ParentStub()
         terminal_data = SimpleNamespace(uuidTerminal="terminal-1")
-        with patch("telas.terminal_screen.DatabaseProdutos"), \
-             patch("model.Carrinho.Terminal.load", return_value=terminal_data), \
-             patch("database.PaymentListener.Terminal.load", return_value=terminal_data), \
-             patch("database.PaymentListener.PaymentListener.start"):
+        with patch("app247_terminal.ui.screens.terminal.CatalogService"), \
+             patch("app247_terminal.models.cart.Terminal.load", return_value=terminal_data), \
+             patch("app247_terminal.services.payment_listener.Terminal.load", return_value=terminal_data), \
+             patch("app247_terminal.services.payment_listener.PaymentListener.start"):
             self.terminal = TerminalScreen(self.parent)
         self.parent.terminal = self.terminal
         self.parent.confirmacao_compra = ConfirmacaoCompraScreen(self.parent)

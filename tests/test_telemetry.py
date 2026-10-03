@@ -5,14 +5,14 @@ from pathlib import Path
 
 import requests
 
-from model.Terminal import Terminal
-from service.ApplicationMetricsCollector import ApplicationMetricsCollector
-from service.DisplayMetricsCollector import DisplayMetricsCollector
-from service.NetworkMetricsCollector import NetworkMetricsCollector
-from service.SystemMetricsCollector import SystemMetricsCollector
-from service.TelemetryService import TelemetryService
-from service.TerminalAuth import TerminalCredentialStore
-from service.WifiService import WifiStatus
+from app247_terminal.models.terminal import Terminal
+from app247_terminal.services.application_metrics import ApplicationMetricsCollector
+from app247_terminal.services.display_metrics import DisplayMetricsCollector
+from app247_terminal.services.network_metrics import NetworkMetricsCollector
+from app247_terminal.services.system_metrics import SystemMetricsCollector
+from app247_terminal.services.telemetry_service import TelemetryService
+from app247_terminal.services.terminal_auth import TerminalCredentialStore
+from app247_terminal.services.wifi_service import WifiStatus
 
 
 class StaticCollector:

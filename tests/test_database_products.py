@@ -3,8 +3,8 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from database.DatabaseProdutos import DatabaseProdutos
-from model.Produtos import Produtos
+from app247_terminal.repositories.product_repository import DatabaseProdutos
+from app247_terminal.models.product import Produtos
 
 
 class DatabaseProductsTest(unittest.TestCase):

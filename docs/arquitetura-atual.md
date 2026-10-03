@@ -1,5 +1,9 @@
 # Arquitetura atual
 
+> Nota de 3 de outubro de 2026: este inventário preserva nomes históricos. A
+> estrutura executável vigente está em `src/app247_terminal`; consulte
+> [[arquitetura]] e [[distribuicao-atualizacao]].
+
 Voltar para [o índice](00-index.md).
 
 > Atualização de 15 de agosto de 2026: a primeira etapa pós-auditoria refatorou o cadastro inicial. A ativação agora usa um único timer, consulta HTTP em `QThread`, UUID canônico compatível com o DTO atual, gravação atômica do JSON e lifecycle pós-ativação idempotente. As seções históricas abaixo descrevem a fotografia encontrada na auditoria quando indicado.

@@ -3,7 +3,7 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-from service.TerminalAuth import (
+from app247_terminal.services.terminal_auth import (
     TerminalCredentialStore,
     migrate_legacy_credential,
 )
@@ -33,9 +33,9 @@ class FakeSession:
 class TerminalProvisioningTest(unittest.TestCase):
     def test_legacy_migration_installs_individual_credential_once(self):
         with tempfile.TemporaryDirectory() as directory, patch(
-            "service.TerminalAuth.LEGACY_TERMINAL_AUTH_ENABLED", True
+            "app247_terminal.services.terminal_auth.LEGACY_TERMINAL_AUTH_ENABLED", True
         ), patch(
-            "service.TerminalAuth.TERMINAL_INTERNAL_TOKEN", "legacy-test-secret"
+            "app247_terminal.services.terminal_auth.TERMINAL_INTERNAL_TOKEN", "legacy-test-secret"
         ):
             store = TerminalCredentialStore(Path(directory) / "credential")
             session = FakeSession()
@@ -64,9 +64,9 @@ class TerminalProvisioningTest(unittest.TestCase):
                 return WrongTerminalResponse()
 
         with tempfile.TemporaryDirectory() as directory, patch(
-            "service.TerminalAuth.LEGACY_TERMINAL_AUTH_ENABLED", True
+            "app247_terminal.services.terminal_auth.LEGACY_TERMINAL_AUTH_ENABLED", True
         ), patch(
-            "service.TerminalAuth.TERMINAL_INTERNAL_TOKEN", "legacy-test-secret"
+            "app247_terminal.services.terminal_auth.TERMINAL_INTERNAL_TOKEN", "legacy-test-secret"
         ):
             store = TerminalCredentialStore(Path(directory) / "credential")
             with self.assertRaises(ValueError):

@@ -10,16 +10,16 @@ os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 from PyQt5.QtTest import QTest
 from PyQt5.QtWidgets import QApplication, QLineEdit, QStackedWidget, QWidget
 
-from model.CompraSession import CompraSession
-from service.WifiService import (
+from app247_terminal.models.purchase_session import CompraSession
+from app247_terminal.services.wifi_service import (
     WifiNetwork,
     WifiService,
     WifiServiceError,
     WifiSnapshot,
     WifiStatus,
 )
-from telas.WifiScreen import WifiScreen
-from telas.teclado import VirtualKeyboard
+from app247_terminal.ui.screens.wifi import WifiScreen
+from app247_terminal.ui.screens.keyboard import VirtualKeyboard
 
 
 def result(stdout="", stderr="", returncode=0):

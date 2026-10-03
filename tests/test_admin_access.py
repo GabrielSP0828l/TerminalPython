@@ -7,9 +7,9 @@ os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 from PyQt5.QtWidgets import QApplication, QLineEdit, QStackedWidget, QWidget
 
-from model.CompraSession import CompraSession
-from telas.AdminAuthScreen import AdminAuthScreen
-from telas.ConfiguracaoScreen import ConfiguracaoScreen
+from app247_terminal.models.purchase_session import CompraSession
+from app247_terminal.ui.screens.admin_auth import AdminAuthScreen
+from app247_terminal.ui.screens.settings import ConfiguracaoScreen
 
 
 class CartStub:
@@ -138,7 +138,7 @@ class AdminAccessTest(unittest.TestCase):
 
         parent.configuracao.entrar(parent.welcome)
         with patch.object(parent.configuracao, "_confirm_action", return_value=True), \
-             patch("telas.ConfiguracaoScreen.QMessageBox.information"):
+             patch("app247_terminal.ui.screens.settings.QMessageBox.information"):
             parent.configuracao.confirmar_reset()
         parent.configuracao.reset_service.request_reset.assert_called_once()
         self.assertEqual(1, parent.shutdown_calls)

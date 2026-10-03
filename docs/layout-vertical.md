@@ -8,7 +8,7 @@ O sistema/compositor gira o display físico. O PyQt mantém `showFullScreen()` e
 
 ## Inicialização opcional
 
-Quando existe `db/display_orientation`, `start.sh` reaplica a escolha administrativa antes de iniciar o PyQt. Para sobrescrever somente uma execução:
+Quando existe `APP247_DISPLAY_ORIENTATION_PATH` (padrão `data/display_orientation`), `start.sh` reaplica a escolha administrativa antes de iniciar o PyQt. Para sobrescrever somente uma execução:
 
 ```bash
 DISPLAY_ORIENTATION=vertical ./start.sh

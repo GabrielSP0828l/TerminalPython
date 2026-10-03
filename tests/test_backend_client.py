@@ -2,12 +2,12 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from service.BackendClient import (
+from app247_terminal.services.backend_client import (
     BackendClient,
     BackendHttpError,
     terminal_access_state,
 )
-from service.TerminalAuth import TerminalCredentialStore
+from app247_terminal.services.terminal_auth import TerminalCredentialStore
 
 
 class Response:

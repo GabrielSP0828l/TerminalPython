@@ -19,6 +19,9 @@ database/last_sync.txt
 # Logs e artefatos gerados.
 logs/
 *.log
+build/
+dist/
+*.spec.local
 __pycache__/
 *.py[cod]
 .pytest_cache/

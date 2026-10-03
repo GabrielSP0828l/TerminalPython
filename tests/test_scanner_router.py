@@ -1,6 +1,6 @@
 import unittest
 
-from service.ScannerRouter import ScannerRouter, ScanType
+from app247_terminal.services.scanner_router import ScannerRouter, ScanType
 
 
 class ScannerRouterTest(unittest.TestCase):

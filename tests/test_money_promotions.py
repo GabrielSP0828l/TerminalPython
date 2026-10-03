@@ -1,10 +1,10 @@
 import unittest
 from decimal import Decimal
 
-from model.Carrinho import Carrinho
-from model.Item import Item
-from model.Money import charged, format_brl, persisted
-from model.Produtos import Produtos
+from app247_terminal.models.cart import Carrinho
+from app247_terminal.models.item import Item
+from app247_terminal.models.money import charged, format_brl, persisted
+from app247_terminal.models.product import Produtos
 
 
 class MoneyAndPromotionsTest(unittest.TestCase):

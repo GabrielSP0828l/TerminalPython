@@ -3,7 +3,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from database.CustomerLinkStore import CustomerLinkStore
+from app247_terminal.repositories.customer_link_repository import CustomerLinkStore
 
 
 class CustomerLinkStoreTest(unittest.TestCase):

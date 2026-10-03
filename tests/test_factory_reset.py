@@ -3,12 +3,12 @@ import unittest
 import sqlite3
 from pathlib import Path
 
-from service.FactoryResetService import (
+from app247_terminal.services.factory_reset import (
     FactoryResetService,
     ResetBlockedActivePayment,
     ResetBlockedCriticalState,
 )
-from service.TerminalAuth import TerminalCredentialStore
+from app247_terminal.services.terminal_auth import TerminalCredentialStore
 
 
 class FactoryResetServiceTest(unittest.TestCase):

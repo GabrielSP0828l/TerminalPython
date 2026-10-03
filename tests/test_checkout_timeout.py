@@ -6,10 +6,10 @@ os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 from PyQt5.QtWidgets import QApplication, QStackedWidget, QWidget
 
-from main import MainWindow
-from model.CompraSession import CompraSession
-from telas.ConfirmacaoCompraScreen import ConfirmacaoCompraScreen
-from telas.terminal_screen import TerminalScreen
+from app247_terminal.application import MainWindow
+from app247_terminal.models.purchase_session import CompraSession
+from app247_terminal.ui.screens.purchase_confirmation import ConfirmacaoCompraScreen
+from app247_terminal.ui.screens.terminal import TerminalScreen
 
 
 PRODUCT_ROW = (
@@ -49,10 +49,10 @@ class CheckoutHost(QWidget):
         self.confirmacao_compra = None
 
         terminal_data = MagicMock(uuidTerminal="terminal-1")
-        with patch("telas.terminal_screen.DatabaseProdutos", return_value=FakeDb()), \
-             patch("model.Carrinho.Terminal.load", return_value=terminal_data), \
-             patch("database.PaymentListener.Terminal.load", return_value=terminal_data), \
-             patch("database.PaymentListener.PaymentListener.start"):
+        with patch("app247_terminal.ui.screens.terminal.CatalogService", return_value=FakeDb()), \
+             patch("app247_terminal.models.cart.Terminal.load", return_value=terminal_data), \
+             patch("app247_terminal.services.payment_listener.Terminal.load", return_value=terminal_data), \
+             patch("app247_terminal.services.payment_listener.PaymentListener.start"):
             self.terminal = TerminalScreen(self)
         self.confirmacao_compra = ConfirmacaoCompraScreen(self)
 

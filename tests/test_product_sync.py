@@ -6,11 +6,11 @@ from pathlib import Path
 
 import requests
 
-from database.DatabaseProdutos import DatabaseProdutos
-from model.Produtos import Produtos
-from model.Terminal import Terminal
-from service.SyncService import SyncService
-from service.TerminalAuth import TerminalCredentialStore
+from app247_terminal.repositories.product_repository import DatabaseProdutos
+from app247_terminal.models.product import Produtos
+from app247_terminal.models.terminal import Terminal
+from app247_terminal.services.sync_service import SyncService
+from app247_terminal.services.terminal_auth import TerminalCredentialStore
 
 
 SYNC_1 = "2026-08-24T17:00:00.123Z"

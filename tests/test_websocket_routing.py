@@ -1,8 +1,8 @@
 import unittest
 from unittest.mock import patch
 
-from database.PaymentListener import PaymentListener
-from model.Terminal import Terminal
+from app247_terminal.services.payment_listener import PaymentListener
+from app247_terminal.models.terminal import Terminal
 
 
 class WebSocketRoutingTest(unittest.TestCase):
@@ -10,7 +10,7 @@ class WebSocketRoutingTest(unittest.TestCase):
         terminal = Terminal.from_dict({
             "terminalId": "terminal-a", "ativo": True, "activated": True,
         })
-        with patch("database.PaymentListener.Terminal.load", return_value=terminal):
+        with patch("app247_terminal.services.payment_listener.Terminal.load", return_value=terminal):
             self.listener = PaymentListener()
 
     def tearDown(self):

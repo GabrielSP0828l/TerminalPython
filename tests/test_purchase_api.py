@@ -7,7 +7,7 @@ os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 from PyQt5.QtTest import QSignalSpy
 from PyQt5.QtWidgets import QApplication
 
-from service.PurchaseApi import (
+from app247_terminal.services.purchase_api import (
     PointCancelWorker,
     PointCheckoutWorker,
     PurchaseApi,
@@ -50,7 +50,7 @@ class PurchaseApiTest(unittest.TestCase):
 
     def setUp(self):
         self.credential_patch = patch(
-            "service.TerminalAuth.TerminalCredentialStore.load",
+            "app247_terminal.services.terminal_auth.TerminalCredentialStore.load",
             return_value="tdc_test_payment",
         )
         self.credential_patch.start()

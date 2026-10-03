@@ -6,8 +6,8 @@ from unittest.mock import Mock, patch
 
 import requests
 
-from service.FactoryResetService import FactoryResetService
-from service.TerminalLifecycleService import TerminalLifecycleApi, TerminalResetPolicy
+from app247_terminal.services.factory_reset import FactoryResetService
+from app247_terminal.services.terminal_lifecycle import TerminalLifecycleApi, TerminalResetPolicy
 
 
 class Response:
@@ -24,7 +24,7 @@ class Response:
 class TerminalLifecycleApiTest(unittest.TestCase):
     def setUp(self):
         self.credential_patch = patch(
-            "service.TerminalAuth.TerminalCredentialStore.load",
+            "app247_terminal.services.terminal_auth.TerminalCredentialStore.load",
             return_value="tdc_test_lifecycle",
         )
         self.credential_patch.start()

@@ -12,12 +12,12 @@ from PyQt5.QtGui import QColor
 from PyQt5.QtTest import QTest
 from PyQt5.QtWidgets import QApplication, QProgressBar, QWidget
 
-from model.CompraSession import CompraSession
-from styles.svg_icons import icon_path, render_colored_svg
-from styles.animated_svg import AnimatedSvgWidget
-from styles.tokens import Colors, FontSize
-from telas.ConfirmacaoScreen import ConfirmacaoScreen
-from telas.pagamento import PagamentoScreen
+from app247_terminal.models.purchase_session import CompraSession
+from app247_terminal.ui.styles.svg_icons import icon_path, render_colored_svg
+from app247_terminal.ui.styles.animated_svg import AnimatedSvgWidget
+from app247_terminal.ui.styles.tokens import Colors, FontSize
+from app247_terminal.ui.screens.confirmation import ConfirmacaoScreen
+from app247_terminal.ui.screens.payment import PagamentoScreen
 
 
 class CartStub:
@@ -316,9 +316,9 @@ class PaymentStateScreensTest(unittest.TestCase):
         success.btn_whatsapp.click()
         success.destination_input.setText("(75) 99999-9999")
         FakeReceiptWorker.starts = 0
-        with patch("telas.ConfirmacaoScreen.Terminal.load", return_value=SimpleNamespace(
+        with patch("app247_terminal.ui.screens.confirmation.Terminal.load", return_value=SimpleNamespace(
             terminalId="terminal-1"
-        )), patch("telas.ConfirmacaoScreen.ReceiptSendWorker", FakeReceiptWorker):
+        )), patch("app247_terminal.ui.screens.confirmation.ReceiptSendWorker", FakeReceiptWorker):
             for _ in range(10):
                 success._send_receipt()
 

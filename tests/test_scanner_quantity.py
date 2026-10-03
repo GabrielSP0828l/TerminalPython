@@ -7,8 +7,8 @@ os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 from PyQt5.QtWidgets import QApplication, QStackedWidget, QWidget, QPushButton
 
-from model.CompraSession import CompraSession
-from telas.terminal_screen import TerminalScreen
+from app247_terminal.models.purchase_session import CompraSession
+from app247_terminal.ui.screens.terminal import TerminalScreen
 
 
 PRODUCT_ROW = (
@@ -37,10 +37,10 @@ class ScannerQuantityTest(unittest.TestCase):
     def test_repeated_scan_increments_without_manual_quantity_buttons(self):
         parent = FakeParent()
         terminal_data = SimpleNamespace(uuidTerminal="terminal-1")
-        with patch("telas.terminal_screen.DatabaseProdutos", return_value=FakeDb()), \
-             patch("model.Carrinho.Terminal.load", return_value=terminal_data), \
-             patch("database.PaymentListener.Terminal.load", return_value=terminal_data), \
-             patch("database.PaymentListener.PaymentListener.start"):
+        with patch("app247_terminal.ui.screens.terminal.CatalogService", return_value=FakeDb()), \
+             patch("app247_terminal.models.cart.Terminal.load", return_value=terminal_data), \
+             patch("app247_terminal.services.payment_listener.Terminal.load", return_value=terminal_data), \
+             patch("app247_terminal.services.payment_listener.PaymentListener.start"):
             screen = TerminalScreen(parent)
         parent.stacked_widget.addWidget(screen)
 

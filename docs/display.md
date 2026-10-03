@@ -18,7 +18,7 @@ O administrador escolhe `HORIZONTAL` ou `VERTICAL`; nomes técnicos como transfo
 
 ## Detecção e aplicação
 
-`service/DisplayService.py` detecta a sessão gráfica, a ferramenta compatível e a primeira saída ativa. `DISPLAY_OUTPUT` pode selecionar explicitamente uma saída em instalação com múltiplos monitores. Não existe `HDMI-A-2` hardcoded.
+`src/app247_terminal/services/display_service.py` detecta a sessão gráfica, a ferramenta compatível e a primeira saída ativa. `DISPLAY_OUTPUT` pode selecionar explicitamente uma saída em instalação com múltiplos monitores. Não existe `HDMI-A-2` hardcoded.
 
 - Wayland requer `wlr-randr`; `xrandr` visto através de XWayland não é usado como fallback inseguro.
 - X11 pode usar `xrandr`.
@@ -30,9 +30,9 @@ Uma compra ou pagamento ativo bloqueia a alteração. Isso evita modificar a geo
 
 ## Persistência e boot
 
-Após aplicação bem-sucedida, a escolha semântica é gravada atomicamente em `db/display_orientation` (`horizontal` ou `vertical`). Esse arquivo operacional está ignorado pelo Git.
+Após aplicação bem-sucedida, a escolha semântica é gravada atomicamente em `APP247_DISPLAY_ORIENTATION_PATH` (padrão `data/display_orientation`) (`horizontal` ou `vertical`). Esse arquivo operacional está ignorado pelo Git.
 
-`start.sh` seleciona o Python e, antes de iniciar `main.py`, chama `python -m service.DisplayService --apply-saved`. A orientação também pode ser sobrescrita para uma execução com `DISPLAY_ORIENTATION`. Se o comando falhar, o script registra aviso e inicia o Terminal; não há loop nem bloqueio infinito.
+`start.sh` seleciona o Python e, antes de iniciar `app247_terminal`, chama `python -m app247_terminal.services.display_service --apply-saved`. A orientação também pode ser sobrescrita para uma execução com `DISPLAY_ORIENTATION`. Se o comando falhar, o script registra aviso e inicia o Terminal; não há loop nem bloqueio infinito.
 
 ## Ambiente auditado e validação física
 

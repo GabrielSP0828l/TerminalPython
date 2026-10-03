@@ -1,5 +1,17 @@
 # Melhorias recomendadas
 
+## MEL-031 — Empacotamento e layout de releases
+
+**Status:** base implementada em 3 de outubro de 2026.
+
+- Código organizado em package `src/app247_terminal`, assets resolvidos de
+  forma independente do CWD e estado persistente fora da release.
+- PyInstaller `onedir`, scripts conservadores de build/instalação, exemplo
+  systemd e base de verificação SHA-256/rollback adicionados.
+- Implementado: assinatura Ed25519 do manifesto e trust anchor externo.
+- Pendente: download, supervisor externo, health-check e rollback automático.
+  Veja [[distribuicao-atualizacao]].
+
 Voltar para [o índice](00-index.md). Cada item informa explicitamente quando já foi implementado e quais limites permanecem.
 
 ## MEL-001 — Unificar identidade do terminal
@@ -176,7 +188,7 @@ Voltar para [o índice](00-index.md). Cada item informa explicitamente quando j�
 - **Prioridade:** P1 para novas telas; P2 para migração das telas estáveis.
 - **Complexidade:** média.
 - **Benefício:** uma única linguagem visual, estados previsíveis e menos QSS/hexadecimais duplicados sem uma reescrita ampla da interface.
-- **Implementação:** todas as telas usam `styles/tokens.py`/`styles/theme.py`; QSS legado duplicado foi removido; targets, tipografia e estados foram padronizados.
+- **Implementação:** todas as telas usam `src/app247_terminal/ui/styles/tokens.py`/`theme.py`; QSS legado duplicado foi removido; targets, tipografia e estados foram padronizados.
 
 ## MEL-025 — Layout portrait e confirmação explícita
 
@@ -228,7 +240,7 @@ Voltar para [o índice](00-index.md). Cada item informa explicitamente quando j�
 - `DisplayService` detecta saída ativa e usa `wlr-randr` em Wayland/wlroots ou `xrandr` em X11;
 - o painel expõe apenas `HORIZONTAL` e `VERTICAL` e bloqueia durante compra/pagamento;
 - execução assíncrona, argv seguro e timeout de oito segundos;
-- escolha gravada atomicamente em `db/display_orientation` e reaplicada por `start.sh`;
+- escolha gravada atomicamente em `APP247_DISPLAY_ORIENTATION_PATH` (padrão `data/display_orientation`) e reaplicada por `start.sh`;
 - a janela PyQt recebe a geometria do compositor, sem rotação manual de widgets e sem output hardcoded.
 
 ## MEL-023 — Coalescer invalidações de catálogo em tempo real
@@ -260,4 +272,7 @@ Voltar para [o índice](00-index.md). Cada item informa explicitamente quando j�
 7. Cobrir tudo com testes antes de remover legado.
 # Hardening entregue em 27/09/2026
 
-Implementados incrementalmente: contenção de runtime/segredos, canal autenticado existente, reset fail-closed, recovery financeiro no startup, kiosk por ambiente, Wi-Fi pré-ativação e lifecycle uniforme de workers. A próxima melhoria de segurança é migrar o token interno compartilhado para credencial individual revogável por dispositivo.
+Implementados incrementalmente: contenção de runtime/segredos, credencial
+individual revogável, armazenamento local endurecido, canal autenticado, reset
+fail-closed, recovery financeiro no startup, kiosk por ambiente, Wi-Fi
+pré-ativação e lifecycle uniforme de workers.

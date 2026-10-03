@@ -13,7 +13,7 @@ X-Terminal-Id: <terminalId>
 ```
 
 `X-Terminal-Id` só é enviado onde o contrato o requer. A credential é lida de
-`DEVICE_CREDENTIAL_PATH`, instalado atomicamente e com modo `0600`. Ela não
+`APP247_DEVICE_CREDENTIAL_PATH`, instalado atomicamente e com modo `0600`. Ela não
 fica no SQLite, `terminal.json`, logs ou Git.
 
 `TERMINAL_INTERNAL_TOKEN` existe somente para

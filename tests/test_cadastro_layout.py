@@ -6,7 +6,7 @@ os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 from PyQt5.QtWidgets import QApplication, QSizePolicy
 
-from telas.CadastroTerminalScreen import CadastroTerminalScreen
+from app247_terminal.ui.screens.terminal_registration import CadastroTerminalScreen
 
 
 class CadastroTerminalLayoutTest(unittest.TestCase):
@@ -16,14 +16,14 @@ class CadastroTerminalLayoutTest(unittest.TestCase):
 
     def _create_screen(self):
         with patch(
-            "telas.CadastroTerminalScreen.TerminalInfo.to_dict",
+            "app247_terminal.ui.screens.terminal_registration.TerminalInfo.to_dict",
             return_value={
                 "serialNumber": "serial",
                 "macAddress": "00:00:00:00:00:00",
                 "ipAddress": "0.0.0.0",
             },
         ), patch(
-            "telas.CadastroTerminalScreen.Terminal.is_activated",
+            "app247_terminal.ui.screens.terminal_registration.Terminal.is_activated",
             return_value=True,
         ):
             return CadastroTerminalScreen(None)

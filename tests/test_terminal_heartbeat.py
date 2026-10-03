@@ -5,10 +5,10 @@ import time
 import unittest
 from pathlib import Path
 
-from model.Terminal import Terminal
-from service.TerminalAuth import TerminalCredentialStore
-from service.TerminalSocket import TerminalSocket
-from service.BackendClient import terminal_access_state
+from app247_terminal.models.terminal import Terminal
+from app247_terminal.services.terminal_auth import TerminalCredentialStore
+from app247_terminal.services.terminal_socket import TerminalSocket
+from app247_terminal.services.backend_client import terminal_access_state
 
 
 class FakeWebSocket:

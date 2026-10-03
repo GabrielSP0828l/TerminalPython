@@ -7,7 +7,7 @@ Data da auditoria: 27 de setembro de 2026. Cada item abaixo é verificável e de
 - [ ] PARCIAL — `.env` saiu do índice, `.env.example` contém placeholders e runtime usa `0600`; ainda é obrigatório rotacionar a senha exposta e higienizar o histórico Git coordenadamente.
 - [ ] PARCIAL — banco, identidade, backups, runtime, logs e bytecode estão ignorados/removidos do índice atual; o H2 local do backend também saiu do índice. Dados presentes no histórico antigo ainda precisam de limpeza coordenada.
 - [x] Reset administrativo e aplicação do marcador no boot bloqueiam qualquer checkpoint/estado financeiro ativo ou incerto.
-- [ ] PARCIAL — `X-Terminal-Token` agora é obrigatório em produção e validado em HTTP/WS; o segredo backend ainda é compartilhado, não credencial individual revogável por Terminal.
+- [x] `X-Terminal-Token` usa credencial individual revogável por Terminal e é validado em HTTP/WS; o segredo legado não é fallback operacional.
 - [x] Handshake de `/payment-socket/{terminalId}` valida credencial e Terminal antes de registrar a sessão.
 - [x] Identidade ausente/corrompida com `active_payment` abre recovery exclusivo e reconcilia antes de permitir reativação.
 
@@ -23,7 +23,7 @@ Data da auditoria: 27 de setembro de 2026. Cada item abaixo é verificável e de
 - [ ] Persistir resultado aprovado suficiente para recuperar a tela verde/Order após crash entre `APPROVED` e `FINALIZAR`.
 - [ ] Bloquear tentativas administrativas repetidas, exigir segredo forte e documentar rotação/provisionamento sem Git.
 - [x] `Pillow` está declarado em `requirements.txt` para geração do QR.
-- [ ] Criar pacote de produção Raspberry: serviço/autostart, restart automático, usuário/permissões, dependências `nmcli`/`wlr-randr`, diretórios graváveis e rotação de logs.
+- [ ] PARCIAL — pacote `onedir`, serviço, usuário/permissões e diretórios foram preparados; dependências físicas, rotação de logs e validação ARM64 no Raspberry permanecem.
 - [ ] Validar no Raspberry real `1024x600`, touch, scanner HID, NetworkManager, labwc/Wayland, rotação 90/270, reboot e recovery sem cobrança real.
 
 ## P2
@@ -67,4 +67,4 @@ Data da auditoria: 27 de setembro de 2026. Cada item abaixo é verificável e de
 - [ ] Testar restart de processo/Raspberry em cada janela entre cart, Order, attempt, aceite remoto e aprovação.
 - [ ] Testar overflow/renderização de todas as telas em hardware `1024x600`, não apenas geometria Qt offscreen.
 - [ ] Testar autostart, crash loop, falta de disco, log cheio, subtensão e throttling no Raspberry.
-- [ ] PARCIAL — headers e handshake autenticado têm testes; falta credencial individual e teste E2E de sessão duplicada/forjada.
+- [ ] PARCIAL — headers, credencial individual e handshake autenticado têm testes; falta teste E2E de sessão duplicada/forjada.

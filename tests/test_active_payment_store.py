@@ -7,8 +7,8 @@ os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 from PyQt5.QtWidgets import QApplication
 
-from database.ActivePaymentStore import ActivePaymentStore
-from model.CompraSession import CompraSession
+from app247_terminal.repositories.active_payment_repository import ActivePaymentStore
+from app247_terminal.models.purchase_session import CompraSession
 
 
 class ActivePaymentStoreTest(unittest.TestCase):

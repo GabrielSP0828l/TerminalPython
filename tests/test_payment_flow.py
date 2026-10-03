@@ -7,8 +7,8 @@ os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 from PyQt5.QtWidgets import QApplication, QWidget
 
-from model.CompraSession import CompraSession
-from telas.pagamento import PagamentoScreen
+from app247_terminal.models.purchase_session import CompraSession
+from app247_terminal.ui.screens.payment import PagamentoScreen
 
 
 class ConfirmationStub(QWidget):
@@ -60,7 +60,7 @@ class PaymentFlowTest(unittest.TestCase):
 
     def test_approved_event_is_correlated_and_opens_existing_success_screen(self):
         terminal = SimpleNamespace(terminalId="terminal-a")
-        with patch("telas.pagamento.Terminal.load", return_value=terminal):
+        with patch("app247_terminal.ui.screens.payment.Terminal.load", return_value=terminal):
             self.screen.processar_evento({
                 "terminalId": "terminal-a", "orderId": "order-old", "status": "APPROVED"
             })

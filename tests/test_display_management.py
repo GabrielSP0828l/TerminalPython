@@ -9,9 +9,9 @@ os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 from PyQt5.QtWidgets import QApplication, QWidget
 
-from model.CompraSession import CompraSession
-from service.DisplayService import DisplayService, DisplayServiceError, DisplayStatus
-from telas.DisplayScreen import DisplayScreen
+from app247_terminal.models.purchase_session import CompraSession
+from app247_terminal.services.display_service import DisplayService, DisplayServiceError, DisplayStatus
+from app247_terminal.ui.screens.display import DisplayScreen
 
 
 def result(stdout="", stderr="", returncode=0):
@@ -55,7 +55,7 @@ class DisplayServiceTest(unittest.TestCase):
     def test_startup_script_has_no_hardcoded_output_and_reuses_saved_service(self):
         script = (Path(__file__).resolve().parents[1] / "start.sh").read_text(encoding="utf-8")
         self.assertNotIn("HDMI-A-2", script)
-        self.assertIn("service.DisplayService --apply-saved", script)
+        self.assertIn("app247_terminal.services.display_service --apply-saved", script)
 
     def test_wayland_detects_active_output_applies_and_persists(self):
         runner = DisplayRunner()

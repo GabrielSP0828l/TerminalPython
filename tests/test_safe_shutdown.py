@@ -8,7 +8,7 @@ os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 from PyQt5.QtCore import Qt
 from PyQt5.QtWidgets import QApplication, QMainWindow
 
-from main import MainWindow, present_main_window
+from app247_terminal.application import MainWindow, present_main_window
 
 
 class SafeShutdownTest(unittest.TestCase):
@@ -85,7 +85,7 @@ class SafeShutdownTest(unittest.TestCase):
             _shutdown_authorized=False,
             _parar_servicos=MagicMock(),
         )
-        with patch("main.QApplication.instance", return_value=app):
+        with patch("app247_terminal.application.QApplication.instance", return_value=app):
             MainWindow.encerrar_terminal(window)
         self.assertTrue(window._shutdown_authorized)
         window._parar_servicos.assert_called_once()

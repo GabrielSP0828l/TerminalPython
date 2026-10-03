@@ -4,15 +4,19 @@ Voltar para [o índice](00-index.md). Fluxo detalhado em [[sincronizacao]].
 
 ## Paths canônicos
 
-Os paths são derivados de `Path(config.py).resolve().parent`; não dependem mais do diretório de onde `python main.py` foi chamado.
+Os paths são centralizados em `src/app247_terminal/config/settings.py` e não
+dependem do diretório corrente nem da release ativa.
 
-| Path absoluto nesta instalação | Finalidade |
-|---|---|
-| `/home/jefiro/Documentos/projetos/TerminalPython/db/terminal.db` | cache local de produtos |
-| `/home/jefiro/Documentos/projetos/TerminalPython/db/terminal.json` | identidade/ativação persistente |
-| `/home/jefiro/Documentos/projetos/TerminalPython/database/last_sync.txt` | espelho legado do `syncAt`; o cursor transacional fica no SQLite |
+| Path padrão de desenvolvimento | Produção recomendada | Finalidade |
+|---|---|---|
+| `./data/terminal.db` | `/var/lib/app247/terminal.db` | cache e checkpoints locais |
+| `./data/terminal.json` | `/var/lib/app247/terminal.json` | identidade/ativação |
+| `./data/last_sync.txt` | `/var/lib/app247/last_sync.txt` | espelho legado do `syncAt` |
 
-O startup registra o path absoluto do SQLite. `FactoryResetService` usa a mesma raiz canônica.
+`APP247_DB_PATH` sobrescreve o banco e `APP247_DATA_DIR` define os demais
+estados. Na primeira execução, o startup copia arquivos legados somente quando
+o novo destino não existe; não move, apaga ou sobrescreve dados. Todas as
+conexões passam por `database/connection.py`.
 
 ## Schema de produtos
 

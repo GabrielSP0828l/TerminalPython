@@ -2,7 +2,7 @@ import unittest
 
 import requests
 
-from service.InternetMonitor import InternetMonitor
+from app247_terminal.services.internet_monitor import InternetMonitor
 
 
 class InternetMonitorTest(unittest.TestCase):

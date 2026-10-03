@@ -1,0 +1,22 @@
+[Unit]
+Description=Terminal de autoatendimento App247
+Wants=network-online.target
+After=network-online.target graphical.target
+
+[Service]
+Type=simple
+# Crie um usuário dedicado ou ajuste User/Group durante o provisionamento.
+User=app247
+Group=app247
+EnvironmentFile=-/etc/app247/terminal.env
+WorkingDirectory=/var/lib/app247
+ExecStartPre=-/opt/app247/current/app247-terminal --apply-display
+ExecStart=/opt/app247/current/app247-terminal
+Restart=always
+RestartSec=3
+TimeoutStopSec=30
+NoNewPrivileges=true
+PrivateTmp=true
+
+[Install]
+WantedBy=graphical.target

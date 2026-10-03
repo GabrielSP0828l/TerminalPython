@@ -6,7 +6,7 @@ os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 from PyQt5.QtWidgets import QApplication
 from PyQt5.QtTest import QTest
 
-from model.CompraSession import CompraSession
+from app247_terminal.models.purchase_session import CompraSession
 
 
 class FakeClock:

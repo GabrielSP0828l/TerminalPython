@@ -20,7 +20,7 @@ Quando o backend está inacessível, `OfflineOverlay` oferece `CONFIGURAR WI-FI`
 
 ## Serviço e segurança
 
-`service/WifiService.py` é o único adaptador de rede. Ele detecta `nmcli`, o rádio e a interface Wi-Fi; obtém estado, SSID, sinal, IPv4 e perfis salvos; faz scan, conecta, desconecta e pode ativar o rádio. A UI não contém comandos Linux.
+`src/app247_terminal/services/wifi_service.py` é o único adaptador de rede. Ele detecta `nmcli`, o rádio e a interface Wi-Fi; obtém estado, SSID, sinal, IPv4 e perfis salvos; faz scan, conecta, desconecta e pode ativar o rádio. A UI não contém comandos Linux.
 
 Todos os subprocessos usam lista de argumentos, `shell=False` implícito e timeout. SSID permanece como um argumento isolado. Para rede protegida nova, `nmcli --ask` recebe a senha por `stdin`; o segredo não aparece na linha do processo, não é salvo pelo Terminal e nunca é registrado. O NetworkManager continua responsável por persistir/reconectar perfis após reboot.
 

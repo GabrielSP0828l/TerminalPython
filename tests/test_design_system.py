@@ -1,7 +1,7 @@
 import unittest
 
-from styles.theme import Theme
-from styles.tokens import Colors, FontSize, Radius, Spacing
+from app247_terminal.ui.styles.theme import Theme
+from app247_terminal.ui.styles.tokens import Colors, FontSize, Radius, Spacing
 
 
 class DesignSystemTest(unittest.TestCase):

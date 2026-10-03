@@ -7,16 +7,16 @@ os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 from PyQt5.QtWidgets import QApplication, QStackedWidget, QWidget
 
-from model.CompraSession import CompraSession
-from telas.CadastroTerminalScreen import CadastroTerminalScreen
-from telas.AdminAuthScreen import AdminAuthScreen
-from telas.ConfiguracaoScreen import ConfiguracaoScreen
-from telas.ConfirmacaoScreen import ConfirmacaoScreen
-from telas.app_payment_screen import AppPaymentScreen
-from telas.bemvindo import TelaBemVindos
-from telas.login_screen import LoginScreen
-from telas.pagamento import PagamentoScreen
-from telas.teclado import TecladoScreen
+from app247_terminal.models.purchase_session import CompraSession
+from app247_terminal.ui.screens.terminal_registration import CadastroTerminalScreen
+from app247_terminal.ui.screens.admin_auth import AdminAuthScreen
+from app247_terminal.ui.screens.settings import ConfiguracaoScreen
+from app247_terminal.ui.screens.confirmation import ConfirmacaoScreen
+from app247_terminal.ui.screens.app_payment import AppPaymentScreen
+from app247_terminal.ui.screens.welcome import TelaBemVindos
+from app247_terminal.ui.screens.login import LoginScreen
+from app247_terminal.ui.screens.payment import PagamentoScreen
+from app247_terminal.ui.screens.keyboard import TecladoScreen
 
 
 class ParentStub(QWidget):
@@ -61,9 +61,9 @@ class PortraitScreensTest(unittest.TestCase):
 
     def test_all_pages_smoke_in_portrait(self):
         parent = ParentStub()
-        with patch("telas.CadastroTerminalScreen.TerminalInfo.to_dict", return_value={
+        with patch("app247_terminal.ui.screens.terminal_registration.TerminalInfo.to_dict", return_value={
             "serialNumber": "serial", "macAddress": "00:00:00:00:00:00", "ipAddress": "0.0.0.0"
-        }), patch("telas.CadastroTerminalScreen.Terminal.is_activated", return_value=True):
+        }), patch("app247_terminal.ui.screens.terminal_registration.Terminal.is_activated", return_value=True):
             cadastro = CadastroTerminalScreen(parent)
 
         screens = [

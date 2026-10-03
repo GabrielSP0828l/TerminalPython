@@ -1,0 +1,25 @@
+# Distribuição, build e atualização
+
+Voltar para [[00-index]]. Arquitetura de código em [[arquitetura]] e estado em
+[[sqlite]].
+
+`app247-terminal.spec` gera PyInstaller `onedir` com assets e dependências
+dinâmicas. `scripts/build.sh` não faz cross-compile: o pacote final do Raspberry
+Pi 4 precisa ser construído em Linux ARM64/aarch64.
+
+Produção separa release (`/opt/app247/releases`), ponteiro ativo
+(`/opt/app247/current`), estado (`/var/lib/app247`) e ambiente
+(`/etc/app247/terminal.env`). Uma troca de release não alcança SQLite,
+identidade ou credencial do dispositivo. A chave pública de atualização fica em
+`/etc/app247/update-signing-public-key.pem`, também fora da release.
+
+`scripts/install.sh` não sobrescreve release/dados/configuração e só muda o
+symlink com `--activate`. `updater/` valida SemVer, manifesto JSON canônico
+assinado com Ed25519, chave pública confiável, nome/arquitetura, SHA-256 e plano
+de staging/rollback; não baixa, para serviço ou ativa versão. A chave privada
+fica somente no cofre do pipeline e nunca no Terminal/repositório.
+
+Antes da automação real ainda são obrigatórios download autenticado, supervisor
+externo, guarda de pagamento, health-check, rollback atômico e procedimento de
+rotação da trust anchor. O exemplo systemd usa usuário dedicado configurável,
+nunca presume `pi`.

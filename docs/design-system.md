@@ -2,7 +2,7 @@
 
 Voltar para [[00-index]]. Layout portrait em [[layout-vertical]] e inventário em [[telas]].
 
-Esta é a única referência visual do Terminal. A fonte de verdade executável está em `styles/tokens.py` e `styles/theme.py`; telas não mantêm QSS próprios. O padrão foi extraído das telas históricas mais maduras (boas-vindas e carrinho) e consolidado com os estados Point já funcionais.
+Esta é a única referência visual do Terminal. A fonte de verdade executável está em `src/app247_terminal/ui/styles/tokens.py` e `src/app247_terminal/ui/styles/theme.py`; telas não mantêm QSS próprios. O padrão foi extraído das telas históricas mais maduras (boas-vindas e carrinho) e consolidado com os estados Point já funcionais.
 
 ## Princípios
 
