@@ -95,6 +95,19 @@ Raspberry Pi 4 ARM64 deve ser construído em Linux `aarch64` (Raspberry, VM/runn
 ARM64 ou pipeline nativo compatível). Para impedir engano em pipeline, use
 `APP247_TARGET_ARCH=aarch64`; o script falha se o host tiver outra arquitetura.
 
+No Raspberry/aarch64, o script evita instalar a wheel PyQt5 por pip. Ele exige o
+PyQt5 do Raspberry Pi OS e cria automaticamente `.venv-build-aarch64` com
+`--system-site-packages`; nesse ambiente instala apenas as demais dependências:
+
+```bash
+sudo apt install python3-venv python3-pyqt5 python3-pyqt5.qtsvg
+APP247_TARGET_ARCH=aarch64 ./scripts/build.sh
+```
+
+`APP247_SYSTEM_PYTHON` e `APP247_ARM64_BUILD_VENV` permitem ajustar os caminhos.
+`PYTHON_BIN` continua sendo override explícito, mas em ARM64 precisa importar o
+mesmo PyQt5 do Python do sistema.
+
 ## Instalação no Raspberry
 
 Layout esperado:

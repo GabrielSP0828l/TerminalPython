@@ -13,6 +13,13 @@ websocket-client e módulos dinâmicos do qrcode. A saída é
 PyInstaller, registra a arquitetura do host e rejeita cross-compile solicitado.
 O artefato ARM64 deve ser gerado em Linux `aarch64` ou runner nativo compatível.
 
+Em `aarch64`, o build valida `/usr/bin/python3` e `PyQt5.QtSvg`, cria o venv
+dedicado `.venv-build-aarch64` com `--system-site-packages` e confirma que o
+PyQt5 carregado é exatamente o `python3-pyqt5` do sistema. As dependências pip
+desse ambiente vêm de `requirements-arm64.txt`, que deliberadamente não contém
+PyQt5 nem `pyqt5_sip`. O script nunca executa `apt`/`sudo`; se necessário, o
+operador instala `python3-venv`, `python3-pyqt5` e `python3-pyqt5.qtsvg`.
+
 ## Layout do Raspberry
 
 ```text

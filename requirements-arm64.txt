@@ -1,0 +1,9 @@
+# Dependências Python instaladas no venv de build ARM64.
+# PyQt5/pyqt5_sip são fornecidos pelo Raspberry Pi OS via python3-pyqt5 e
+# entram no venv por --system-site-packages.
+python-dotenv==1.2.3
+qrcode==8.2
+Pillow==12.2.0
+Requests==2.34.2
+websocket_client==1.9.0
+cryptography>=43.0.0,<47.0.0

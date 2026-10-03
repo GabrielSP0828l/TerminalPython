@@ -7,6 +7,12 @@ Voltar para [[00-index]]. Arquitetura de código em [[arquitetura]] e estado em
 dinâmicas. `scripts/build.sh` não faz cross-compile: o pacote final do Raspberry
 Pi 4 precisa ser construído em Linux ARM64/aarch64.
 
+Em `aarch64`, o script detecta o host e usa um venv dedicado criado com
+`--system-site-packages`, validando que `PyQt5`/`QtSvg` vêm do
+`python3-pyqt5` do Raspberry Pi OS. `requirements-arm64.txt` instala apenas as
+dependências restantes e evita tentar obter PyQt5 por pip. O script não chama
+`sudo` ou `apt` automaticamente.
+
 Produção separa release (`/opt/app247/releases`), ponteiro ativo
 (`/opt/app247/current`), estado (`/var/lib/app247`) e ambiente
 (`/etc/app247/terminal.env`). Uma troca de release não alcança SQLite,

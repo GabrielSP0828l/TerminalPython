@@ -1,4 +1,5 @@
 .venv/
+.venv-build-aarch64/
 venv/
 
 # Configuracao e credenciais locais. Somente o modelo sem valores e versionado.

@@ -25,6 +25,22 @@ from updater.version import CURRENT_VERSION, Version
 
 
 class PackagingArchitectureTest(unittest.TestCase):
+    def test_arm64_build_uses_system_pyqt_without_pip_requirement(self):
+        project_root = Path(__file__).resolve().parents[1]
+        build_script = (project_root / "scripts/build.sh").read_text(encoding="utf-8")
+        arm_requirements = (project_root / "requirements-arm64.txt").read_text(
+            encoding="utf-8"
+        )
+        self.assertIn("--system-site-packages", build_script)
+        self.assertIn("python3-pyqt5", build_script)
+        requirement_names = {
+            line.split("=", 1)[0].split("<", 1)[0].strip().lower()
+            for line in arm_requirements.splitlines()
+            if line.strip() and not line.lstrip().startswith("#")
+        }
+        self.assertNotIn("pyqt5", requirement_names)
+        self.assertNotIn("pyqt5_sip", requirement_names)
+
     def test_assets_are_resolved_without_current_working_directory(self):
         self.assertTrue(image_path("logo.png").is_file())
         self.assertTrue(icon_path("checked.svg").is_file())
