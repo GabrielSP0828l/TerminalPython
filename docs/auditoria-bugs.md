@@ -378,3 +378,11 @@ Critério: **confirmado** quando o caminho executável ou contrato prova o compo
 # Status do hardening P0/P1 (27/09/2026)
 
 Corrigidos: reset durante pagamento, aplicação destrutiva de reset no boot, recovery com identidade ausente, SQLite corrompido apagável, fullscreen de produção, Wi-Fi pré-ativação e referências órfãs dos workers principais. Autenticação deixou de depender apenas de UUID, mas permanece parcial até existir credencial individual revogável por Terminal. Veja [[terminal-review-2026-09]].
+
+## BUG-043 — Instalador distribuído dependia do checkout fonte
+
+**Status:** corrigido em 4 de outubro de 2026.
+
+O instalador agora distingue checkout e pacote por `SCRIPT_DIR`, lê `VERSION` e
+usa `app/`, template, unit, launcher e chave pública adjacentes. O smoke do
+verificador prepara a release em sandbox sem `.git`, `src`, `dist` ou venv.

@@ -1,9 +1,29 @@
 #!/usr/bin/env bash
 set -Eeuo pipefail
 
-PROJECT_DIR="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
-ARTIFACT_DIR="${APP247_ARTIFACT_DIR:-$PROJECT_DIR/dist/app247-terminal}"
+SCRIPT_DIR="$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)"
+REPOSITORY_DIR="$(CDPATH= cd -- "$SCRIPT_DIR/.." && pwd)"
+if [ -f "$SCRIPT_DIR/VERSION" ] && [ -d "$SCRIPT_DIR/app" ]; then
+    PROJECT_DIR="$SCRIPT_DIR"
+    DEFAULT_ARTIFACT_DIR="$SCRIPT_DIR/app"
+    DEFAULT_CONFIG_TEMPLATE="$SCRIPT_DIR/terminal.env.production.example"
+    DEFAULT_SERVICE_SOURCE="$SCRIPT_DIR/app247-terminal.service"
+    DEFAULT_LAUNCHER_SOURCE="$SCRIPT_DIR/app247-terminal-launcher"
+    DEFAULT_PUBLIC_KEY_SOURCE="$SCRIPT_DIR/update-signing-public-key.pem"
+else
+    PROJECT_DIR="$REPOSITORY_DIR"
+    DEFAULT_ARTIFACT_DIR="$PROJECT_DIR/dist/app247-terminal"
+    DEFAULT_CONFIG_TEMPLATE="$PROJECT_DIR/packaging/terminal.env.production.example"
+    DEFAULT_SERVICE_SOURCE="$PROJECT_DIR/packaging/systemd/app247-terminal.service"
+    DEFAULT_LAUNCHER_SOURCE="$PROJECT_DIR/packaging/app247-terminal-launcher"
+    DEFAULT_PUBLIC_KEY_SOURCE=""
+fi
+
+ARTIFACT_DIR="${APP247_ARTIFACT_DIR:-$DEFAULT_ARTIFACT_DIR}"
 VERSION="${APP247_INSTALL_VERSION:-}"
+if [ -z "$VERSION" ] && [ -f "$SCRIPT_DIR/VERSION" ]; then
+    VERSION="$(tr -d '\r\n' < "$SCRIPT_DIR/VERSION")"
+fi
 INSTALL_ROOT="${APP247_INSTALL_ROOT:-/opt/app247}"
 DATA_DIR="${APP247_DATA_DIR:-/var/lib/app247}"
 DATABASE_PATH="${APP247_DB_PATH:-$DATA_DIR/terminal.db}"
@@ -13,14 +33,17 @@ DISPLAY_ORIENTATION_PATH="${APP247_DISPLAY_ORIENTATION_PATH:-$DATA_DIR/display_o
 LAST_SYNC_PATH="${APP247_LAST_SYNC_PATH:-$DATA_DIR/last_sync.txt}"
 CONFIG_DIR="${APP247_CONFIG_DIR:-/etc/app247}"
 CONFIG_FILE="$CONFIG_DIR/terminal.env"
-CONFIG_TEMPLATE="${APP247_CONFIG_TEMPLATE:-$PROJECT_DIR/packaging/terminal.env.production.example}"
+CONFIG_TEMPLATE="${APP247_CONFIG_TEMPLATE:-$DEFAULT_CONFIG_TEMPLATE}"
 SERVICE_USER="${APP247_SERVICE_USER:-app247}"
 SERVICE_GROUP="${APP247_SERVICE_GROUP:-app247}"
 SYSTEMD_DIR="${APP247_SYSTEMD_DIR:-/etc/systemd/system}"
 SERVICE_NAME="${APP247_SERVICE_NAME:-app247-terminal.service}"
 SERVICE_DESTINATION="$SYSTEMD_DIR/$SERVICE_NAME"
+SERVICE_SOURCE="${APP247_SERVICE_SOURCE:-$DEFAULT_SERVICE_SOURCE}"
+LAUNCHER_SOURCE="${APP247_LAUNCHER_SOURCE:-$DEFAULT_LAUNCHER_SOURCE}"
+LAUNCHER_DESTINATION="${APP247_LAUNCHER_DESTINATION:-/usr/local/bin/app247-terminal-launcher}"
 MANAGE_SYSTEMD="${APP247_MANAGE_SYSTEMD:-true}"
-UPDATE_PUBLIC_KEY_SOURCE="${APP247_UPDATE_PUBLIC_KEY_SOURCE:-}"
+UPDATE_PUBLIC_KEY_SOURCE="${APP247_UPDATE_PUBLIC_KEY_SOURCE:-$DEFAULT_PUBLIC_KEY_SOURCE}"
 ACTIVATE="false"
 
 for argument in "$@"; do
@@ -30,7 +53,7 @@ for argument in "$@"; do
     esac
 done
 if [[ ! "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+([.-][0-9A-Za-z.-]+)?$ ]]; then
-    echo "Erro: informe APP247_INSTALL_VERSION (ex.: 1.0.0)." >&2
+    echo "Erro: versão ausente/inválida em VERSION ou APP247_INSTALL_VERSION." >&2
     exit 1
 fi
 if [ ! -x "$ARTIFACT_DIR/app247-terminal" ]; then
@@ -41,8 +64,12 @@ if [ ! -f "$CONFIG_TEMPLATE" ]; then
     echo "Erro: template de configuração ausente: $CONFIG_TEMPLATE" >&2
     exit 1
 fi
-if [ ! -f "$PROJECT_DIR/packaging/systemd/app247-terminal.service" ]; then
+if [ ! -f "$SERVICE_SOURCE" ]; then
     echo "Erro: unidade systemd de origem ausente." >&2
+    exit 1
+fi
+if [ ! -x "$LAUNCHER_SOURCE" ]; then
+    echo "Erro: launcher gráfico ausente ou sem permissão de execução." >&2
     exit 1
 fi
 if [ "$MANAGE_SYSTEMD" != "true" ] && [ "$MANAGE_SYSTEMD" != "false" ]; then
@@ -54,34 +81,59 @@ if [ "$ACTIVATE" = "true" ] && [ "$MANAGE_SYSTEMD" = "true" ] && [ "$(id -u)" -n
     exit 1
 fi
 PUBLIC_KEY_DESTINATION="$CONFIG_DIR/update-signing-public-key.pem"
+INSTALL_PUBLIC_KEY="false"
 if [ -n "$UPDATE_PUBLIC_KEY_SOURCE" ]; then
     if [ ! -f "$UPDATE_PUBLIC_KEY_SOURCE" ] || [ -L "$UPDATE_PUBLIC_KEY_SOURCE" ]; then
         echo "Erro: APP247_UPDATE_PUBLIC_KEY_SOURCE deve ser um arquivo regular." >&2
         exit 1
     fi
     if [ -e "$PUBLIC_KEY_DESTINATION" ]; then
-        echo "Erro: chave pública já existe; rotação exige procedimento explícito." >&2
-        exit 1
+        if [ ! -f "$PUBLIC_KEY_DESTINATION" ] || [ -L "$PUBLIC_KEY_DESTINATION" ]; then
+            echo "Erro: chave pública instalada não é um arquivo regular." >&2
+            exit 1
+        fi
+        if ! cmp -s "$UPDATE_PUBLIC_KEY_SOURCE" "$PUBLIC_KEY_DESTINATION"; then
+            echo "Erro: chave pública já existe e diverge; rotação exige procedimento explícito." >&2
+            exit 1
+        fi
+        echo "Chave pública confiável já instalada e idêntica."
+    else
+        INSTALL_PUBLIC_KEY="true"
     fi
 fi
 
 RELEASE_DIR="$INSTALL_ROOT/releases/$VERSION"
 RELEASE_ALREADY_INSTALLED="false"
-if [ -e "$RELEASE_DIR" ] && [ "$ACTIVATE" != "true" ]; then
-    echo "Erro: a release já existe; nada foi sobrescrito: $RELEASE_DIR" >&2
-    exit 1
-elif [ -e "$RELEASE_DIR" ]; then
-    if [ ! -x "$RELEASE_DIR/app247-terminal" ]; then
-        echo "Erro: release preparada é inválida: $RELEASE_DIR" >&2
+if [ -e "$RELEASE_DIR" ]; then
+    if [ ! -d "$RELEASE_DIR" ] || [ -L "$RELEASE_DIR" ] || [ ! -x "$RELEASE_DIR/app247-terminal" ]; then
+        echo "Erro: release existente é parcial ou inválida: $RELEASE_DIR" >&2
+        exit 1
+    fi
+    if ! diff -qr "$ARTIFACT_DIR" "$RELEASE_DIR" >/dev/null; then
+        echo "Erro: release existente diverge do pacote; nada foi sobrescrito: $RELEASE_DIR" >&2
         exit 1
     fi
     RELEASE_ALREADY_INSTALLED="true"
+    echo "Release $VERSION já instalada e íntegra; nenhuma cópia foi refeita."
 fi
 
 if [ "$(id -u)" -eq 0 ]; then
-    if ! id "$SERVICE_USER" >/dev/null 2>&1 || ! getent group "$SERVICE_GROUP" >/dev/null 2>&1; then
-        echo "Erro: crie o usuário/grupo dedicado ou informe APP247_SERVICE_USER/GROUP." >&2
-        exit 1
+    if ! getent group "$SERVICE_GROUP" >/dev/null 2>&1; then
+        if ! command -v groupadd >/dev/null 2>&1; then
+            echo "Erro: grupo $SERVICE_GROUP ausente e groupadd indisponível." >&2
+            exit 1
+        fi
+        groupadd --system "$SERVICE_GROUP"
+        echo "Grupo de serviço criado: $SERVICE_GROUP"
+    fi
+    if ! id "$SERVICE_USER" >/dev/null 2>&1; then
+        if ! command -v useradd >/dev/null 2>&1; then
+            echo "Erro: usuário $SERVICE_USER ausente e useradd indisponível." >&2
+            exit 1
+        fi
+        useradd --system --gid "$SERVICE_GROUP" --home-dir "$DATA_DIR" \
+            --no-create-home --shell /usr/sbin/nologin "$SERVICE_USER"
+        echo "Usuário de serviço criado: $SERVICE_USER"
     fi
 fi
 
@@ -90,6 +142,10 @@ install -d -m 0750 "$DATA_DIR" "$CONFIG_DIR"
 if [ "$RELEASE_ALREADY_INSTALLED" = "false" ]; then
     install -d -m 0755 "$RELEASE_DIR"
     cp -a "$ARTIFACT_DIR/." "$RELEASE_DIR/"
+    chmod -R go-w "$RELEASE_DIR"
+    if [ "$(id -u)" -eq 0 ]; then
+        chown -R root:root "$RELEASE_DIR"
+    fi
 fi
 
 if [ ! -e "$CONFIG_FILE" ]; then
@@ -116,14 +172,25 @@ if [ ! -e "$CONFIG_FILE" ]; then
     rm -f "$CONFIG_TEMP"
     trap - EXIT
 fi
-if [ -n "$UPDATE_PUBLIC_KEY_SOURCE" ]; then
+if [ "$INSTALL_PUBLIC_KEY" = "true" ]; then
     install -m 0644 "$UPDATE_PUBLIC_KEY_SOURCE" "$PUBLIC_KEY_DESTINATION"
 fi
 if [ "$(id -u)" -eq 0 ]; then
-    chown "$SERVICE_USER:$SERVICE_GROUP" "$DATA_DIR"
+    chown -R "$SERVICE_USER:$SERVICE_GROUP" "$DATA_DIR"
+    chmod 0750 "$DATA_DIR"
+    find "$DATA_DIR" -type d -exec chmod o-rwx,g-w {} +
+    find "$DATA_DIR" -type f -exec chmod o-rwx,g-wx {} +
+    for sensitive_file in "$TERMINAL_CONFIG_PATH" "$DEVICE_CREDENTIAL_PATH"; do
+        if [ -f "$sensitive_file" ] && [ ! -L "$sensitive_file" ]; then
+            chmod 0600 "$sensitive_file"
+        fi
+    done
     chown "root:$SERVICE_GROUP" "$CONFIG_DIR" "$CONFIG_FILE"
-    if [ -n "$UPDATE_PUBLIC_KEY_SOURCE" ]; then
+    chmod 0750 "$CONFIG_DIR"
+    chmod 0640 "$CONFIG_FILE"
+    if [ -f "$PUBLIC_KEY_DESTINATION" ]; then
         chown root:root "$CONFIG_DIR/update-signing-public-key.pem"
+        chmod 0644 "$CONFIG_DIR/update-signing-public-key.pem"
     fi
 fi
 
@@ -171,7 +238,8 @@ if [ "$ACTIVATE" = "true" ]; then
         exit "$CHECK_STATUS"
     fi
 
-    install -d -m 0755 "$SYSTEMD_DIR"
+    install -d -m 0755 "$SYSTEMD_DIR" "$(dirname -- "$LAUNCHER_DESTINATION")"
+    install -m 0755 "$LAUNCHER_SOURCE" "$LAUNCHER_DESTINATION"
     UNIT_TEMP="$(mktemp)"
     trap 'rm -f "$UNIT_TEMP"' EXIT
     sed \
@@ -181,7 +249,7 @@ if [ "$ACTIVATE" = "true" ]; then
         -e "s|^WorkingDirectory=.*|WorkingDirectory=$DATA_DIR|" \
         -e "s|^ExecStartPre=.*|ExecStartPre=-$INSTALL_ROOT/current/app247-terminal --apply-display|" \
         -e "s|^ExecStart=.*|ExecStart=$INSTALL_ROOT/current/app247-terminal|" \
-        "$PROJECT_DIR/packaging/systemd/app247-terminal.service" > "$UNIT_TEMP"
+        "$SERVICE_SOURCE" > "$UNIT_TEMP"
     install -m 0644 "$UNIT_TEMP" "$SERVICE_DESTINATION"
     rm -f "$UNIT_TEMP"
     trap - EXIT

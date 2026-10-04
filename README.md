@@ -108,32 +108,78 @@ APP247_TARGET_ARCH=aarch64 ./scripts/build.sh
 `PYTHON_BIN` continua sendo override explícito, mas em ARM64 precisa importar o
 mesmo PyQt5 do Python do sistema.
 
+## Empacotamento oficial de release
+
+Depois do build, exporte os caminhos da chave privada guardada no cofre do
+pipeline e da respectiva trust anchor pública. A chave privada precisa ser um
+arquivo regular externo ao repositório e nunca é copiada para o pacote:
+
+```bash
+export APP247_UPDATE_PRIVATE_KEY=/cofre/app247/update-signing-private-key.pem
+export APP247_UPDATE_PUBLIC_KEY=/cofre/app247/update-signing-public-key.pem
+./scripts/build.sh
+./scripts/package-release.sh 1.0.1
+```
+
+`package-release.sh` exige SemVer idêntico a `app247-terminal --version`, usa
+`dpkg --print-architecture` com fallback seguro, compara o host com o ELF real
+inspecionado por `file`, executa `--check` no modo isolado de release, copia o
+`onedir` completo e cria um tar reproduzível com raiz versionada. O manifesto
+continua no schema já consumido pelo updater, com assinatura Ed25519 embutida;
+`size` e `signatureAlgorithm` são metadados assinados opcionais e manifestos
+antigos continuam aceitos. O `.sig` contém a mesma assinatura em Base64.
+
+Saída em `release/`:
+
+```text
+app247-terminal-1.0.1-<arch>.tar.gz
+app247-terminal-1.0.1-<arch>.manifest.json
+app247-terminal-1.0.1-<arch>.manifest.json.sig
+SHA256SUMS
+```
+
+Cada empacotamento chama `verify-release.sh`, que valida assinatura, tamanho,
+SHA-256, arquitetura, raiz/arquivos obrigatórios, links internos seguros,
+ausência de segredos/estado e preparação pelo instalador standalone. Para uma
+inspeção posterior:
+
+```bash
+APP247_UPDATE_PUBLIC_KEY=/cofre/app247/update-signing-public-key.pem \
+  ./scripts/verify-release.sh \
+  release/app247-terminal-1.0.1-arm64.tar.gz \
+  release/app247-terminal-1.0.1-arm64.manifest.json \
+  release/app247-terminal-1.0.1-arm64.manifest.json.sig
+```
+
 ## Instalação no Raspberry
 
 Layout esperado:
 
 ```text
 /opt/app247/
-├── current -> releases/1.0.0
-└── releases/1.0.0/
+├── current -> releases/1.0.1
+└── releases/1.0.1/
 /var/lib/app247/terminal.db e demais estados persistentes
 /etc/app247/terminal.env
 ```
 
-O instalador não sobrescreve banco ou configuração. A primeira chamada prepara
-a release e cria `/etc/app247/terminal.env` a partir do template de produção:
+O pacote oficial é standalone: `install.sh` descobre seu próprio diretório, lê
+`VERSION`, instala o `app/` completo e não depende de checkout, Git, `src/`,
+`dist/` ou venv. A primeira chamada prepara a release, instala a trust anchor em
+`/etc/app247` sem rotação implícita e cria `terminal.env` pelo template:
 
 ```bash
-sudo APP247_INSTALL_VERSION=1.0.0 \
-  APP247_UPDATE_PUBLIC_KEY_SOURCE=/caminho/confiavel/update-public.pem \
-  ./scripts/install.sh
+tar -xzf app247-terminal-1.0.1-arm64.tar.gz
+cd app247-terminal-1.0.1
+sudo ./install.sh
 sudoedit /etc/app247/terminal.env
-sudo APP247_INSTALL_VERSION=1.0.0 ./scripts/install.sh --activate
+sudo ./install.sh --activate
 ```
 
-Crie antes um usuário/grupo de serviço dedicado (`app247` por padrão) ou
-informe `APP247_SERVICE_USER` e `APP247_SERVICE_GROUP`. O script não cria
-contas automaticamente.
+Em uma máquina nova, o instalador cria o usuário/grupo de sistema `app247`
+quando ausentes. Overrides explícitos continuam disponíveis. Release existente
+idêntica é reconhecida sem recópia; conteúdo parcial ou divergente aborta. O
+script nunca remove `/etc/app247` ou `/var/lib/app247`.
 
 Sem `--activate`, a release é apenas copiada. A ativação aceita essa mesma
 release preparada, troca atomicamente o symlink, executa o diagnóstico, instala

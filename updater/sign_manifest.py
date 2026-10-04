@@ -46,8 +46,10 @@ def main(argv=None) -> int:
         "schemaVersion": 1,
         "version": str(Version.parse(args.version)),
         "sha256": sha256_file(package),
+        "size": package.stat().st_size,
         "architecture": normalize_architecture(args.architecture),
         "package": package.name,
+        "signatureAlgorithm": "Ed25519",
     }
     signature = load_private_key(args.private_key, args.password_file).sign(
         canonical_manifest_payload(payload)

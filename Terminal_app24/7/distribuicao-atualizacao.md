@@ -43,3 +43,45 @@ Antes da automação real ainda são obrigatórios download autenticado, supervi
 externo, guarda de pagamento, health-check, rollback atômico e procedimento de
 rotação da trust anchor. O exemplo systemd usa usuário dedicado configurável,
 nunca presume `pi`.
+
+## Pacote oficial standalone
+
+`scripts/package-release.sh <SemVer>` é o único orquestrador local do pacote.
+Ele exige que o `onedir` já exista e que sua versão interna seja idêntica à
+solicitada. A arquitetura de distribuição usa o nome Debian retornado por
+`dpkg --print-architecture` (`armhf`, `arm64` ou `amd64`), com fallback por
+`uname`; `file` inspeciona o ELF e qualquer divergência host/binário aborta.
+
+O diagnóstico de build usa `APP247_DIAGNOSTIC_MODE=release`: assets, paths e o
+bundle continuam verificados, mas nenhuma credencial real ou chamada ao backend
+é exigida. Esse modo não é usado pela ativação de produção.
+
+O tar contém uma única raiz `app247-terminal-<versão>/`, o `app/` PyInstaller
+completo, instalador, unit, launcher, template, `VERSION`, `RELEASE_INFO.json` e
+a chave pública. A chave pública só viaja no invólucro bootstrap e é instalada
+como trust anchor em `/etc/app247`; não entra na release imutável em `/opt`. A
+chave privada vem de `APP247_UPDATE_PRIVATE_KEY`, nunca entra no staging e nunca
+é copiada para `release/`.
+
+O manifesto schema 1 preserva os campos anteriores e aceita os metadados
+assinados opcionais `size` e `signatureAlgorithm=Ed25519`. A assinatura continua
+embutida para o updater e é também exportada, sem recalculá-la, no arquivo
+`.manifest.json.sig`. `verify-release.sh` reutiliza o verificador Ed25519,
+recalcula SHA-256/tamanho, extrai em temporário, compara arquitetura e trust
+anchor, rejeita estado/segredos e executa o instalador standalone em sandbox.
+
+## Instalador e sessão gráfica
+
+No pacote, `install.sh` resolve `SCRIPT_DIR`, lê `VERSION` e copia somente
+`app/`. Release existente é aceita apenas quando `diff -qr` confirma conteúdo
+idêntico; estado parcial/divergente aborta sem sobrescrita. O template só cria
+`/etc/app247/terminal.env` quando ausente. `/var/lib/app247` e `/etc/app247`
+nunca são removidos; usuário/grupo `app247` são criados em uma máquina nova e
+os arquivos operacionais conhecidos permanecem sem leitura pública.
+
+`app247-terminal-launcher` carrega `/etc/app247/terminal.env`, usa o UID efetivo
+da sessão — nunca `1000` —, valida `XDG_RUNTIME_DIR`, descobre um socket Wayland
+pertencente ao usuário quando necessário e executa
+`/opt/app247/current/app247-terminal`. Se o serviço systemd já estiver ativo, o
+launcher não abre uma segunda instância. A unit instalada conserva os paths de
+ambiente, dados, pre-start de orientação e executável ativo já estabelecidos.

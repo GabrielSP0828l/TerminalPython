@@ -388,6 +388,20 @@ Falha, instrução e sucesso eram cards e a aprovação apagava a compra após c
 - **Validação:** teste isolado cobre preparar, ativar, criar symlink e renderizar
   a unidade sem chamar o systemd real.
 
+## BUG-043 — Instalador distribuído dependia do checkout fonte
+
+**Status:** corrigido em 4 de outubro de 2026.
+
+- **Causa:** `scripts/install.sh` derivava `dist/`, template e unit exclusivamente
+  a partir da raiz do repositório e exigia `APP247_INSTALL_VERSION`.
+- **Impacto:** um `.tar.gz` entregue a um Raspberry novo não podia ser instalado
+  pelos comandos standalone documentados.
+- **Correção:** detecção explícita por `SCRIPT_DIR`, leitura de `VERSION`, fontes
+  adjacentes no pacote, trust anchor idempotente e comparação integral de uma
+  release já existente.
+- **Validação:** o verificador extrai cada pacote em temporário e executa a fase
+  de preparação com todos os destinos redirecionados para um sandbox.
+
 ## BUG-031 — Heartbeat opaco, sem confirmação do backend
 
 **Status:** corrigido em 24 de agosto de 2026.

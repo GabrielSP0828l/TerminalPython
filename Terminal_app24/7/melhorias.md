@@ -301,3 +301,17 @@ Voltar para [o índice](00-index.md). Cada item informa explicitamente quando j�
 permissões do ambiente, segurança local, assets, diretório de dados, integridade
 SQLite, credencial individual, health do backend e release ativa. O relatório
 separa `OK`, `WARN` e `ERROR` e usa exit code para bloquear ativações inválidas.
+
+## MEL-034 — Empacotamento oficial e verificável
+
+**Status:** implementada em 4 de outubro de 2026.
+
+- artefato `onedir` completo sob raiz versionada e arquitetura Debian detectada;
+- tar razoavelmente reproduzível, `RELEASE_INFO.json`, manifesto, assinatura
+  destacada e `SHA256SUMS`;
+- assinatura/tamanho/hash/arquitetura/estrutura verificados antes da publicação
+  local, reutilizando Ed25519 do updater;
+- inspeção bloqueia segredos, credenciais, estado SQLite, fontes e caches;
+- instalador standalone lê `VERSION`, preserva dados/configuração e mantém
+  rollback/health-check da ativação;
+- publicação remota continua deliberadamente fora do escopo.

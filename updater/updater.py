@@ -30,6 +30,8 @@ class UpdateManifest:
     sha256: str
     architecture: str
     package: str
+    size: int | None
+    signature_algorithm: str | None
     signature: str
 
     @classmethod
@@ -40,9 +42,10 @@ class UpdateManifest:
         required = {
             "schemaVersion", "version", "sha256", "architecture", "package", "signature"
         }
+        optional = {"size", "signatureAlgorithm"}
         if missing := required.difference(data):
             raise ValueError(f"Manifesto incompleto: {', '.join(sorted(missing))}")
-        if set(data).difference(required):
+        if set(data).difference(required | optional):
             raise ValueError("Manifesto contém campos não reconhecidos")
         if data["schemaVersion"] != 1:
             raise ValueError("Versão de schema do manifesto não suportada")
@@ -54,23 +57,46 @@ class UpdateManifest:
         package = str(data["package"])
         if not package or Path(package).name != package:
             raise ValueError("Nome de pacote inválido no manifesto")
+        size = data.get("size")
+        signature_algorithm = data.get("signatureAlgorithm")
+        if (size is None) != (signature_algorithm is None):
+            raise ValueError(
+                "Metadados de tamanho e algoritmo devem aparecer juntos no manifesto"
+            )
+        if size is not None and (
+            not isinstance(size, int) or isinstance(size, bool) or size <= 0
+        ):
+            raise ValueError("Tamanho de pacote inválido no manifesto")
+        if signature_algorithm is not None and signature_algorithm != "Ed25519":
+            raise ValueError("Algoritmo de assinatura não suportado")
         signature = str(data["signature"])
         try:
             base64.b64decode(signature, validate=True)
         except (ValueError, binascii.Error) as error:
             raise ValueError("Assinatura Base64 inválida") from error
-        return cls(1, version, digest, architecture, package, signature)
+        return cls(
+            1,
+            version,
+            digest,
+            architecture,
+            package,
+            size,
+            signature_algorithm,
+            signature,
+        )
 
     def signed_payload(self) -> bytes:
-        return canonical_manifest_payload(
-            {
-                "schemaVersion": self.schema_version,
-                "version": self.version,
-                "sha256": self.sha256,
-                "architecture": self.architecture,
-                "package": self.package,
-            }
-        )
+        payload = {
+            "schemaVersion": self.schema_version,
+            "version": self.version,
+            "sha256": self.sha256,
+            "architecture": self.architecture,
+            "package": self.package,
+        }
+        if self.size is not None:
+            payload["size"] = self.size
+            payload["signatureAlgorithm"] = self.signature_algorithm
+        return canonical_manifest_payload(payload)
 
 
 def canonical_manifest_payload(data: dict) -> bytes:
@@ -139,7 +165,13 @@ def sha256_file(path, chunk_size=1024 * 1024) -> str:
 
 
 def verify_package(package, manifest: UpdateManifest) -> None:
-    actual = sha256_file(package)
+    package_path = Path(package)
+    if manifest.size is not None and package_path.stat().st_size != manifest.size:
+        raise ValueError(
+            f"Tamanho divergente: esperado={manifest.size} "
+            f"atual={package_path.stat().st_size}"
+        )
+    actual = sha256_file(package_path)
     if actual != manifest.sha256:
         raise ValueError(f"SHA-256 divergente: esperado={manifest.sha256} atual={actual}")
 

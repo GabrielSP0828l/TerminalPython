@@ -1,0 +1,60 @@
+#!/usr/bin/env bash
+set -Eeuo pipefail
+
+umask 027
+
+CONFIG_FILE="${APP247_CONFIG_FILE:-/etc/app247/terminal.env}"
+CURRENT_LINK="${APP247_CURRENT_LINK:-/opt/app247/current}"
+EXECUTABLE="$CURRENT_LINK/app247-terminal"
+
+if [ "$(id -u)" -eq 0 ]; then
+    echo "Erro: execute o launcher como o usuário da sessão gráfica, nunca como root." >&2
+    exit 1
+fi
+if [ ! -r "$CONFIG_FILE" ]; then
+    echo "Erro: configuração ausente ou ilegível: $CONFIG_FILE" >&2
+    exit 1
+fi
+if [ ! -x "$EXECUTABLE" ]; then
+    echo "Erro: release ativa inválida: $EXECUTABLE" >&2
+    exit 1
+fi
+if command -v systemctl >/dev/null 2>&1 && \
+   systemctl is-active --quiet app247-terminal.service 2>/dev/null; then
+    echo "Terminal já está em execução pelo serviço app247-terminal.service."
+    exit 0
+fi
+
+# O binário usa python-dotenv para carregar o arquivo sem executá-lo como shell.
+export APP247_CONFIG_FILE="$CONFIG_FILE"
+
+SESSION_UID="$(id -u)"
+if [ -z "${XDG_RUNTIME_DIR:-}" ]; then
+    RUNTIME_CANDIDATE="/run/user/$SESSION_UID"
+    if [ -d "$RUNTIME_CANDIDATE" ] && [ "$(stat -c '%u' "$RUNTIME_CANDIDATE")" = "$SESSION_UID" ]; then
+        export XDG_RUNTIME_DIR="$RUNTIME_CANDIDATE"
+    fi
+fi
+
+if [ -n "${XDG_RUNTIME_DIR:-}" ]; then
+    if [ ! -d "$XDG_RUNTIME_DIR" ] || [ "$(stat -c '%u' "$XDG_RUNTIME_DIR")" != "$SESSION_UID" ]; then
+        echo "Erro: XDG_RUNTIME_DIR não pertence ao usuário gráfico atual." >&2
+        exit 1
+    fi
+    if [ -z "${WAYLAND_DISPLAY:-}" ]; then
+        for candidate in "$XDG_RUNTIME_DIR"/wayland-*; do
+            if [ -S "$candidate" ] && [ "$(stat -c '%u' "$candidate")" = "$SESSION_UID" ]; then
+                export WAYLAND_DISPLAY="$(basename "$candidate")"
+                export XDG_SESSION_TYPE="wayland"
+                break
+            fi
+        done
+    fi
+fi
+
+if [ -z "${WAYLAND_DISPLAY:-}" ] && [ -z "${DISPLAY:-}" ]; then
+    echo "Erro: nenhuma sessão gráfica Wayland/X11 do usuário atual foi encontrada." >&2
+    exit 1
+fi
+
+exec "$EXECUTABLE"

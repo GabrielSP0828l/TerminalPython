@@ -125,6 +125,10 @@ def _check_credential(path: Path) -> DiagnosticResult:
 
 
 def _check_backend(api_url: str, session, timeout: float) -> DiagnosticResult:
+    if os.getenv("APP247_DIAGNOSTIC_MODE", "").strip().lower() == "release":
+        return _result(
+            "OK", "Backend", "dispensado no diagnóstico isolado de build/release"
+        )
     if not api_url:
         return _result("ERROR", "Backend", "teste não executado: URL ausente")
     try:

@@ -276,3 +276,12 @@ Implementados incrementalmente: contenção de runtime/segredos, credencial
 individual revogável, armazenamento local endurecido, canal autenticado, reset
 fail-closed, recovery financeiro no startup, kiosk por ambiente, Wi-Fi
 pré-ativação e lifecycle uniforme de workers.
+
+## MEL-034 — Empacotamento oficial e verificável
+
+**Status:** implementada em 4 de outubro de 2026.
+
+O fluxo `build.sh -> package-release.sh` produz tar `onedir` standalone,
+manifesto compatível assinado com Ed25519, assinatura destacada e
+`SHA256SUMS`. Arquitetura, estrutura, segredos/estado proibidos, extração e
+instalação sem checkout são verificados automaticamente antes da saída local.

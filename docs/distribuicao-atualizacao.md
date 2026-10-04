@@ -70,3 +70,29 @@ Pendências antes de automação real:
 
 O exemplo systemd está em `packaging/systemd/app247-terminal.service`, usa
 `Restart=always`, `RestartSec=3`, rede online e usuário dedicado configurável.
+
+## Release distribuível
+
+O fluxo oficial local é `build.sh` seguido de
+`package-release.sh <SemVer>`. O empacotador confirma versão interna, diagnóstico
+isolado, arquitetura Debian do host e arquitetura ELF por `file`; copia todo o
+`onedir`; monta uma raiz versionada; cria tar determinístico por commit/
+`SOURCE_DATE_EPOCH`; calcula SHA-256; chama o assinador Ed25519 existente; e
+chama imediatamente `verify-release.sh` antes de mover os quatro resultados
+para `release/`. Artefatos da mesma versão nunca são sobrescritos.
+
+O manifesto schema 1 ganhou `size` e `signatureAlgorithm` opcionais e assinados,
+sem invalidar documentos antigos. A assinatura embutida continua sendo a fonte
+do updater; o `.sig` é a mesma assinatura Base64 destacada para distribuição.
+
+O arquivo compactado contém somente `app/`, `install.sh`, unit, launcher,
+template, chave pública, `VERSION` e `RELEASE_INFO.json`. O verificador rejeita
+`.env`, chaves privadas, banco/identidade/credencial, fontes/testes/caches,
+links que escapem da raiz, arquitetura divergente e instalador acoplado ao
+checkout. A chave privada é lida apenas do path externo informado ao build.
+
+O `install.sh` detecta tanto o checkout legado quanto o pacote standalone. No
+standalone ele lê `VERSION`, usa `app/` e fontes adjacentes, reconhece uma
+release existente somente quando idêntica e instala a chave pública fora de
+`/opt/app247/releases`. Em host novo cria o usuário/grupo `app247`, preserva
+configuração/estado e instala o launcher gráfico sem UID hardcoded.

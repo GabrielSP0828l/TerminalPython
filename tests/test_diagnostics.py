@@ -19,7 +19,37 @@ class FakeSession:
         return FakeResponse()
 
 
+class FailingIfCalledSession:
+    def get(self, url, timeout):
+        raise AssertionError("o diagnóstico de release não deve acessar a rede")
+
+
 class InstallationDiagnosticsTest(unittest.TestCase):
+    def test_release_mode_does_not_require_backend_or_production_credentials(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            with patch.dict(os.environ, {"APP247_DIAGNOSTIC_MODE": "release"}), patch(
+                "app247_terminal.diagnostics.settings.API_URL",
+                "https://release-check.invalid",
+            ), patch(
+                "app247_terminal.diagnostics.settings.WS_URL",
+                "wss://release-check.invalid",
+            ), patch("app247_terminal.diagnostics.settings.IS_PRODUCTION", False), patch(
+                "app247_terminal.diagnostics.settings.DATA_DIR", root
+            ), patch(
+                "app247_terminal.diagnostics.settings.DATABASE_PATH", root / "missing.db"
+            ), patch(
+                "app247_terminal.diagnostics.settings.DEVICE_CREDENTIAL_PATH",
+                root / "missing-credential",
+            ):
+                results = run_diagnostics(
+                    session=FailingIfCalledSession(), current_link=root / "current"
+                )
+
+            self.assertFalse([result for result in results if result.level == "ERROR"])
+            backend = next(result for result in results if result.name == "Backend")
+            self.assertIn("build/release", backend.message)
+
     def test_production_installation_reports_valid_runtime(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
