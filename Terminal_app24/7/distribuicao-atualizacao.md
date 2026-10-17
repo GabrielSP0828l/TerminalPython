@@ -119,6 +119,12 @@ manual das instalações 1.0.0/1.0.1 (`App247 Terminal.desktop`, que chamava o
 launcher fora da unit) é movido para `~/.local/share/app247/legacy-desktop/`,
 evitando dois atalhos; outros arquivos da área de trabalho não são tocados.
 
+Rollback do `--activate`: antes de gravar qualquer arquivo fora de `releases/`,
+o instalador guarda um snapshot temporário de launcher, unit, link de enable,
+política de Wi-Fi, ícone, atalhos e autostart. Se algo falhar depois da troca de
+`current`, esses caminhos voltam ao estado anterior (ou são removidos, se não
+existiam) junto com o symlink, e a unit anterior é recarregada antes do restart.
+
 No `--activate`, o instalador resolve o usuário gráfico por override,
 `SUDO_USER` ou uma única sessão local Wayland/X11 ativa no `loginctl`. A unit
 vai para `$HOME/.config/systemd/user/app247-terminal.service` e seu enable para

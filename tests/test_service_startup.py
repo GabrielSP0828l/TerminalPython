@@ -339,6 +339,44 @@ class InstalledUnitTest(unittest.TestCase):
             self.assertIn("Icon=computer\n", entry.read_text(encoding="utf-8"))
             self.assertIn("logo ausente", activation.stderr)
 
+    def test_failed_activation_restores_files_written_outside_releases(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            desktop_home = root / "home"
+            environment = self._environment(root, desktop_home)
+            environment["APP247_INSTALL_VERSION"] = "9.9.8"
+            first = self._install(environment)
+            self.assertEqual(0, first.returncode, first.stderr)
+
+            launcher = root / "bin/launcher"
+            unit = desktop_home / ".config/systemd/user/app247-terminal.service"
+            wants = unit.parent / "default.target.wants/app247-terminal.service"
+            policy = root / "NetworkManager/conf.d/app247-wifi-powersave.conf"
+            desktop_entry = desktop_home / "Desktop/Terminal 24-7.desktop"
+            launcher.write_text("#!/bin/sh\n# launcher anterior\n", encoding="utf-8")
+            unit.write_text(unit.read_text(encoding="utf-8") + "# unit anterior\n", encoding="utf-8")
+            policy.unlink()
+            before = {
+                path: path.read_bytes() for path in (launcher, unit, desktop_entry)
+            }
+            # Falha depois de launcher/unit já gravados: enable de outra unit.
+            wants.unlink()
+            wants.symlink_to("/usr/lib/systemd/user/outra.service")
+
+            environment["APP247_INSTALL_VERSION"] = "9.9.9"
+            second = self._install(environment)
+
+            self.assertNotEqual(0, second.returncode)
+            self.assertIn("Release anterior restaurada", second.stderr)
+            self.assertIn("anteriores restaurados", second.stderr)
+            self.assertEqual(
+                root / "opt/releases/9.9.8", (root / "opt/current").resolve()
+            )
+            for path, contents in before.items():
+                self.assertEqual(contents, path.read_bytes(), path)
+            self.assertEqual("/usr/lib/systemd/user/outra.service", os.readlink(wants))
+            self.assertFalse(policy.exists())
+
     def test_foreign_enable_link_is_still_rejected(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)

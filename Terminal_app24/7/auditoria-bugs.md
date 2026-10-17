@@ -554,13 +554,13 @@ Falha, instrução e sucesso eram cards e a aprovação apagava a compra após c
 
 ## BUG-055 — Ativação no campo recusava o enable legado e o rollback é parcial
 
-**Status:** recusa corrigida em 17 de outubro de 2026; rollback parcial aberto.
+**Status:** corrigido em 17 de outubro de 2026 (recusa do enable na 1.0.3; rollback completo após a tag `v1.0.3`, entra na próxima release).
 
 - **Severidade:** média
 - **Tipo:** confirmado na primeira instalação da 1.0.3 no Raspberry
 - **Causa:** `enable_user_service_offline` só aceitava `default.target.wants/app247-terminal.service -> ../app247-terminal.service`; o `systemctl --user enable` das instalações 1.0.0/1.0.1 cria link absoluto para a mesma unit. O `--activate` falhou e voltou `current` para 1.0.1.
 - **Correção:** link absoluto para `USER_SERVICE_DESTINATION` é aceito como equivalente; link para outra unit continua recusado (`tests/test_service_startup.py`).
-- **Aberto:** `restore_previous_release` restaura apenas `current`; launcher, unit, política de Wi-Fi e atalho já gravados permanecem. No campo o resultado foi coerente (launcher novo funciona com a 1.0.1), mas o rollback deveria restaurar ou declarar esses arquivos.
+- **Rollback:** antes desta correção, `restore_previous_release` restaurava apenas `current`; launcher, unit, política de Wi-Fi e atalho já gravados permaneciam (no campo o resultado foi coerente, pois o launcher novo funciona com a 1.0.1). Agora o `--activate` faz snapshot de launcher, unit, link de enable, política do NetworkManager, ícone, atalho, atalho legado e autostart antes de gravá-los; qualquer falha após a troca de `current` restaura cada arquivo ou remove o que não existia, e faz `daemon-reload` antes de religar a release anterior. Teste: `test_failed_activation_restores_files_written_outside_releases` (falha com o instalador anterior).
 
 ## BUG-031 — Heartbeat opaco, sem confirmação do backend
 

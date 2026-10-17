@@ -736,7 +736,70 @@ if [ "$ACTIVATE" = "true" ]; then
     ln -s "releases/$VERSION" "$TEMP_LINK"
     mv -Tf "$TEMP_LINK" "$INSTALL_ROOT/current"
 
+    # Snapshot de tudo o que a ativação grava fora de releases/. Uma falha
+    # depois da troca de current restaura estes caminhos, não só o symlink.
+    ROLLBACK_DIR=""
+    ROLLBACK_PATHS=()
+    ROLLBACK_PRESENT=()
+
+    snapshot_activation_files() {
+        local path index=0
+
+        ROLLBACK_DIR="$(mktemp -d "${TMPDIR:-/tmp}/app247-rollback.XXXXXX")" || return 1
+        ROLLBACK_PATHS=(
+            "$LAUNCHER_DESTINATION"
+            "$USER_SERVICE_DESTINATION"
+            "$USER_SYSTEMD_DIR/default.target.wants/$SERVICE_NAME"
+            "$NM_CONF_DIR/app247-wifi-powersave.conf"
+        )
+        if [ "$INSTALL_DESKTOP_INTEGRATION" = "true" ]; then
+            ROLLBACK_PATHS+=(
+                "$ICON_DESTINATION"
+                "$DESKTOP_DIR/Terminal 24-7.desktop"
+                "$DESKTOP_DIR/App247 Terminal.desktop"
+                "$AUTOSTART_DIR/app247-terminal.desktop"
+            )
+        fi
+        ROLLBACK_PRESENT=()
+        for path in "${ROLLBACK_PATHS[@]}"; do
+            if [ -e "$path" ] || [ -L "$path" ]; then
+                cp -a -- "$path" "$ROLLBACK_DIR/$index" || return 1
+                ROLLBACK_PRESENT+=("true")
+            else
+                ROLLBACK_PRESENT+=("false")
+            fi
+            index=$((index + 1))
+        done
+    }
+
+    restore_activation_files() {
+        local index path
+
+        [ -n "$ROLLBACK_DIR" ] || return 0
+        for index in "${!ROLLBACK_PATHS[@]}"; do
+            path="${ROLLBACK_PATHS[$index]}"
+            if [ "${ROLLBACK_PRESENT[$index]}" = "true" ]; then
+                if ! cp -a -- "$ROLLBACK_DIR/$index" "$path.app247-rollback.$$" ||
+                   ! mv -Tf -- "$path.app247-rollback.$$" "$path"; then
+                    rm -f -- "$path.app247-rollback.$$"
+                    echo "Aviso: não foi possível restaurar $path" >&2
+                fi
+            elif [ -f "$path" ] || [ -L "$path" ]; then
+                rm -f -- "$path"
+            fi
+        done
+        rm -rf -- "$ROLLBACK_DIR"
+        ROLLBACK_DIR=""
+        echo "Launcher, unit, atalhos e política de Wi-Fi anteriores restaurados." >&2
+    }
+
+    discard_activation_snapshot() {
+        [ -n "$ROLLBACK_DIR" ] && rm -rf -- "$ROLLBACK_DIR"
+        ROLLBACK_DIR=""
+    }
+
     restore_previous_release() {
+        restore_activation_files
         if [ -n "$PREVIOUS" ]; then
             ROLLBACK_LINK="$INSTALL_ROOT/.rollback-$VERSION-$$"
             ln -s "$PREVIOUS" "$ROLLBACK_LINK"
@@ -769,8 +832,18 @@ if [ "$ACTIVATE" = "true" ]; then
         exit "$CHECK_STATUS"
     fi
 
-    install -d -m 0755 "$(dirname -- "$LAUNCHER_DESTINATION")"
-    install -m 0755 "$LAUNCHER_SOURCE" "$LAUNCHER_DESTINATION"
+    if ! snapshot_activation_files; then
+        echo "Erro: não foi possível registrar o estado anterior para rollback." >&2
+        discard_activation_snapshot
+        restore_previous_release
+        exit 1
+    fi
+    if ! install -d -m 0755 "$(dirname -- "$LAUNCHER_DESTINATION")" ||
+       ! install -m 0755 "$LAUNCHER_SOURCE" "$LAUNCHER_DESTINATION"; then
+        echo "Erro: não foi possível instalar o launcher gráfico." >&2
+        restore_previous_release
+        exit 1
+    fi
     install_wifi_powersave_policy
     if ! install_user_service || ! enable_user_service_offline; then
         echo "Erro: não foi possível instalar/habilitar a unit gráfica do usuário." >&2
@@ -803,6 +876,7 @@ if [ "$ACTIVATE" = "true" ]; then
                 run_user_systemctl status "$SERVICE_NAME" --no-pager >&2 || true
                 restore_previous_release
                 if [ -n "$PREVIOUS" ]; then
+                    run_user_systemctl daemon-reload || true
                     run_user_systemctl restart "$SERVICE_NAME" || true
                 fi
                 exit 1
@@ -814,6 +888,7 @@ if [ "$ACTIVATE" = "true" ]; then
     else
         echo "Unit gráfica instalada sem operar systemd --user: $USER_SERVICE_DESTINATION"
     fi
+    discard_activation_snapshot
     echo "Release ativada e diagnóstico concluído: $RELEASE_DIR"
 else
     echo "Release preparada. Edite $CONFIG_FILE e execute novamente com --activate."
