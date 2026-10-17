@@ -9,6 +9,7 @@ from PyQt5.QtWidgets import (
 )
 
 from app247_terminal.models.terminal import Terminal
+from app247_terminal.ui.responsive import follow_layout_profile
 from app247_terminal.services.purchase_api import PurchaseApi, PurchaseApiError, ReceiptSendWorker
 from app247_terminal.ui.styles.svg_icons import ColoredSvgLabel
 from app247_terminal.ui.styles.theme import Theme
@@ -43,6 +44,7 @@ class ConfirmacaoScreen(QWidget):
         self.input_page = self._build_input_page()
         self.notice_page = self._build_notice_page()
         self.pages.addWidget(self.success_page)
+        follow_layout_profile(self._apply_compact_success)
         self.pages.addWidget(self.input_page)
         self.pages.addWidget(self.notice_page)
         self.post_timeout_timer = QTimer(self)
@@ -106,12 +108,27 @@ class ConfirmacaoScreen(QWidget):
         self.btn_whatsapp.clicked.connect(
             lambda: self._open_receipt_input("WHATSAPP")
         )
-        actions.addWidget(self.btn_finalizar, 0, 0)
-        actions.addWidget(self.btn_cpf, 0, 1)
-        actions.addWidget(self.btn_whatsapp, 1, 0)
-        actions.addWidget(self.btn_email, 1, 1)
+        self.success_actions = actions
         root.addLayout(actions)
+        follow_layout_profile(self._apply_compact)
         return page
+
+    def _apply_compact(self, compact):
+        """Grade 2×2 em paisagem; coluna única no display em pé (600 px)."""
+        if compact:
+            positions = (
+                (self.btn_finalizar, 0, 0), (self.btn_whatsapp, 1, 0),
+                (self.btn_email, 2, 0), (self.btn_cpf, 3, 0),
+            )
+        else:
+            positions = (
+                (self.btn_finalizar, 0, 0), (self.btn_cpf, 0, 1),
+                (self.btn_whatsapp, 1, 0), (self.btn_email, 1, 1),
+            )
+        for button, _row, _column in positions:
+            self.success_actions.removeWidget(button)
+        for button, row, column in positions:
+            self.success_actions.addWidget(button, row, column)
 
     def _build_input_page(self):
         page = QWidget(self)
@@ -426,9 +443,8 @@ class ConfirmacaoScreen(QWidget):
                 and self.pages.currentWidget() is not self.input_page:
             self.finalizar_e_voltar()
 
-    def resizeEvent(self, event):
-        super().resizeEvent(event)
-        if self.height() > self.width():
+    def _apply_compact_success(self, compact):
+        if compact:
             self.success_page.layout().setContentsMargins(
                 Spacing.XXXL, Spacing.XXL, Spacing.XXXL, Spacing.XXL
             )

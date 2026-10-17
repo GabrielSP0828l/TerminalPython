@@ -15,6 +15,7 @@ from PyQt5.QtWidgets import (
 )
 
 from app247_terminal.models.terminal import Terminal
+from app247_terminal.ui.responsive import layout_profile
 from app247_terminal.models.purchase_session import CompraSession
 from app247_terminal.repositories.active_payment_repository import ActivePaymentStore
 from app247_terminal.services.sync_service import SyncService
@@ -754,6 +755,8 @@ class MainWindow(QMainWindow):
         QTimer.singleShot(250, self._refresh_display_geometry)
 
     def _refresh_display_geometry(self):
+        # Reavalia retrato/paisagem caso o compositor ainda não tenha avisado.
+        layout_profile.refresh()
         if IS_PRODUCTION:
             self.showFullScreen()
         else:

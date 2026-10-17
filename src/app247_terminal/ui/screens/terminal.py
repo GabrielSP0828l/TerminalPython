@@ -4,6 +4,7 @@ from decimal import Decimal
 from PyQt5.QtCore import Qt, QTimer
 from PyQt5.QtGui import QFontMetrics
 from PyQt5.QtWidgets import (
+    QBoxLayout,
     QFrame,
     QGridLayout,
     QHBoxLayout,
@@ -20,6 +21,7 @@ from app247_terminal.services.payment_listener import PaymentListener
 from app247_terminal.models.cart import Carrinho
 from app247_terminal.models.item import Item
 from app247_terminal.models.product import Produtos
+from app247_terminal.ui.responsive import follow_layout_profile
 from app247_terminal.ui.styles.theme import Theme
 from app247_terminal.ui.styles.tokens import Spacing, TouchSize
 from app247_terminal.ui.screens.session_timer import SessionTimerLabel
@@ -254,7 +256,8 @@ class TerminalScreen(QWidget):
 
         self.footer_card = QFrame(self)
         self.footer_card.setObjectName("cartFooter")
-        footer = QHBoxLayout(self.footer_card)
+        footer = QBoxLayout(QBoxLayout.LeftToRight, self.footer_card)
+        self.footer_layout = footer
         footer.setContentsMargins(Spacing.LG, Spacing.SM, Spacing.LG, Spacing.MD)
         footer.setSpacing(Spacing.MD)
 
@@ -280,16 +283,26 @@ class TerminalScreen(QWidget):
 
         actions.addWidget(self.btn_cancelar, 1)
         actions.addWidget(self.btn_finalizar, 2)
-        footer.addWidget(total_label)
-        footer.addWidget(self.totalBox)
-        footer.addStretch(1)
+        total_row = QHBoxLayout()
+        total_row.setSpacing(Spacing.MD)
+        total_row.addWidget(total_label)
+        total_row.addWidget(self.totalBox)
+        total_row.addStretch(1)
+        footer.addLayout(total_row, 1)
         footer.addLayout(actions, 2)
+        follow_layout_profile(self._apply_compact_footer)
 
         root.addWidget(self.header_card)
         root.addWidget(self.scroll, 1)
         root.addWidget(self.customer_status)
         root.addLayout(scanner_layout)
         root.addWidget(self.footer_card)
+
+    def _apply_compact_footer(self, compact):
+        """Em pé (600 px) o total fica acima das ações em vez de ao lado."""
+        self.footer_layout.setDirection(
+            QBoxLayout.TopToBottom if compact else QBoxLayout.LeftToRight
+        )
 
     def atualizar_interface(self):
         self.totalBox.setText(self.carrinho.total_formatado().replace(".", ","))

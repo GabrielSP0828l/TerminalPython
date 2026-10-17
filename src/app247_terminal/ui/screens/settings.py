@@ -13,6 +13,7 @@ from PyQt5.QtWidgets import (
 
 from app247_terminal.services.factory_reset import FactoryResetService
 from app247_terminal.services.terminal_lifecycle import TerminalResetPolicy
+from app247_terminal.ui.responsive import follow_layout_profile
 from app247_terminal.ui.styles.theme import Theme
 from app247_terminal.ui.styles.tokens import Spacing
 from app247_terminal.ui.screens.display import DisplayScreen
@@ -65,6 +66,7 @@ class ConfiguracaoScreen(QWidget):
         title = QLabel("CONFIGURAÇÕES DO TERMINAL")
         title.setProperty("role", "pageTitle")
         title.setAlignment(Qt.AlignCenter)
+        self.menu_title = title
 
         subtitle = QLabel(
             "Área local de manutenção. As configurações do backend e do Mercado Pago não são alteradas aqui."
@@ -103,6 +105,11 @@ class ConfiguracaoScreen(QWidget):
         layout.addWidget(self.close_terminal_button)
         layout.addWidget(self.back_button)
         menu_root.addWidget(card)
+        follow_layout_profile(self._apply_compact)
+
+    def _apply_compact(self, compact):
+        # Em paisagem o título cabe em uma linha; em pé (600 px) quebra.
+        self.menu_title.setWordWrap(compact)
 
     def entrar(self, return_widget):
         self._authenticated = True

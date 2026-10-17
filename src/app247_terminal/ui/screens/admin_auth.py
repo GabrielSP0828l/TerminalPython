@@ -2,6 +2,7 @@ import hmac
 
 from PyQt5.QtCore import Qt
 from PyQt5.QtWidgets import (
+    QBoxLayout,
     QFrame,
     QLabel,
     QLineEdit,
@@ -11,6 +12,7 @@ from PyQt5.QtWidgets import (
 )
 
 from app247_terminal.config.settings import TERMINAL_ADMIN_PASSWORD
+from app247_terminal.ui.responsive import follow_layout_profile
 from app247_terminal.ui.styles.theme import Theme
 from app247_terminal.ui.styles.tokens import Spacing, TouchSize
 from app247_terminal.ui.screens.keyboard import VirtualKeyboard
@@ -34,12 +36,14 @@ class AdminAuthScreen(QWidget):
         self.setStyleSheet(Theme.admin_stylesheet())
 
         root = QVBoxLayout(self)
+        self.root_layout = root
         root.setContentsMargins(Spacing.XL, Spacing.XL, Spacing.XL, Spacing.XL)
         root.setSpacing(Spacing.LG)
 
         card = QFrame(self)
         card.setObjectName("adminAuthCard")
         card_layout = QVBoxLayout(card)
+        self.card_layout = card_layout
         card_layout.setContentsMargins(
             Spacing.XXL, Spacing.XL, Spacing.XXL, Spacing.XL
         )
@@ -81,10 +85,42 @@ class AdminAuthScreen(QWidget):
         cancel_button.setProperty("variant", "secondary")
         cancel_button.clicked.connect(self.cancelar)
 
+        self.actions_layout = QBoxLayout(QBoxLayout.TopToBottom)
+        self.actions_layout.setSpacing(Spacing.MD)
+        self.actions_layout.addWidget(self.enter_button, 2)
+        self.actions_layout.addWidget(cancel_button, 1)
+
         root.addWidget(card)
         root.addWidget(self.keyboard, 1)
-        root.addWidget(self.enter_button)
-        root.addWidget(cancel_button)
+        root.addLayout(self.actions_layout)
+        follow_layout_profile(self._apply_compact)
+
+    def _apply_compact(self, compact):
+        """Em pé há altura de sobra; deitado tudo precisa caber em 600 px."""
+        if compact:
+            self.root_layout.setContentsMargins(
+                Spacing.XL, Spacing.XL, Spacing.XL, Spacing.XL
+            )
+            self.root_layout.setSpacing(Spacing.LG)
+            self.card_layout.setContentsMargins(
+                Spacing.XXL, Spacing.XL, Spacing.XXL, Spacing.XL
+            )
+            self.card_layout.setSpacing(Spacing.MD)
+            self.actions_layout.setDirection(QBoxLayout.TopToBottom)
+        else:
+            self.root_layout.setContentsMargins(
+                Spacing.XL, Spacing.LG, Spacing.XL, Spacing.LG
+            )
+            self.root_layout.setSpacing(Spacing.SM)
+            self.card_layout.setContentsMargins(
+                Spacing.XL, Spacing.MD, Spacing.XL, Spacing.MD
+            )
+            self.card_layout.setSpacing(Spacing.SM)
+            # CANCELAR à esquerda, ENTRAR à direita, como no TecladoScreen.
+            self.actions_layout.setDirection(QBoxLayout.RightToLeft)
+        self.status_label.setProperty("dense", not compact)
+        self.status_label.style().unpolish(self.status_label)
+        self.status_label.style().polish(self.status_label)
 
     def iniciar(self, return_widget):
         self._return_widget = return_widget

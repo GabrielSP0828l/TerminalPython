@@ -1,6 +1,7 @@
 from PyQt5.QtCore import Qt
 from PyQt5.QtWidgets import QHBoxLayout, QLabel, QVBoxLayout, QWidget
 
+from app247_terminal.ui.responsive import follow_layout_profile
 from app247_terminal.ui.styles.svg_icons import ColoredSvgLabel
 from app247_terminal.ui.styles.tokens import Colors, Spacing
 
@@ -61,6 +62,7 @@ class PaymentStateWidget(QWidget):
         self.action_layout = QVBoxLayout()
         self.action_layout.setSpacing(Spacing.MD)
         self.layout_root.addLayout(self.action_layout)
+        follow_layout_profile(self._apply_compact)
 
     def set_message(self, message):
         self.message.setText(message)
@@ -68,9 +70,10 @@ class PaymentStateWidget(QWidget):
     def set_timer_widget(self, widget):
         self.header_layout.addWidget(widget)
 
-    def resizeEvent(self, event):
-        super().resizeEvent(event)
-        if self.height() > self.width():
+    def _apply_compact(self, compact):
+        # Decide pela tela, não pelo widget: com as margens de retrato o
+        # mínimo passa de 600 px e a janela deitada estoura antes do resize.
+        if compact:
             self.layout_root.setContentsMargins(
                 Spacing.XXXL, Spacing.XXXL, Spacing.XXXL, Spacing.XXXL
             )

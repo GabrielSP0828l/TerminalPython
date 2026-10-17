@@ -4,7 +4,18 @@ Voltar para [[00-index]]. Fluxo funcional em [[fluxo-compra]] e limites de integ
 
 ## Display de referência
 
-A interface operacional é validada prioritariamente no display físico de 7 polegadas, em `1024×600`. A janela continua fullscreen e as páginas permanecem no `QStackedWidget`; nenhuma tela de compra abre janela separada.
+A interface operacional é validada prioritariamente no display físico de 7 polegadas, `1024×600` nativo. No campo ele fica **em pé** (área lógica `600×1024`) na porta HDMI 2. A janela continua fullscreen e as páginas permanecem no `QStackedWidget`; nenhuma tela de compra abre janela separada.
+
+Toda tela precisa caber nas duas áreas. `ui/responsive.py` define o perfil compacto quando a largura lógica da tela é menor que 760 px e o reaplica quando a orientação muda. No perfil compacto:
+
+- teclado virtual: `ESPAÇO` e `LIMPAR` ficam em linha própria; teclas têm 44 px mínimos de largura e 64 px de altura;
+- carrinho: 2 colunas de cards (cálculo existente pelo viewport) e rodapé com `TOTAL` acima de `CANCELAR COMPRA`/`FINALIZAR`;
+- comprovante: `FINALIZAR`, WhatsApp, e-mail e CPF em coluna única;
+- títulos de login e configurações quebram linha.
+
+Fora do perfil compacto (deitado, 600 px de altura): teclas do teclado virtual com 52 px de altura; acesso admin com margens menores e `CANCELAR`/`ENTRAR` lado a lado; estados de pagamento e comprovante com margens de paisagem desde a construção.
+
+Medição offscreen (DejaVu Sans): em `600×1024` nenhuma tela passa de 584 px de largura mínima; em `1024×600` nenhuma passa de 578 px de altura mínima. Gate: `tests/test_portrait_screens.py`, nas duas orientações.
 
 ## Administração, Wi-Fi e display
 

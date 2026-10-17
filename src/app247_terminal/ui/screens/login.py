@@ -3,6 +3,7 @@ from PyQt5.QtCore import Qt
 import requests
 
 from app247_terminal.config.settings import API_URL
+from app247_terminal.ui.responsive import follow_layout_profile
 from app247_terminal.ui.styles.theme import Theme
 from app247_terminal.ui.styles.tokens import Spacing
 
@@ -28,6 +29,7 @@ class LoginScreen(QWidget):
         title = QLabel("Como deseja continuar?")
         title.setProperty("role", "pageTitle")
         title.setAlignment(Qt.AlignCenter)
+        self.title = title
 
         btn_identificar = QPushButton("IDENTIFICAR-SE (CPF)")
         btn_identificar.setProperty("variant", "primary")
@@ -47,6 +49,11 @@ class LoginScreen(QWidget):
         root.addStretch()
         root.addWidget(card, alignment=Qt.AlignCenter)
         root.addStretch()
+        follow_layout_profile(self._apply_compact)
+
+    def _apply_compact(self, compact):
+        # Em paisagem o título cabe em uma linha; em pé (600 px) quebra.
+        self.title.setWordWrap(compact)
 
     def continuar_anonimo(self):
         url = f"{API_URL}/usuarios/anonimo"

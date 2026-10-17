@@ -23,4 +23,6 @@ Compra ou pagamento ativo bloqueia a mudança. Após sucesso, `MainWindow` reapl
 
 A escolha é gravada atomicamente em `APP247_DISPLAY_ORIENTATION_PATH` (padrão `data/display_orientation`). `start.sh` chama `python -m app247_terminal.services.display_service --apply-saved` antes de `main.py`; erro gera aviso e não impede o Terminal de iniciar. `DISPLAY_ORIENTATION` pode sobrescrever uma execução.
 
+Em campo o display é `1024×600` montado em pé, na porta HDMI 2 (`HDMI-A-2`). A resolução deve permanecer no modo nativo `1024×600`: modos maiores reduzem a imagem no painel e deixam o texto ilegível. Os layouts seguem a orientação pela geometria da tela (ver [[telas]] e BUG-056 em [[auditoria-bugs]]); após aplicar a orientação, `MainWindow` também reavalia o perfil de layout.
+
 O host auditado era Wayland/GNOME sem `wlr-randr`, e o serviço recusou corretamente o `xrandr` virtual. Testes simulam `HDMI-A-2`, 90/normal, X11, ferramenta ausente, timeout e reapply no boot. No Raspberry/labwc ainda é obrigatório validar output real, sentido 90/270, geometria Qt, calibração touch e reboot.

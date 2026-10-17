@@ -117,6 +117,7 @@ class PagamentoScreen(QWidget):
         self.title = QLabel("PREPARANDO PAGAMENTO")
         self.title.setObjectName("paymentTitle")
         self.title.setAlignment(Qt.AlignCenter)
+        self.title.setWordWrap(True)
         self.total_final = QLabel("R$ 0,00")
         self.total_final.hide()
         self.loading = QLabel("Preparando pagamento...")

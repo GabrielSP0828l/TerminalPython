@@ -199,6 +199,7 @@ class Theme:
                 border: 1px solid {Colors.BORDER};
                 border-radius: {Radius.CARD}px;
             }}
+            QFrame#cartFooter QPushButton {{ padding: 0 {Spacing.MD}px; }}
             QLabel#cartTotalLabel {{
                 color: {Colors.TEXT_SECONDARY}; font-size: {FontSize.LABEL}px;
                 font-weight: {FontWeight.BOLD};
@@ -323,6 +324,7 @@ class Theme:
                 background-color: {Colors.SURFACE}; border: 1px solid {Colors.BORDER};
                 border-radius: {Radius.CARD}px;
             }}
+            QFrame#settingsCard QPushButton {{ padding: 0 {Spacing.SM}px; }}
         """
 
     @classmethod
@@ -381,6 +383,7 @@ class Theme:
                 font-size: {FontSize.BODY}px;
                 font-weight: {FontWeight.MEDIUM};
             }}
+            QLabel#adminAuthStatus[dense="true"] {{ min-height: 30px; }}
             QLabel#adminAuthStatus[state="error"] {{ color: {Colors.ERROR}; }}
         """
 
@@ -392,10 +395,11 @@ class Theme:
                 border-radius: {Radius.CARD}px;
             }}
             QPushButton[key="true"] {{
-                min-height: 64px; min-width: 56px; padding: 0 {Spacing.SM}px;
+                min-height: 64px; min-width: 34px; padding: 0 {Spacing.XS}px;
                 background-color: {Colors.SURFACE_ELEVATED}; color: {Colors.TEXT_PRIMARY};
                 border: 1px solid {Colors.BORDER}; font-size: {FontSize.BODY}px;
             }}
+            QPushButton[key="true"][dense="true"] {{ min-height: 52px; }}
             QPushButton[key="true"]:pressed {{ background-color: {Colors.PRIMARY_PRESSED}; }}
             QPushButton[keyType="special"] {{ color: {Colors.TEXT_SECONDARY}; border-color: {Colors.PRIMARY}; }}
         """
@@ -608,7 +612,7 @@ class Theme:
             }}
             QWidget#receiptInputPage QPushButton[key="true"] {{
                 min-height: 48px;
-                min-width: 48px;
+                min-width: 34px;
                 padding: 0 {Spacing.XS}px;
                 font-size: {FontSize.SMALL}px;
             }}

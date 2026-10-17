@@ -40,6 +40,12 @@ class TelaBemVindos(QWidget):
 
         logo_pixmap = QPixmap(str(image_path("logo.png")))
         self.logo_pixmap_original = logo_pixmap
+        # Nunca exibe o PNG no tamanho original: ele impõe largura mínima
+        # maior que o display e a janela fullscreen estoura antes do resize.
+        if not logo_pixmap.isNull():
+            logo_pixmap = logo_pixmap.scaled(
+                160, 160, Qt.KeepAspectRatio, Qt.SmoothTransformation
+            )
         self.atualizar_logo(logo_pixmap)
 
         titulo = QLabel("BEM VINDO")

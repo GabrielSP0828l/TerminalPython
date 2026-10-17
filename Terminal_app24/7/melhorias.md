@@ -356,3 +356,12 @@ separa `OK`, `WARN` e `ERROR` e usa exit code para bloquear ativações inválid
 - logs persistentes e rotativos sem segredos (BUG-050);
 - reinício automático de heartbeat/listener ao voltar a `OPERATIONAL` (BUG-048).
 
+
+## MEL-038 — Layout responsivo à orientação do display
+
+**Status:** implementado em 17 de outubro de 2026; corrige BUG-056 ([[auditoria-bugs]]).
+
+- perfil compacto por largura lógica da tela (`ui/responsive.py`), não por tamanho de widget;
+- widgets que mudam de arranjo assinam `follow_layout_profile` com método próprio (desconexão automática ao destruir);
+- novas telas devem caber em `600×1024` e em `1024×600`; `tests/test_portrait_screens.py` é o gate;
+- telas com teclado e estados de pagamento também cabem em `1024×600` deitado (gate de paisagem no mesmo teste).

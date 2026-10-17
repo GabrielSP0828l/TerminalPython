@@ -9,6 +9,7 @@ from PyQt5.QtWidgets import (
     QWidget,
 )
 
+from app247_terminal.ui.responsive import follow_layout_profile
 from app247_terminal.ui.styles.theme import Theme
 from app247_terminal.ui.styles.tokens import Spacing
 
@@ -36,11 +37,13 @@ class VirtualKeyboard(QWidget):
         self._uppercase = True
         self._symbol_mode = False
         self._key_buttons = []
+        self._wrap_buttons = []
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(Spacing.SM)
 
-        for row in self.ALPHA_ROWS:
+        last_row = len(self.ALPHA_ROWS) - 1
+        for row_index, row in enumerate(self.ALPHA_ROWS):
             row_layout = QHBoxLayout()
             row_layout.setSpacing(Spacing.SM)
             for key in row:
@@ -52,10 +55,40 @@ class VirtualKeyboard(QWidget):
                     lambda checked=False, target=button: self.process_key(target.text())
                 )
                 self._key_buttons.append(button)
-                row_layout.addWidget(
-                    button, 2 if key in {"abc", "ESPAÇO", "LIMPAR", "⌫"} else 1
-                )
+                if row_index == last_row and key in self.WRAP_KEYS:
+                    self._wrap_buttons.append(button)
+                row_layout.addWidget(button, self._key_stretch(key))
             layout.addLayout(row_layout)
+        self._last_row_layout = row_layout
+        # Em retrato (600 px) a última linha não cabe: as teclas largas
+        # descem para uma linha própria.
+        self._wrap_row_layout = QHBoxLayout()
+        self._wrap_row_layout.setSpacing(Spacing.SM)
+        layout.addLayout(self._wrap_row_layout)
+        follow_layout_profile(self._apply_compact)
+
+    WRAP_KEYS = frozenset({"ESPAÇO", "LIMPAR"})
+
+    @staticmethod
+    def _key_stretch(key):
+        return 2 if key in {"abc", "#+=", "ESPAÇO", "LIMPAR", "⌫"} else 1
+
+    def _apply_compact(self, compact):
+        # Deitado (600 px de altura) as teclas ficam mais baixas; em pé há
+        # altura de sobra e as teclas largas descem para linha própria.
+        for button in self._key_buttons:
+            button.setProperty("dense", not compact)
+            button.style().unpolish(button)
+            button.style().polish(button)
+        target = self._wrap_row_layout if compact else self._last_row_layout
+        for button in self._wrap_buttons:
+            if target.indexOf(button) >= 0:
+                continue
+            if compact:
+                self._last_row_layout.removeWidget(button)
+            else:
+                self._wrap_row_layout.removeWidget(button)
+            target.addWidget(button, 2)
 
     def set_target(self, input_field):
         self.target_input = input_field

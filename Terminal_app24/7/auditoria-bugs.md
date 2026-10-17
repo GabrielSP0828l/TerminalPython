@@ -565,6 +565,19 @@ Falha, instrução e sucesso eram cards e a aprovação apagava a compra após c
 - **Correção:** link absoluto para `USER_SERVICE_DESTINATION` é aceito como equivalente; link para outra unit continua recusado (`tests/test_service_startup.py`).
 - **Rollback:** antes desta correção, `restore_previous_release` restaurava apenas `current`; launcher, unit, política de Wi-Fi e atalho já gravados permaneciam (no campo o resultado foi coerente, pois o launcher novo funciona com a 1.0.1). Agora o `--activate` faz snapshot de launcher, unit, link de enable, política do NetworkManager, ícone, atalho, atalho legado e autostart antes de gravá-los; qualquer falha após a troca de `current` restaura cada arquivo ou remove o que não existia, e faz `daemon-reload` antes de religar a release anterior. Teste: `test_failed_activation_restores_files_written_outside_releases` (falha com o instalador anterior).
 
+## BUG-056 — Telas cortadas no display montado em pé
+
+**Status:** corrigido em 17 de outubro de 2026 (entra na próxima release). Validação no Raspberry pendente.
+
+- **Severidade:** alta (cliente não consegue ler nem tocar ações cortadas)
+- **Tipo:** confirmado pelo operador no campo e por medição offscreen
+- **Ambiente:** display 7" `1024×600` nativo montado em pé (área lógica `600×1024`), na porta HDMI 2 (`HDMI-A-2`).
+- **Sintoma:** em `1024×600` rotacionado a interface ficava cortada; em modos maiores (ex.: 1080p) tudo cabia, mas o painel reduzia a imagem e o texto ficava ilegível.
+- **Causa:** layouts com largura mínima acima de 600 px — teclado virtual (894), autenticação admin (942), configurações (926), carrinho (871), comprovante (766), pagamento (631), login (628), confirmação da compra (686) e o logo do Bem-vindo exibido no tamanho original (1138) até o primeiro resize. A janela fullscreen não encolhe abaixo do mínimo dos layouts. O teste de retrato existente usava `768×1360` e não incluía carrinho nem confirmação da compra.
+- **Correção:** `ui/responsive.py` deriva o perfil compacto da largura lógica da tela (< 760 px) e reaplica quando a geometria muda (orientação pelo painel). Em retrato: `ESPAÇO`/`LIMPAR` descem para uma linha própria no teclado, o rodapé do carrinho empilha total sobre ações, as ações do comprovante viram coluna única e os títulos de login/configurações quebram linha. Ajustes neutros em paisagem: largura mínima real das teclas 44 px, padding lateral menor em botões que já ocupam a largura toda, logo inicial em 240 px, títulos de pagamento e confirmação com quebra. Paisagem permanece visualmente igual.
+- **Paisagem (pré-existente, mesma causa):** `AdminAuthScreen` (altura mínima 798, teclas sobrepostas), `TecladoScreen` (616) e `PagamentoScreen` (606) excediam 600 px de altura em `1024×600` deitado. `PaymentStateWidget` e `ConfirmacaoScreen` escolhiam margens por `height() > width()` do próprio widget, então abriam com margens de retrato e o mínimo estourava antes do primeiro resize. Correção: ambos seguem o perfil da tela; deitado, teclas do teclado virtual têm 52 px de altura (em pé continuam 64), e o acesso admin usa margens menores, status de 30 px e `CANCELAR`/`ENTRAR` lado a lado. Maior altura mínima deitado: 578 px (admin).
+- **Testes:** `tests/test_portrait_screens.py` valida as 11 telas em `600×1024` e em `1024×600`, incluindo carrinho e confirmação da compra; falha se o mínimo de qualquer tela exceder o display ou se botão sair da área, e cobre a troca de perfil.
+
 ## BUG-031 — Heartbeat opaco, sem confirmação do backend
 
 **Status:** corrigido em 24 de agosto de 2026.
