@@ -125,6 +125,11 @@ política de Wi-Fi, ícone, atalhos e autostart. Se algo falhar depois da troca 
 `current`, esses caminhos voltam ao estado anterior (ou são removidos, se não
 existiam) junto com o symlink, e a unit anterior é recarregada antes do restart.
 
+`systemctl --user stop`, reboot e `poweroff` enviam `SIGTERM`: o Terminal faz o
+mesmo encerramento cooperativo do painel administrativo dentro de
+`APP247_SHUTDOWN_BUDGET_SECONDS` (padrão 20 s, abaixo de `TimeoutStopSec=30`) e
+sai com código 0, sem reinício pelo `Restart=on-failure` (BUG-047).
+
 No `--activate`, o instalador resolve o usuário gráfico por override,
 `SUDO_USER` ou uma única sessão local Wayland/X11 ativa no `loginctl`. A unit
 vai para `$HOME/.config/systemd/user/app247-terminal.service` e seu enable para

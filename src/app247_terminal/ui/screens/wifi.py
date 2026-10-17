@@ -17,6 +17,7 @@ from app247_terminal.ui.styles.animated_svg import AnimatedSvgWidget
 from app247_terminal.ui.styles.theme import Theme
 from app247_terminal.ui.styles.tokens import Colors, Spacing
 from app247_terminal.ui.screens.keyboard import VirtualKeyboard
+from app247_terminal.services import shutdown_budget
 
 
 class WifiScreen(QWidget):
@@ -509,7 +510,7 @@ class WifiScreen(QWidget):
             if wait:
                 # subprocess.run não é interrompido pelo flag do QThread; a
                 # espera acompanha o timeout máximo e continua sendo limitada.
-                self.worker.wait(20000)
+                self.worker.wait(shutdown_budget.wait_ms(20000))
         if self.worker is not None and not self.worker.isRunning():
             worker, self.worker = self.worker, None
             worker.deleteLater()

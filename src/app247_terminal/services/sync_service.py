@@ -18,6 +18,7 @@ from app247_terminal.repositories.product_repository import DatabaseProdutos
 from app247_terminal.models.product import Produtos
 from app247_terminal.models.terminal import Terminal
 from app247_terminal.services.backend_client import BackendClient, BackendHttpError
+from app247_terminal.services import shutdown_budget
 
 
 logger = logging.getLogger(__name__)
@@ -406,6 +407,6 @@ class SyncService:
         scheduler = self._scheduler_thread
         worker = self._worker_thread
         if scheduler and scheduler.is_alive():
-            scheduler.join(timeout=2)
+            scheduler.join(timeout=shutdown_budget.wait_seconds(2))
         if worker and worker.is_alive():
-            worker.join(timeout=2)
+            worker.join(timeout=shutdown_budget.wait_seconds(2))

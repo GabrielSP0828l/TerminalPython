@@ -8,6 +8,7 @@ from app247_terminal.config.settings import WS_URL
 from app247_terminal.models.terminal import Terminal
 from app247_terminal.services.terminal_auth import terminal_auth_headers
 from app247_terminal.services.backend_client import terminal_access_state
+from app247_terminal.services import shutdown_budget
 
 
 class PaymentListener(QThread):
@@ -132,4 +133,4 @@ class PaymentListener(QThread):
                 self.ws.close()
             except Exception:
                 pass
-        self.wait(6000)
+        self.wait(shutdown_budget.wait_ms(6000))

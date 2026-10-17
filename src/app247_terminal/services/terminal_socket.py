@@ -14,6 +14,7 @@ from app247_terminal.config.settings import (
 from app247_terminal.models.terminal import Terminal
 from app247_terminal.services.terminal_auth import terminal_auth_headers
 from app247_terminal.services.backend_client import terminal_access_state
+from app247_terminal.services import shutdown_budget
 
 
 logger = logging.getLogger(__name__)
@@ -145,4 +146,4 @@ class TerminalSocket:
             self.connection_state = "DISCONNECTED"
         self._close_socket()
         if self._thread and self._thread.is_alive():
-            self._thread.join(timeout=2)
+            self._thread.join(timeout=shutdown_budget.wait_seconds(2))

@@ -15,6 +15,7 @@ from app247_terminal.ui.styles.theme import Theme
 from app247_terminal.ui.styles.tokens import Colors, Spacing
 from app247_terminal.models.money import format_brl
 from app247_terminal.ui.screens.keyboard import EmailKeyboard, NumericKeyboard
+from app247_terminal.services import shutdown_budget
 
 
 logger = logging.getLogger(__name__)
@@ -406,7 +407,7 @@ class ConfirmacaoScreen(QWidget):
         worker = self.receipt_worker
         if worker is not None and hasattr(worker, "isRunning") and worker.isRunning():
             worker.requestInterruption()
-            worker.wait(50000)
+            worker.wait(shutdown_budget.wait_ms(50000))
         if (worker is not None and hasattr(worker, "isRunning")
                 and not worker.isRunning()):
             if self.receipt_worker is worker:

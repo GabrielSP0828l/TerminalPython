@@ -5,6 +5,7 @@ from PyQt5.QtWidgets import QFrame, QLabel, QPushButton, QVBoxLayout, QWidget
 from app247_terminal.services.purchase_api import AppCheckoutWorker
 from app247_terminal.ui.styles.theme import Theme
 from app247_terminal.ui.styles.tokens import Spacing
+from app247_terminal.services import shutdown_budget
 
 
 class AppPaymentScreen(QWidget):
@@ -118,7 +119,7 @@ class AppPaymentScreen(QWidget):
         self.qr_label.clear()
         if self.checkout_worker is not None and self.checkout_worker.isRunning():
             self.checkout_worker.requestInterruption()
-            self.checkout_worker.wait(25000)
+            self.checkout_worker.wait(shutdown_budget.wait_ms(25000))
         if self.checkout_worker is not None and not self.checkout_worker.isRunning():
             worker, self.checkout_worker = self.checkout_worker, None
             worker.deleteLater()

@@ -20,5 +20,18 @@ os.environ["APP247_NM_CONF_DIR"] = str(_data_dir / "NetworkManager/conf.d")
 os.environ["APP247_ICON_DESTINATION"] = str(_data_dir / "pixmaps/app247-terminal.png")
 
 
+import pytest
+
+
+@pytest.fixture(autouse=True)
+def _reset_shutdown_budget():
+    """O prazo de encerramento é global ao processo; cada teste começa sem ele."""
+    from app247_terminal.services import shutdown_budget
+
+    shutdown_budget.reset_for_tests()
+    yield
+    shutdown_budget.reset_for_tests()
+
+
 def pytest_sessionfinish(session, exitstatus):
     _runtime.cleanup()

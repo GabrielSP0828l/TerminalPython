@@ -4,6 +4,7 @@ import requests
 from PyQt5.QtCore import QThread, pyqtSignal
 
 from app247_terminal.config.settings import API_URL
+from app247_terminal.services import shutdown_budget
 
 
 logger = logging.getLogger(__name__)
@@ -40,4 +41,4 @@ class InternetMonitor(QThread):
 
     def stop(self):
         self.requestInterruption()
-        self.wait(3500)
+        self.wait(shutdown_budget.wait_ms(3500))

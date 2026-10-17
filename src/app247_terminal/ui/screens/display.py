@@ -12,6 +12,7 @@ from app247_terminal.services.display_service import DisplayService, DisplayWork
 from app247_terminal.ui.styles.animated_svg import AnimatedSvgWidget
 from app247_terminal.ui.styles.theme import Theme
 from app247_terminal.ui.styles.tokens import Colors, Spacing
+from app247_terminal.services import shutdown_budget
 
 
 class DisplayScreen(QWidget):
@@ -182,7 +183,7 @@ class DisplayScreen(QWidget):
         if self._worker_running():
             self.worker.requestInterruption()
             if wait:
-                self.worker.wait(9000)
+                self.worker.wait(shutdown_budget.wait_ms(9000))
         if self.worker is not None and not self.worker.isRunning():
             worker, self.worker = self.worker, None
             worker.deleteLater()

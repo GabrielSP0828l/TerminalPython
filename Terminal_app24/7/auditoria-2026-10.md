@@ -76,7 +76,7 @@ HTTP fora da UI thread com timeouts; correlação estrita de pagamento; checkpoi
 | ID | Severidade | Resumo |
 |---|---|---|
 | BUG-046 | alta | `terminal.json` vazio/corrompido derruba o app antes da UI — **corrigido 17/10** |
-| BUG-047 | média | sem tratamento de `SIGTERM`; esperas de parada excedem `TimeoutStopSec` |
+| BUG-047 | média | sem tratamento de `SIGTERM`; esperas de parada excedem `TimeoutStopSec` — **corrigido 17/10** |
 | BUG-048 | média | latch global de 401/403; heartbeat/listener morrem até reinício |
 | BUG-049 | média | socket de pagamento sem ping detecta mal a queda de Wi-Fi |
 | BUG-050 | média | logs do app não persistem no Raspberry |

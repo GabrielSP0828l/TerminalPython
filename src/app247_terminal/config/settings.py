@@ -144,3 +144,8 @@ RECEIPT_CONNECT_TIMEOUT_SECONDS = _float_setting(
 RECEIPT_READ_TIMEOUT_SECONDS = _float_setting(
     "APP247_RECEIPT_READ_TIMEOUT_SECONDS", "RECEIPT_READ_TIMEOUT_SECONDS", 45, 1
 )
+# Orçamento total do encerramento cooperativo. Deve ficar abaixo do
+# TimeoutStopSec=30 da unit, deixando margem para o Qt e o Python finalizarem.
+SHUTDOWN_BUDGET_SECONDS = _float_setting(
+    "APP247_SHUTDOWN_BUDGET_SECONDS", "SHUTDOWN_BUDGET_SECONDS", 20, 1
+)

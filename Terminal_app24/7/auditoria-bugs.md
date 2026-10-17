@@ -471,7 +471,10 @@ Falha, instrução e sucesso eram cards e a aprovação apagava a compra após c
 
 ## BUG-047 — `SIGTERM` encerra o processo sem o desligamento cooperativo
 
-**Status:** aberto; confirmado por código em 17 de outubro de 2026.
+**Status:** corrigido em 17 de outubro de 2026 (após a tag `v1.0.3`; entra na próxima release). Validação com `poweroff` real no Raspberry pendente.
+
+- **Correção aplicada:** `main.install_termination_bridge` registra `SIGTERM`, `SIGINT` e `SIGHUP` com `signal.set_wakeup_fd` + `QSocketNotifier`, acordando o loop Qt (um handler Python puro não roda com `exec_` bloqueado em C++) e chamando `MainWindow.encerrar_por_sinal`, que registra o sinal com `paymentInFlight`/`orderId` e usa o mesmo `encerrar_terminal` do painel. `services/shutdown_budget.py` cria um prazo único (`APP247_SHUTDOWN_BUDGET_SECONDS`, padrão 20 s, abaixo de `TimeoutStopSec=30`) iniciado em `_parar_servicos`; todas as esperas de QThread/Thread do encerramento (pagamento, comprovante, recuperação, Wi-Fi, display, listener, monitor, heartbeat, sync, telemetria) usam `wait_ms`/`wait_seconds` e dividem esse prazo. Fora do encerramento cada espera mantém o limite anterior. Após o encerramento cooperativo, `main` faz `logging.shutdown()` e `os._exit(code)`, evitando o abort do Qt por QThread ainda vivo. O checkpoint de pagamento continua no SQLite e é reconciliado no próximo boot.
+- **Testes:** `tests/test_shutdown_budget.py` — orçamento compartilhado; 5 workers de pagamento travados consomem no máximo 20 s (antes 125 s); processo GUI real com QThread travado recebe `SIGTERM`, encerra em menos de 5 s com código 0 e sem "Destroyed while thread".
 
 - **Severidade:** média
 - **Tipo:** confirmado

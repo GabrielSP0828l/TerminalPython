@@ -64,12 +64,80 @@ def _run_gui(arguments: list[str]) -> int:
 
     app = QApplication([sys.argv[0], *arguments])
     window = MainWindow()
+    signal_handler = getattr(window, "encerrar_por_sinal", None)
+    if signal_handler is not None:
+        install_termination_bridge(app, signal_handler)
     app.setOverrideCursor(Qt.BlankCursor)
     present_main_window(window)
     exit_code = app.exec_()
-    return _gui_exit_code(
+    code = _gui_exit_code(
         exit_code, shutdown_was_requested=window.shutdown_was_requested
     )
+    if window.shutdown_was_requested:
+        # Serviços já foram parados dentro do orçamento. Um QThread que ainda
+        # não terminou faria o Qt abortar ao destruir a janela; sair direto
+        # evita core dump e código de falha num desligamento normal.
+        logger.info("[LIFECYCLE] encerramento cooperativo concluído code=%s", code)
+        logging.shutdown()
+        sys.stdout.flush()
+        sys.stderr.flush()
+        os._exit(code)
+    return code
+
+
+TERMINATION_SIGNALS = ("SIGTERM", "SIGINT", "SIGHUP")
+
+
+def install_termination_bridge(app, on_signal):
+    """Entrega sinais de término ao loop Qt.
+
+    Um handler Python puro só roda quando o interpretador volta a executar
+    bytecode, o que não acontece enquanto ``exec_`` está bloqueado em C++. O
+    ``set_wakeup_fd`` escreve o número do sinal num socketpair observado por um
+    ``QSocketNotifier``, que acorda o loop e chama ``on_signal(nome)``.
+    """
+    import signal
+    import socket
+
+    from PyQt5.QtCore import QSocketNotifier
+
+    reader, writer = socket.socketpair()
+    reader.setblocking(False)
+    writer.setblocking(False)
+    previous_fd = signal.set_wakeup_fd(writer.fileno())
+    names = {}
+    for name in TERMINATION_SIGNALS:
+        number = getattr(signal, name, None)
+        if number is None:
+            continue
+        names[int(number)] = name
+        # Handler não-padrão impede o término imediato; o trabalho real é
+        # feito no slot do notifier, na thread da GUI.
+        signal.signal(number, lambda *_args: None)
+
+    notifier = QSocketNotifier(reader.fileno(), QSocketNotifier.Read, app)
+
+    def _drain():
+        try:
+            data = reader.recv(64)
+        except (BlockingIOError, InterruptedError):
+            return
+        for number in data:
+            name = names.get(number)
+            if name:
+                on_signal(name)
+
+    notifier.activated.connect(_drain)
+
+    def restore():
+        notifier.setEnabled(False)
+        signal.set_wakeup_fd(previous_fd)
+        reader.close()
+        writer.close()
+
+    # Mantém referências vivas pelo tempo da aplicação.
+    app._app247_termination_bridge = (reader, writer, notifier, restore)
+    return restore
 
 
 def _gui_exit_code(exit_code: int, *, shutdown_was_requested: bool) -> int:

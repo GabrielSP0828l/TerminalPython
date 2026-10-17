@@ -49,6 +49,7 @@ from app247_terminal.ui.screens.welcome import TelaBemVindos
 from app247_terminal.ui.screens.payment import PagamentoScreen
 from app247_terminal.ui.screens.keyboard import TecladoScreen
 from app247_terminal.ui.screens.terminal import TerminalScreen
+from app247_terminal.services import shutdown_budget
 
 
 class MainWindow(QMainWindow):
@@ -597,6 +598,17 @@ class MainWindow(QMainWindow):
     def encerrar_menu_admin(self, return_widget):
         self.stacked_widget.setCurrentWidget(return_widget or self.welcome)
 
+    def encerrar_por_sinal(self, signal_name):
+        """SIGTERM/SIGINT do systemd: mesmo encerramento cooperativo do painel."""
+        logging.getLogger(__name__).warning(
+            "[LIFECYCLE] sinal %s recebido; encerrando de forma cooperativa "
+            "paymentInFlight=%s orderId=%s",
+            signal_name,
+            self.compra_session.payment_in_flight,
+            self.compra_session.order_id,
+        )
+        self.encerrar_terminal()
+
     def encerrar_terminal(self):
         if self._shutdown_started:
             return
@@ -616,6 +628,8 @@ class MainWindow(QMainWindow):
         if self._services_stopped:
             return
         self._services_stopped = True
+        # Todas as esperas abaixo dividem um único prazo (TimeoutStopSec=30).
+        shutdown_budget.begin_shutdown()
         self.compra_session.stop()
         self.welcome.stop()
         self.cadastro_terminal.activation_timer.stop()
@@ -628,10 +642,10 @@ class MainWindow(QMainWindow):
         identity_worker = getattr(self, "identity_recovery_worker", None)
         if identity_worker is not None and identity_worker.isRunning():
             identity_worker.requestInterruption()
-            identity_worker.wait(25000)
+            identity_worker.wait(shutdown_budget.wait_ms(25000))
         if self.cadastro_terminal.activation_worker.isRunning():
             self.cadastro_terminal.activation_worker.requestInterruption()
-            self.cadastro_terminal.activation_worker.wait(500)
+            self.cadastro_terminal.activation_worker.wait(shutdown_budget.wait_ms(500))
         if self.confirmacao is not None:
             self.confirmacao.stop()
         configuracao = getattr(self, "configuracao", None)

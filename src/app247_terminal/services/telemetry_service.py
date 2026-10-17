@@ -11,6 +11,7 @@ from app247_terminal.services.display_metrics import DisplayMetricsCollector
 from app247_terminal.services.network_metrics import NetworkMetricsCollector
 from app247_terminal.services.system_metrics import SystemMetricsCollector
 from app247_terminal.services.backend_client import BackendClient, BackendHttpError
+from app247_terminal.services import shutdown_budget
 
 
 logger = logging.getLogger(__name__)
@@ -97,4 +98,6 @@ class TelemetryService:
     def stop(self):
         self._stop_event.set()
         if self._thread is not None and self._thread.is_alive():
-            self._thread.join(timeout=min(2, self.timeout_seconds))
+            self._thread.join(
+                timeout=shutdown_budget.wait_seconds(min(2, self.timeout_seconds))
+            )

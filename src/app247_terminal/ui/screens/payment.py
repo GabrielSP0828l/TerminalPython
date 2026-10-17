@@ -23,6 +23,7 @@ from app247_terminal.ui.styles.theme import Theme
 from app247_terminal.ui.styles.tokens import Colors, Spacing
 from app247_terminal.ui.screens.payment_state import PaymentStateWidget
 from app247_terminal.ui.screens.session_timer import SessionTimerLabel
+from app247_terminal.services import shutdown_budget
 
 
 logger = logging.getLogger(__name__)
@@ -912,7 +913,7 @@ class PagamentoScreen(QWidget):
             worker = getattr(self, attribute)
             if worker is not None and worker.isRunning():
                 worker.requestInterruption()
-                worker.wait(25000)
+                worker.wait(shutdown_budget.wait_ms(25000))
             if worker is not None and not worker.isRunning():
                 if getattr(self, attribute, None) is worker:
                     setattr(self, attribute, None)
