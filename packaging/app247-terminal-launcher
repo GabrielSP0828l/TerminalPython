@@ -1,60 +1,161 @@
 #!/usr/bin/env bash
 set -Eeuo pipefail
 
-umask 027
+# Arquivos operacionais novos devem ser acessíveis somente ao usuário gráfico e
+# ao grupo app247, nunca a outros usuários.
+umask 007
 
 CONFIG_FILE="${APP247_CONFIG_FILE:-/etc/app247/terminal.env}"
 CURRENT_LINK="${APP247_CURRENT_LINK:-/opt/app247/current}"
 EXECUTABLE="$CURRENT_LINK/app247-terminal"
+SESSION_WAIT_SECONDS="${APP247_GRAPHICAL_SESSION_WAIT_SECONDS:-30}"
+# --apply-display roda como ExecStartPre: precisa terminar rápido e nunca virar a
+# GUI. A espera pela sessão e a execução têm orçamento próprio e limitado.
+APPLY_DISPLAY_SESSION_WAIT_SECONDS="${APP247_APPLY_DISPLAY_SESSION_WAIT_SECONDS:-10}"
+APPLY_DISPLAY_TIMEOUT_SECONDS="${APP247_APPLY_DISPLAY_TIMEOUT_SECONDS:-20}"
 
 if [ "$(id -u)" -eq 0 ]; then
     echo "Erro: execute o launcher como o usuário da sessão gráfica, nunca como root." >&2
     exit 1
 fi
+if ! [[ "$SESSION_WAIT_SECONDS" =~ ^[0-9]+$ ]]; then
+    echo "Erro: APP247_GRAPHICAL_SESSION_WAIT_SECONDS deve ser um inteiro não negativo." >&2
+    exit 1
+fi
+if ! [[ "$APPLY_DISPLAY_SESSION_WAIT_SECONDS" =~ ^[0-9]+$ ]] ||
+   ! [[ "$APPLY_DISPLAY_TIMEOUT_SECONDS" =~ ^[1-9][0-9]*$ ]]; then
+    echo "Erro: limites de --apply-display devem ser inteiros (timeout maior que zero)." >&2
+    exit 1
+fi
 if [ ! -r "$CONFIG_FILE" ]; then
     echo "Erro: configuração ausente ou ilegível: $CONFIG_FILE" >&2
+    echo "Faça logout/login ou reinicie após a instalação para aplicar o grupo app247." >&2
     exit 1
 fi
 if [ ! -x "$EXECUTABLE" ]; then
     echo "Erro: release ativa inválida: $EXECUTABLE" >&2
     exit 1
 fi
-if command -v systemctl >/dev/null 2>&1 && \
-   systemctl is-active --quiet app247-terminal.service 2>/dev/null; then
-    echo "Terminal já está em execução pelo serviço app247-terminal.service."
-    exit 0
-fi
 
-# O binário usa python-dotenv para carregar o arquivo sem executá-lo como shell.
-export APP247_CONFIG_FILE="$CONFIG_FILE"
-
-SESSION_UID="$(id -u)"
-if [ -z "${XDG_RUNTIME_DIR:-}" ]; then
-    RUNTIME_CANDIDATE="/run/user/$SESSION_UID"
-    if [ -d "$RUNTIME_CANDIDATE" ] && [ "$(stat -c '%u' "$RUNTIME_CANDIDATE")" = "$SESSION_UID" ]; then
-        export XDG_RUNTIME_DIR="$RUNTIME_CANDIDATE"
-    fi
-fi
-
-if [ -n "${XDG_RUNTIME_DIR:-}" ]; then
-    if [ ! -d "$XDG_RUNTIME_DIR" ] || [ "$(stat -c '%u' "$XDG_RUNTIME_DIR")" != "$SESSION_UID" ]; then
-        echo "Erro: XDG_RUNTIME_DIR não pertence ao usuário gráfico atual." >&2
-        exit 1
-    fi
-    if [ -z "${WAYLAND_DISPLAY:-}" ]; then
-        for candidate in "$XDG_RUNTIME_DIR"/wayland-*; do
-            if [ -S "$candidate" ] && [ "$(stat -c '%u' "$candidate")" = "$SESSION_UID" ]; then
-                export WAYLAND_DISPLAY="$(basename "$candidate")"
-                export XDG_SESSION_TYPE="wayland"
-                break
-            fi
-        done
-    fi
-fi
-
-if [ -z "${WAYLAND_DISPLAY:-}" ] && [ -z "${DISPLAY:-}" ]; then
-    echo "Erro: nenhuma sessão gráfica Wayland/X11 do usuário atual foi encontrada." >&2
+# terminal.env é controlado por root (0640 root:app247). Exportar suas variáveis
+# torna o launcher equivalente à unit, inclusive em execuções manuais seguras.
+set -a
+# shellcheck disable=SC1090
+if ! . "$CONFIG_FILE"; then
+    set +a
+    echo "Erro: não foi possível carregar a configuração: $CONFIG_FILE" >&2
     exit 1
 fi
+set +a
+export APP247_CONFIG_FILE="$CONFIG_FILE"
 
-exec "$EXECUTABLE"
+has_argument() {
+    local expected="$1" argument
+    shift
+    for argument in "$@"; do
+        [ "$argument" = "$expected" ] && return 0
+    done
+    return 1
+}
+
+is_non_graphical_cli() {
+    has_argument "--version" "$@" ||
+        has_argument "--check" "$@" ||
+        has_argument "--install-device-credential" "$@"
+}
+
+configure_graphical_session() {
+    local session_uid runtime_candidate candidate attempt=0
+
+    session_uid="$(id -u)"
+    if [ -n "${XDG_RUNTIME_DIR:-}" ] &&
+       [ -d "$XDG_RUNTIME_DIR" ] &&
+       [ "$(stat -c '%u' "$XDG_RUNTIME_DIR")" = "$session_uid" ]; then
+        : # ambiente da sessão já é válido
+    else
+        runtime_candidate="/run/user/$session_uid"
+        if [ -d "$runtime_candidate" ] &&
+           [ "$(stat -c '%u' "$runtime_candidate")" = "$session_uid" ]; then
+            export XDG_RUNTIME_DIR="$runtime_candidate"
+        else
+            unset XDG_RUNTIME_DIR
+        fi
+    fi
+
+    while [ "$attempt" -le "$SESSION_WAIT_SECONDS" ]; do
+        if [ -n "${XDG_RUNTIME_DIR:-}" ]; then
+            if [ -n "${WAYLAND_DISPLAY:-}" ] &&
+               [ -S "$XDG_RUNTIME_DIR/$WAYLAND_DISPLAY" ] &&
+               [ "$(stat -c '%u' "$XDG_RUNTIME_DIR/$WAYLAND_DISPLAY")" = "$session_uid" ]; then
+                export XDG_SESSION_TYPE=wayland
+                export QT_QPA_PLATFORM="${QT_QPA_PLATFORM:-wayland}"
+                export DBUS_SESSION_BUS_ADDRESS="unix:path=$XDG_RUNTIME_DIR/bus"
+                return 0
+            fi
+            for candidate in "$XDG_RUNTIME_DIR"/wayland-*; do
+                if [ -S "$candidate" ] &&
+                   [ "$(stat -c '%u' "$candidate")" = "$session_uid" ]; then
+                    export WAYLAND_DISPLAY="$(basename "$candidate")"
+                    export XDG_SESSION_TYPE=wayland
+                    export QT_QPA_PLATFORM="${QT_QPA_PLATFORM:-wayland}"
+                    export DBUS_SESSION_BUS_ADDRESS="unix:path=$XDG_RUNTIME_DIR/bus"
+                    return 0
+                fi
+            done
+        fi
+
+        # X11 só é aceito quando há socket local para o DISPLAY informado; não
+        # presumimos :0 nem aceitamos um DISPLAY remoto arbitrário.
+        if [[ "${DISPLAY:-}" =~ ^:([0-9]+)(\.[0-9]+)?$ ]] &&
+           [ -S "/tmp/.X11-unix/X${BASH_REMATCH[1]}" ]; then
+            export QT_QPA_PLATFORM="${QT_QPA_PLATFORM:-xcb}"
+            return 0
+        fi
+        if [ "$attempt" -eq "$SESSION_WAIT_SECONDS" ]; then
+            break
+        fi
+        sleep 1
+        attempt=$((attempt + 1))
+    done
+
+    echo "Erro: nenhuma sessão gráfica Wayland/X11 válida foi encontrada após ${SESSION_WAIT_SECONDS}s." >&2
+    return 1
+}
+
+if has_argument "--apply-display" "$@"; then
+    # Somente a orientação: sessão ausente não é fatal para a unit (prefixo "-")
+    # e a GUI nunca é iniciada por este caminho.
+    if [ "$#" -ne 1 ]; then
+        echo "Erro: --apply-display não aceita outros argumentos." >&2
+        exit 2
+    fi
+    SESSION_WAIT_SECONDS="$APPLY_DISPLAY_SESSION_WAIT_SECONDS"
+    configure_graphical_session || exit 1
+    if command -v timeout >/dev/null 2>&1; then
+        exec timeout --kill-after=2 "$APPLY_DISPLAY_TIMEOUT_SECONDS" \
+            "$EXECUTABLE" --apply-display
+    fi
+    exec "$EXECUTABLE" --apply-display
+fi
+
+if ! is_non_graphical_cli "$@"; then
+    configure_graphical_session
+fi
+
+# A instância normal segura o lock durante todo o exec para não haver dois
+# Terminais. Comandos CLI (--version/--check) não disputam o lock.
+if ! is_non_graphical_cli "$@"; then
+    if command -v flock >/dev/null 2>&1; then
+        LOCK_FILE="${XDG_RUNTIME_DIR:-${APP247_DATA_DIR:-/var/lib/app247}}/.app247-terminal.lock"
+        # O descritor é herdado pelo exec; flock permanece até o processo Qt sair.
+        exec 9>"$LOCK_FILE"
+        if ! flock -n 9; then
+            echo "Terminal já está em execução nesta sessão gráfica."
+            exit 0
+        fi
+    else
+        echo "Aviso: flock indisponível; a unit systemd --user continua sendo a proteção primária contra duplicidade." >&2
+    fi
+fi
+
+exec "$EXECUTABLE" "$@"

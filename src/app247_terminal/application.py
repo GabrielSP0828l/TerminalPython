@@ -32,7 +32,10 @@ from app247_terminal.services.terminal_lifecycle import (
 from app247_terminal.services.internet_monitor import InternetMonitor
 from app247_terminal.services.telemetry_service import TelemetryService
 from app247_terminal.services.purchase_api import ActivePaymentRecoveryWorker
-from app247_terminal.services.terminal_auth import TerminalCredentialStore
+from app247_terminal.services.terminal_auth import (
+    TerminalCredentialMissing,
+    TerminalCredentialStore,
+)
 from app247_terminal.services.backend_client import terminal_access_state
 from app247_terminal.config.settings import IS_PRODUCTION
 
@@ -172,16 +175,17 @@ class MainWindow(QMainWindow):
             self.active_payment_store.load()
             if self.active_payment_store is not None else None
         )
+        credential_available = self._credential_available()
         if self._startup_recovery_error:
             self.stacked_widget.setCurrentWidget(self.local_recovery_screen)
-        elif pending_payment and not TerminalCredentialStore().load():
+        elif pending_payment and not credential_available:
             self.compra_session.restore_pending_payment()
             self.identity_recovery_status.setText(
                 "Pagamento preservado. A credencial do equipamento precisa ser "
                 "reprovisionada pelo administrador antes da reconciliacao."
             )
             self.stacked_widget.setCurrentWidget(self.identity_recovery_screen)
-        elif Terminal.is_activated() and TerminalCredentialStore().load():
+        elif Terminal.is_activated() and credential_available:
             self.iniciar_operacao_terminal()
             self.stacked_widget.setCurrentWidget(self.welcome)
 
@@ -190,12 +194,23 @@ class MainWindow(QMainWindow):
             self.stacked_widget.setCurrentWidget(self.identity_recovery_screen)
             QTimer.singleShot(0, self._start_identity_recovery)
         else:
-            if Terminal.is_activated() and not TerminalCredentialStore().load():
+            if Terminal.is_activated() and not credential_available:
                 self.cadastro_terminal.activation_timer.start(
                     self.cadastro_terminal.POLL_INTERVAL_MS
                 )
                 QTimer.singleShot(0, self.cadastro_terminal.verificar_ativacao)
             self.stacked_widget.setCurrentWidget(self.cadastro_terminal)
+
+    @staticmethod
+    def _credential_available():
+        """Credencial ilegível/insegura equivale a ausente, sem derrubar a GUI."""
+        try:
+            return bool(TerminalCredentialStore().load())
+        except TerminalCredentialMissing as error:
+            logging.getLogger(__name__).error(
+                "[TERMINAL-AUTH] credencial do dispositivo inutilizável: %s", error
+            )
+            return False
 
     def _guard_device_auth(self):
         state = terminal_access_state.get()
@@ -358,7 +373,7 @@ class MainWindow(QMainWindow):
         if self.terminal is not None:
             return
 
-        terminal_config = Terminal.load()
+        terminal_config = Terminal.load_or_none()
         self.compra_session.restore_pending_payment(
             terminal_config.terminalId if terminal_config is not None else None
         )
@@ -382,7 +397,7 @@ class MainWindow(QMainWindow):
 
     @staticmethod
     def _current_terminal_id():
-        terminal = Terminal.load()
+        terminal = Terminal.load_or_none()
         return terminal.terminalId if terminal is not None else None
 
     def current_terminal_id(self):
@@ -434,7 +449,7 @@ class MainWindow(QMainWindow):
     def iniciar_operacao_terminal(self):
         if self._operacao_iniciada:
             return
-        if not TerminalCredentialStore().load():
+        if not self._credential_available():
             terminal_access_state.set("AUTH_REQUIRED")
             return
 
@@ -481,7 +496,7 @@ class MainWindow(QMainWindow):
         self._check_terminal_lifecycle("WEBSOCKET_RESET_HINT")
 
     def _check_terminal_lifecycle(self, origin="BOOTSTRAP"):
-        terminal = Terminal.load()
+        terminal = Terminal.load_or_none()
         if terminal is None or self._shutdown_started:
             return
         if self._lifecycle_worker is not None and self._lifecycle_worker.isRunning():
@@ -534,7 +549,7 @@ class MainWindow(QMainWindow):
         self._execute_factory_reset(response)
 
     def _execute_factory_reset(self, response):
-        terminal = Terminal.load()
+        terminal = Terminal.load_or_none()
         if terminal is None or self._shutdown_started:
             return
         self.lifecycle_api.notify_started(terminal.terminalId)
@@ -591,6 +606,11 @@ class MainWindow(QMainWindow):
         app = QApplication.instance()
         if app is not None:
             app.quit()
+
+    @property
+    def shutdown_was_requested(self):
+        """Indica um encerramento cooperativo solicitado pelo fluxo administrativo."""
+        return self._shutdown_started and self._shutdown_authorized
 
     def _parar_servicos(self):
         if self._services_stopped:

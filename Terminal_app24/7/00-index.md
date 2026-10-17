@@ -29,6 +29,7 @@ Estado funcional verificado em 31 de agosto de 2026. O Terminal está adaptado a
 
 ## Auditoria e evolução
 
+- [[auditoria-2026-10]] — auditoria completa de outubro de 2026: fluxos reais, endpoints x backend, achados e prioridades.
 - [[auditoria-bugs]] — bugs confirmados e riscos potenciais `BUG-001` em diante.
 - [[melhorias]] — plano incremental `MEL-001` em diante, sem refatoração aplicada nesta auditoria.
 

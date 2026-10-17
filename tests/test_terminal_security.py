@@ -48,6 +48,18 @@ class TerminalSecurityTest(unittest.TestCase):
             with self.assertRaisesRegex(TerminalCredentialMissing, "permissões"):
                 TerminalCredentialStore(path).load()
 
+    def test_credential_must_belong_to_the_graphical_process_user(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "credential"
+            store = TerminalCredentialStore(path)
+            store.install("tdc_owned-by-graphical-user")
+            with patch(
+                "app247_terminal.services.terminal_auth.os.geteuid",
+                return_value=os.geteuid() + 1,
+            ):
+                with self.assertRaisesRegex(TerminalCredentialMissing, "pertencer"):
+                    store.load()
+
     def test_credential_rejects_symbolic_link(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)

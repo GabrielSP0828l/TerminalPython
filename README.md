@@ -181,17 +181,38 @@ quando ausentes. Overrides explícitos continuam disponíveis. Release existente
 idêntica é reconhecida sem recópia; conteúdo parcial ou divergente aborta. O
 script nunca remove `/etc/app247` ou `/var/lib/app247`.
 
-Sem `--activate`, a release é apenas copiada. A ativação aceita essa mesma
-release preparada, troca atomicamente o symlink, executa o diagnóstico, instala
-a unidade com o usuário/grupo configurados, faz `daemon-reload`, habilita e
-inicia/reinicia o serviço. Falha no diagnóstico restaura o link anterior e não
-inicia a nova versão. Para preparar uma imagem sem controlar o daemon, use
-`APP247_MANAGE_SYSTEMD=false`; a unidade ainda será gerada no diretório indicado.
+Na ativação, o instalador detecta o usuário da sessão gráfica por `SUDO_USER`
+ou `loginctl`, instala a unit em
+`~/.config/systemd/user/app247-terminal.service`, cria na área de trabalho um
+atalho com o nome exibido **Terminal 24/7** e instala a entrada XDG de
+autostart. Não há UID `1000` hardcoded. Em provisionamento sem sessão ativa,
+informe `APP247_DESKTOP_USER=<usuario>`. O usuário gráfico entra no grupo
+`app247`, portanto a nova associação vale após logout/login ou reboot.
 
-O diagnóstico também pode ser executado manualmente, como o usuário do serviço:
+A GUI nunca é executada como unit systemd de sistema. A unit de usuário chama o
+launcher, que carrega `terminal.env`, encontra o socket Wayland pertencente ao
+usuário (com fallback X11 local), e executa `/opt/app247/current/app247-terminal`.
+O atalho/autostart chama `systemctl --user start --no-block`, logo não contorna
+essa unit nem abre uma segunda instância. O launcher usa um lock por sessão como
+proteção adicional.
+
+Sem `--activate`, a release é apenas copiada. A ativação aceita essa mesma
+release preparada, troca atomicamente o symlink, executa o diagnóstico como o
+usuário gráfico, instala e habilita a unit de usuário e a inicia quando o bus da
+sessão estiver disponível. Falha no diagnóstico ou na troca do serviço restaura
+o link anterior. Para preparar uma imagem sem controlar o daemon do usuário,
+use `APP247_MANAGE_SYSTEMD=false`; a unit ainda será instalada e habilitada para
+o próximo login.
+
+A unit usa `Restart=on-failure`, nunca `Restart=always`, e limita reinícios a
+cinco por minuto. O botão administrativo **FECHAR TERMINAL** encerra Qt e seus
+workers cooperativamente com código `0`; por isso não há reabertura após três
+segundos. Crash ou saída diferente de zero continuam elegíveis a reinício.
+
+O diagnóstico também pode ser executado manualmente, como o usuário gráfico:
 
 ```bash
-sudo -u app247 /opt/app247/current/app247-terminal --check
+sudo -u <usuario-grafico> /opt/app247/current/app247-terminal --check
 ```
 
 Ele valida URLs e placeholders, proteção do arquivo de ambiente, senha

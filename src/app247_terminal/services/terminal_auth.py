@@ -43,6 +43,10 @@ class TerminalCredentialStore:
             raise TerminalCredentialMissing(
                 "Credencial do dispositivo deve ser um arquivo regular"
             )
+        if metadata.st_uid != os.geteuid():
+            raise TerminalCredentialMissing(
+                "Credencial do dispositivo deve pertencer ao usuário que executa o Terminal"
+            )
         if metadata.st_mode & 0o077:
             raise TerminalCredentialMissing(
                 "Credencial do dispositivo possui permissões inseguras"
@@ -54,6 +58,7 @@ class TerminalCredentialStore:
                 opened = os.fstat(stream.fileno())
                 if (
                     not stat.S_ISREG(opened.st_mode)
+                    or opened.st_uid != os.geteuid()
                     or opened.st_mode & 0o077
                     or opened.st_size > 4096
                 ):

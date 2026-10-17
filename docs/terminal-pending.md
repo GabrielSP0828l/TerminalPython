@@ -66,5 +66,5 @@ Data da auditoria: 27 de setembro de 2026. Cada item abaixo é verificável e de
 - [ ] Testar webhook perdido com reconciliação real em ambiente controlado.
 - [ ] Testar restart de processo/Raspberry em cada janela entre cart, Order, attempt, aceite remoto e aprovação.
 - [ ] Testar overflow/renderização de todas as telas em hardware `1024x600`, não apenas geometria Qt offscreen.
-- [ ] Testar autostart, crash loop, falta de disco, log cheio, subtensão e throttling no Raspberry.
+- [ ] PARCIAL — unit `systemd --user`, autostart, lock, restart policy e encerramento administrativo possuem testes automatizados; falta validar boot gráfico Wayland, restart após crash real, ausência de socket, falta de disco, log cheio, subtensão e throttling no Raspberry físico.
 - [ ] PARCIAL — headers, credencial individual e handshake autenticado têm testes; falta teste E2E de sessão duplicada/forjada.

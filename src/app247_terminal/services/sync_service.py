@@ -234,7 +234,7 @@ class SyncService:
         logger.info("[SYNC] iniciando")
         logger.info("[SYNC] SQLite path: %s", self.db_path)
 
-        terminal = Terminal.load(self.terminal_path)
+        terminal = Terminal.load_or_none(self.terminal_path)
         if terminal is None or not terminal.activated or not terminal.ativo:
             logger.warning("[SYNC] Terminal ainda não está ativado; sincronização adiada")
             self._complete_sync("Terminal ainda não está ativado")

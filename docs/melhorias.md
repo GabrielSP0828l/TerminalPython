@@ -285,3 +285,30 @@ O fluxo `build.sh -> package-release.sh` produz tar `onedir` standalone,
 manifesto compatível assinado com Ed25519, assinatura destacada e
 `SHA256SUMS`. Arquitetura, estrutura, segredos/estado proibidos, extração e
 instalação sem checkout são verificados automaticamente antes da saída local.
+
+## MEL-035 — Atalho e autostart da sessão gráfica
+
+**Status:** implementada em 4 de outubro de 2026; validação física no Raspberry pendente.
+
+- cria atalho exibido como `Terminal 24/7` e entrada XDG de autostart durante
+  `install.sh --activate`;
+- detecta o usuário por `SUDO_USER`/`loginctl` ou override, sem UID hardcoded;
+- preserva Wayland/X11 pelo launcher e evita duplicidade com a unit systemd;
+- compartilha estado pelo grupo `app247`, setgid e `umask 0007`, sem acesso
+  público;
+- recusa sobrescrever entrada gráfica que não seja gerenciada pelo App247.
+
+## MEL-036 — Lifecycle gráfico pelo systemd de usuário
+
+**Status:** implementada em 4 de outubro de 2026; validação física no Raspberry pendente.
+
+- remove a execução da GUI PyQt pela unit systemd de sistema e instala a unit
+  em `~/.config/systemd/user` do usuário gráfico real;
+- launcher carrega o ambiente, verifica Wayland/X11, aguarda a sessão e guarda
+  lock de instância; atalho/autostart usam `systemctl --user`;
+- unit usa `Restart=on-failure` com limite de cinco tentativas/minuto; falha de
+  orientação é aviso e não gera restart storm;
+- fechamento administrativo para workers, timers, socket, sync e telemetria,
+  então retorna `exit 0`, sem restart; crash não-zero continua reiniciável;
+- estado compartilhado é `2770`/`0660` pelo grupo `app247`, enquanto a
+  credencial permanece `0600` e exclusivamente do usuário gráfico.

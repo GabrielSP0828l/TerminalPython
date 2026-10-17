@@ -315,3 +315,44 @@ separa `OK`, `WARN` e `ERROR` e usa exit code para bloquear ativações inválid
 - instalador standalone lê `VERSION`, preserva dados/configuração e mantém
   rollback/health-check da ativação;
 - publicação remota continua deliberadamente fora do escopo.
+
+## MEL-035 — Atalho e autostart da sessão gráfica
+
+**Status:** implementada em 4 de outubro de 2026; validação física no Raspberry pendente.
+
+- `install.sh --activate` cria o atalho exibido como `Terminal 24/7` e o
+  autostart XDG da sessão;
+- usuário gráfico vem de override, `SUDO_USER` ou `loginctl`, nunca de UID
+  hardcoded;
+- o launcher preserva Wayland/X11 e bloqueia outra instância quando a unit está
+  ativa ou em ativação;
+- grupo `app247`, diretórios setgid e `umask 0007` dão acesso operacional sem
+  expor configuração, SQLite ou credencial a outros usuários;
+- arquivo `.desktop` alheio nunca é sobrescrito silenciosamente.
+
+## MEL-036 — Lifecycle gráfico pelo systemd de usuário
+
+**Status:** implementada em 4 de outubro de 2026; validação física no Raspberry pendente.
+
+- GUI PyQt não é mais iniciada por serviço systemd de sistema; a unit fica no
+  home do usuário gráfico descoberto;
+- launcher carrega env, espera Wayland/X11 válido e mantém lock; atalho e
+  autostart usam `systemctl --user` e não criam cópia direta;
+- `Restart=on-failure`, limite de cinco partidas/minuto e orientação não fatal
+  eliminam o loop de reinício causado por display indisponível;
+- fechar pelo painel para serviços cooperativamente e finaliza `main` com
+  código zero; crash real permanece reiniciável;
+- dados compartilhados ficam no grupo `app247`; credencial continua privada
+  (`0600`) e deve pertencer ao usuário gráfico.
+
+## MEL-037 — Robustez de campo do Raspberry
+
+**Status:** proposta em 17 de outubro de 2026; ver [[auditoria-2026-10]].
+
+- ~~recuperar `terminal.json` inválido e gravá-lo com `fsync` (BUG-046)~~ — implementado em 17/10/2026 com quarentena e reativação por serial;
+- ~~política persistente de Wi-Fi sem economia de energia~~ — implementado em 17/10/2026 pelo instalador (NetworkManager `conf.d`);
+- tratar `SIGTERM` com encerramento cooperativo dentro de `TimeoutStopSec` (BUG-047);
+- ping/pong no socket de pagamento (BUG-049);
+- logs persistentes e rotativos sem segredos (BUG-050);
+- reinício automático de heartbeat/listener ao voltar a `OPERATIONAL` (BUG-048).
+

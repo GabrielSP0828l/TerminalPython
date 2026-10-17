@@ -402,6 +402,156 @@ Falha, instrução e sucesso eram cards e a aprovação apagava a compra após c
 - **Validação:** o verificador extrai cada pacote em temporário e executa a fase
   de preparação com todos os destinos redirecionados para um sandbox.
 
+## BUG-044 — GUI era iniciada fora da sessão gráfica e o estado local não respeitava o usuário da tela
+
+**Status:** corrigido em 4 de outubro de 2026; validação física em Raspberry Pi permanece pendente.
+
+- **Causa:** a unit de sistema iniciava PyQt como usuário de serviço, sem o
+  socket Wayland/DBus da sessão gráfica. Além disso, `/var/lib/app247` e a
+  credencial individual eram provisionados para o usuário de serviço, embora a
+  GUI passe a executar como o usuário gráfico.
+- **Impacto:** Qt falhava ao conectar ao display, o usuário gráfico recebia
+  `PermissionError` ao abrir estado local e a credencial segura `0600` era
+  recusada por não pertencer ao processo que a consumia. `Restart=always`
+  também reabria o programa após o fechamento administrativo.
+- **Correção:** o instalador resolve o usuário gráfico, instala/habilita uma
+  unit `systemd --user` e usa launcher que descobre Wayland/X11 de forma
+  verificada. Dados compartilhados usam grupo `app247`, SGID `2770` e arquivos
+  `0660`; a credencial continua `0600` e é migrada ao usuário gráfico na
+  ativação. O encerramento administrativo para recursos cooperativamente e
+  normaliza o retorno para `0`; a unit usa `Restart=on-failure`, limite de cinco
+  partidas/minuto e ignora apenas falha não crítica de orientação.
+- **Hardening:** o instalador rejeita links simbólicos no diretório de dados
+  antes de executar `chown`/`chmod` como root, prevenindo alteração de arquivos
+  externos por uma atualização.
+- **Validação:** testes automatizados cobrem unit, launcher, lock, argumentos,
+  Wayland, permissões, credencial e lifecycle CLI; build e pacote standalone
+  assinado foram verificados em ambiente amd64. Falta teste físico Wayland no
+  Raspberry.
+
+## BUG-045 — Corrupção recorrente do sistema no Raspberry Pi com SSD USB
+
+**Status:** em investigação; nenhuma causa confirmada. Evidências coletadas via SSH em 16 de outubro de 2026.
+
+- **Severidade:** alta (terminal indisponível até reinstalação)
+- **Tipo:** potencial — ambiente/hardware, não atribuído ao código do Terminal.
+- **Ambiente verificado:** Raspberry Pi 4 Model B Rev 1.5, Raspbian 13 (trixie), kernel `6.18.50+rpt-rpi-v8`, bootloader de 17/05/2026 atualizado. SSD 128 GB (`/dev/sda`, 119,2 GiB) em ponte USB-SATA **Initio `13fd:5917`**, driver `uas`, USB 3 (5 Gbit/s); `sda1` vfat em `/boot/firmware`, `sda2` ext4 `rw,noatime` em `/`; swap só em `zram0` 1,8 GB. Filesystem criado em 14/09/2026 (imagem regravada), 7 montagens, estado `clean`, 10 GB escritos. App instalado: `/opt/app247/current -> releases/1.0.1` (não 1.0.2).
+
+### Evidências (16/10/2026, boot das 14:28, ~1h45 de uptime)
+
+| Evidência | Resultado | Interpretação |
+|---|---|---|
+| `journalctl -k -b 0` | `EXT4-fs (sda2): orphan cleanup on readonly fs` | o boot anterior **não foi desmontado corretamente** (queda de energia, travamento ou desligamento forçado) |
+| `journalctl -b 0 -p err` | `usb usb2-port2: Cannot enable. Maybe the USB cable is bad?` (2×) — porta onde está o SSD | falha de enumeração do SSD no boot; compatível com cabo, case, porta ou alimentação marginal. **Indício mais forte até agora.** |
+| `vcgencmd get_throttled` | `0x0` | nenhuma subtensão/throttling **desde este boot** (não cobre boots anteriores) |
+| `vcgencmd measure_temp` | 74–76 °C com load 0,15 e ARM a 600 MHz | temperatura alta em repouso; perto do limite de throttling (80 °C). Risco, não causa comprovada de corrupção. |
+| `sd 0:0:0:0` | `Write cache: enabled ... doesn't support DPO or FUA` | queda de energia pode perder escritas ainda no cache da ponte/SSD |
+| journald | `Storage=volatile` | **logs de boots anteriores não existem**; por isso não há histórico das corrupções passadas |
+| relógio | boot iniciou com hora 05/10 00:26 e só sincronizou via NTP 45 s depois | sem RTC; timestamps iniciais do boot são falsos |
+| `smartctl` | não instalado | SMART ainda não lido (a ponte Initio pode exigir `-d sat`) |
+| `app247-terminal.service` | 6 falhas de start entre 14:29 e 14:37, ativo desde 14:42 | observação separada; causa não investigada (journal do usuário indisponível) |
+
+- **Observação isolada:** em desligamento anterior pela touchscreen apareceu `Shut down request (2)` com cursor piscando, sem teclado; depois iniciou normalmente. Sem logs persistentes, não é possível correlacionar.
+- **Hipóteses ainda abertas:** alimentação insuficiente (fonte/cabo de energia), cabo/case USB-SATA, temperatura, desligamento sem `poweroff`. A rede ([[wifi]]) não explica corrupção de disco.
+- **Procedimento operacional:** desligar somente com `sudo poweroff` e aguardar o LED verde parar antes de remover a alimentação.
+- **Próximos passos dependentes de autorização:** journal persistente (`Storage=persistent`) para capturar a próxima ocorrência; instalar `smartmontools` e ler SMART; testar outro cabo/case/porta USB 3 e fonte oficial 5,1 V/3 A; dissipador/ventoinha. Não reinstalar, não alterar `cmdline.txt`/quirks USB/kernel sem nova evidência.
+
+## BUG-046 — `terminal.json` vazio ou corrompido derruba o Terminal antes da UI
+
+**Status:** corrigido em 17 de outubro de 2026 (reproduzido antes da correção); validação no Raspberry pendente.
+
+- **Correção aplicada:** `Terminal.save` faz `fsync` do arquivo temporário e do diretório; `Terminal.load` lança `TerminalConfigCorrupted`; no startup `Terminal.quarantine_if_corrupted` preserva o arquivo como `terminal.json.corrupt-<data>` (nunca apaga) e o Terminal volta à ativação por serial ou à recuperação de pagamento pendente; heartbeat, sync, telemetria e lifecycle usam `Terminal.load_or_none`; credencial ilegível/insegura vira "indisponível" em `MainWindow` e na tela/thread de ativação, sem abortar o PyQt. Testes: `tests/test_terminal_config_recovery.py`.
+
+- **Severidade:** alta
+- **Tipo:** confirmado (reproduzido com `terminal.json` vazio em diretório isolado)
+- **Arquivo/função:** `main.py:_run_gui` chama `Terminal.load()` sem tratamento; `Terminal.load` propaga `JSONDecodeError`. Mesmo padrão em `TerminalSocket._load_active_terminal` (fora do `try`, mata a thread de heartbeat), `PaymentListener.__init__`, `SyncService.sincronizar_produtos` e `MainWindow` (`TerminalCredentialStore().load()` pode lançar `TerminalCredentialMissing` em arquivo truncado).
+- **Cenário:** desligamento sujo durante `Terminal.save()` — que usa tmp + `replace` **sem `fsync`** — ou corrupção do disco (ver BUG-045).
+- **Impacto:** processo sai com traceback antes de qualquer tela; `Restart=on-failure` entra em loop até o limite de partidas e o terminal fica sem UI e sem mensagem ao operador.
+- **Correção recomendada:** `fsync` do arquivo e do diretório em `Terminal.save`; tratar JSON inválido como estado de recuperação explícito (tela administrativa, sem apagar o arquivo), como já é feito para SQLite em `local_recovery_screen`.
+
+## BUG-047 — `SIGTERM` encerra o processo sem o desligamento cooperativo
+
+**Status:** aberto; confirmado por código em 17 de outubro de 2026.
+
+- **Severidade:** média
+- **Tipo:** confirmado
+- **Arquivo/função:** não há `signal.signal` em `src/`; `MainWindow._parar_servicos` só roda pelo fluxo administrativo/`closeEvent`.
+- **Cenário:** `systemctl --user stop`, `sudo poweroff` ou reboot.
+- **Impacto:** workers, sockets e checkpoints não são encerrados de forma ordenada. Além disso, `_parar_servicos` pode bloquear a thread principal por muito mais que `TimeoutStopSec=30` (`confirmation.stop` espera até 50 s, cada worker de pagamento até 25 s, recuperação até 25 s).
+- **Correção recomendada:** tratar `SIGTERM` via `QSocketNotifier`/timer chamando `encerrar_terminal`, e limitar a soma das esperas ao orçamento de parada da unit. SQLite (journal DELETE) e o checkpoint de pagamento continuam seguros; o risco maior é `terminal.json`/arquivos auxiliares (BUG-046).
+
+## BUG-048 — Um único 401/403 bloqueia o Terminal até reiniciar
+
+**Status:** aberto; confirmado por código em 17 de outubro de 2026 (impacto de 403 depende do backend).
+
+- **Severidade:** média
+- **Tipo:** confirmado (latch) / potencial (403 por regra de negócio)
+- **Arquivo/função:** `BackendClient.request` grava `AUTH_REQUIRED`/`FORBIDDEN` em `terminal_access_state` para qualquer endpoint; só a ativação volta a `OPERATIONAL`. `TerminalSocket._heartbeat` e `PaymentListener.run` **retornam definitivamente** após 401. `MainWindow._guard_device_auth` reposiciona a tela a cada 1 s.
+- **Cenário:** credencial rotacionada/revogada e depois restaurada, ou um 403 pontual em endpoint não essencial.
+- **Impacto:** operação bloqueada, heartbeat e socket de pagamento mortos até reinício manual, mesmo depois de reprovisionado. O texto atual pede reinício, então é comportamento conhecido, mas não automático.
+- **Correção recomendada:** restringir o latch a endpoints de identidade/handshake, revalidar periodicamente e reiniciar heartbeat/listener ao voltar a `OPERATIONAL`.
+
+## BUG-049 — Socket de pagamento não detecta conexão meio-aberta
+
+**Status:** aberto; potencial, identificado em 17 de outubro de 2026.
+
+- **Severidade:** média (mitigada)
+- **Tipo:** potencial
+- **Arquivo/função:** `PaymentListener.run` usa `settimeout(5)` e trata `WebSocketTimeoutException` com `continue`, sem ping/pong de aplicação; o backend mantém a sessão em `PaymentWebSocketHandler.sessions` enquanto `isOpen()`.
+- **Cenário:** queda breve de Wi-Fi (medida perda de 13,33% no campo, ver [[wifi]]) sem FIN/RST.
+- **Impacto:** o terminal continua `CONNECTED` e não reconecta; eventos `PAYMENT_STATUS`, `PRODUCT_SYNC_REQUIRED` e reset são perdidos. Pagamento é coberto pelo polling de `/order/{id}/status`; catálogo só atualiza no sync periódico (300 s) e reset no bootstrap (60 s). A telemetria mostra estado de socket falso.
+- **Correção recomendada:** `ping` periódico com prazo de pong (ou derrubar o listener quando o heartbeat de `/terminal-socket` falhar).
+
+## BUG-050 — Logs da aplicação não sobrevivem a reinício no Raspberry
+
+**Status:** aberto; confirmado no Raspberry em 16 de outubro de 2026.
+
+- **Severidade:** média
+- **Tipo:** confirmado
+- **Arquivo/função:** o app só registra em stdout (`logging.basicConfig`), a unit `systemd --user` envia ao journal e o journald do equipamento está com `Storage=volatile`. Não há arquivo de log.
+- **Impacto:** as 6 falhas de partida do `app247-terminal.service` em 16/10 (14:29–14:37) e qualquer incidente de pagamento antes de um reboot não podem ser investigados.
+- **Correção recomendada:** journald persistente com limite (`SystemMaxUse`) ou log rotativo próprio em `/var/lib/app247/logs`, sem segredos.
+
+## BUG-051 — Instalação de campo diverge do layout e das permissões atuais
+
+**Status:** parcialmente corrigido em 17 de outubro de 2026 — o instalador migra a unit legada (BUG-053); permissões de `/opt/app247` no campo continuam pendentes.
+
+- **Severidade:** média
+- **Tipo:** confirmado
+- **Evidência:** `/opt/app247` e `/opt/app247/releases` pertencem a `jefro` (usuário gráfico); `releases/1.0.0` é gravável por ele; a unit instalada usa `/usr/local/bin/app247-terminal-launcher` e um override com `ExecStartPre=-/opt/app247/current/app247-terminal`, enquanto o pacote atual usa `app/app247-terminal`. Versão ativa `1.0.1`.
+- **Impacto:** o usuário da sessão (com senha fraca e SSH aberto) pode trocar o código executado; a atualização a partir deste layout antigo não foi testada.
+- **Correção recomendada:** validar `install.sh` atual contra essa instalação em ambiente de teste antes de aplicar no campo; garantir `root:root` em `/opt/app247` e releases.
+
+## BUG-052 — Código morto e diretórios legados
+
+**Status:** aberto; baixa prioridade.
+
+- **Severidade:** baixa
+- **Tipo:** confirmado
+- **Arquivo/função:** `ui/screens/login.py` (`/usuarios/anonimo`, comentado em `application.py`), `Produtos.get_produtos_api` (`requests.get` sem autenticação e com `print`), diretórios não versionados `telas/`, `model/`, `service/`, `database/` com apenas `__pycache__`. Complementa BUG-025.
+- **Correção recomendada:** remover em etapa própria após confirmar que não há uso.
+
+## BUG-053 — `ExecStartPre --apply-display` abria a GUI e entrava em loop
+
+**Status:** corrigido no repositório em 17 de outubro de 2026; no Raspberry há contorno manual (`override.conf` de 16/10 14:42) até instalar o launcher novo.
+
+- **Severidade:** alta
+- **Tipo:** confirmado (logs do Raspberry e reprodução com o launcher de `HEAD`)
+- **Causa raiz:** o launcher das releases 1.0.0/1.0.1 (`HEAD:packaging/app247-terminal-launcher`) termina com `exec "$EXECUTABLE"` e **descarta os argumentos**. A unit de usuário instalada no campo chama `ExecStartPre=/usr/local/bin/app247-terminal-launcher --apply-display`; o executável recebia zero argumentos, iniciava a GUI completa (sync, heartbeat) e o systemd matava o pré-start após 90 s (`start-pre operation timed out`, 5× entre 14:29 e 14:36 de 16/10). Reprodução: launcher antigo → `args=0`; launcher novo → `args=1 [--apply-display]`.
+- **Origem da unit divergente:** ela não vem de outro provisionador; é a saída de uma versão intermediária do `install.sh` (unit de usuário apontando para o launcher, sem marcador `# Managed by App247`), instalada junto com o launcher antigo. A unit de sistema de `HEAD` chamava o executável direto. O `install.sh` atual recusava sobrescrever essa unit sem marcador, então uma atualização no campo falharia.
+- **Correção:** o launcher trata `--apply-display` em caminho próprio (só esse argumento, espera de sessão curta, `timeout` de 20 s, sem lock e sem GUI); o instalador reconhece a unit legada, guarda backup `.legacy-<data>`, substitui e avisa sobre drop-ins que redefinem `ExecStart*`. `Restart=on-failure` com `StartLimitBurst=5` é a política correta para unit de usuário (BUG-044). O `ExecStartPre` continua no launcher porque `DisplayService` precisa de `WAYLAND_DISPLAY` e de `DISPLAY_*` do `terminal.env`, que só o launcher resolve. O timeout do systemd não foi aumentado.
+- **Testes:** `tests/test_service_startup.py` (argumento repassado, extras recusados, pré-start limitado mesmo com executável travado, execução em paralelo à GUI com lock, migração da unit legada do campo, preservação de unit alheia).
+
+## BUG-054 — Toda saída normal da GUI terminava em `TypeError`
+
+**Status:** corrigido em 17 de outubro de 2026.
+
+- **Severidade:** média
+- **Tipo:** confirmado (encontrado pelo teste de startup de BUG-046)
+- **Arquivo/função:** `main._run_gui` chamava `_gui_exit_code(exit_code, window.shutdown_was_requested)`, mas `shutdown_was_requested` é argumento só por nome.
+- **Impacto:** o encerramento administrativo saía com traceback e código 1, e `Restart=on-failure` religava o Terminal. Restrito ao worktree não commitado.
+- **Correção:** chamada por palavra-chave; coberto por `test_gui_startup_survives_empty_terminal_json`.
+
 ## BUG-031 — Heartbeat opaco, sem confirmação do backend
 
 **Status:** corrigido em 24 de agosto de 2026.

@@ -56,7 +56,7 @@ class TerminalSocket:
         return self._thread
 
     def _load_active_terminal(self):
-        terminal = Terminal.load(self.terminal_path)
+        terminal = Terminal.load_or_none(self.terminal_path)
         if terminal is None or not terminal.activated or not terminal.ativo:
             return None
         return terminal

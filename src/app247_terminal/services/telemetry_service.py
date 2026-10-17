@@ -50,7 +50,7 @@ class TelemetryService:
 
     def collect_and_send(self):
         try:
-            terminal = Terminal.load(self.terminal_path)
+            terminal = Terminal.load_or_none(self.terminal_path)
             if terminal is None or not terminal.activated or not terminal.ativo or not self.api_url:
                 return False
             payload = self.build_payload(terminal)

@@ -115,6 +115,15 @@ class ActivationCheckThread(QThread):
             if not self.isInterruptionRequested():
                 self.status_changed.emit("Sem conexão com o servidor. Tentando novamente...", True)
             logger.warning("Falha ao consultar ativação: %s", error)
+        except TerminalCredentialMissing as error:
+            # Arquivo de credencial ilegível/inseguro: exige reprovisionamento,
+            # mas não pode abortar o processo a partir da thread.
+            if not self.isInterruptionRequested():
+                self.status_changed.emit(
+                    "Credencial do equipamento inválida. Solicite reprovisionamento.",
+                    True,
+                )
+            logger.error("Credencial do dispositivo inutilizável: %s", error)
 
 
 class CadastroTerminalScreen(QWidget):
@@ -301,7 +310,7 @@ class CadastroTerminalScreen(QWidget):
                 True,
             )
             return
-        if Terminal.is_activated() and TerminalCredentialStore().load():
+        if Terminal.is_activated() and self._credential_available():
             self.activation_timer.stop()
             terminal_access_state.set("OPERATIONAL")
             self.parent_app.iniciar_operacao_terminal()
@@ -313,6 +322,14 @@ class CadastroTerminalScreen(QWidget):
 
         self._atualizar_status("Consultando ativação...", False, state="loading")
         self.activation_worker.start()
+
+    @staticmethod
+    def _credential_available():
+        try:
+            return bool(TerminalCredentialStore().load())
+        except TerminalCredentialMissing as error:
+            logger.error("Credencial do dispositivo inutilizável: %s", error)
+            return False
 
     def _atualizar_status(self, message, is_error, state=None):
         self.status_label.setText(message)
