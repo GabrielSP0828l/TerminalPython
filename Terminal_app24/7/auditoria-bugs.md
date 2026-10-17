@@ -552,6 +552,16 @@ Falha, instrução e sucesso eram cards e a aprovação apagava a compra após c
 - **Impacto:** o encerramento administrativo saía com traceback e código 1, e `Restart=on-failure` religava o Terminal. Restrito ao worktree não commitado.
 - **Correção:** chamada por palavra-chave; coberto por `test_gui_startup_survives_empty_terminal_json`.
 
+## BUG-055 — Ativação no campo recusava o enable legado e o rollback é parcial
+
+**Status:** recusa corrigida em 17 de outubro de 2026; rollback parcial aberto.
+
+- **Severidade:** média
+- **Tipo:** confirmado na primeira instalação da 1.0.3 no Raspberry
+- **Causa:** `enable_user_service_offline` só aceitava `default.target.wants/app247-terminal.service -> ../app247-terminal.service`; o `systemctl --user enable` das instalações 1.0.0/1.0.1 cria link absoluto para a mesma unit. O `--activate` falhou e voltou `current` para 1.0.1.
+- **Correção:** link absoluto para `USER_SERVICE_DESTINATION` é aceito como equivalente; link para outra unit continua recusado (`tests/test_service_startup.py`).
+- **Aberto:** `restore_previous_release` restaura apenas `current`; launcher, unit, política de Wi-Fi e atalho já gravados permanecem. No campo o resultado foi coerente (launcher novo funciona com a 1.0.1), mas o rollback deveria restaurar ou declarar esses arquivos.
+
 ## BUG-031 — Heartbeat opaco, sem confirmação do backend
 
 **Status:** corrigido em 24 de agosto de 2026.

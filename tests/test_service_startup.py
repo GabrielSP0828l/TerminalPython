@@ -209,9 +209,17 @@ class InstalledUnitTest(unittest.TestCase):
             )
             dropin.write_text(dropin_contents, encoding="utf-8")
 
+            wants = unit_dir / "default.target.wants"
+            wants.mkdir()
+            # Link absoluto criado por `systemctl --user enable` no campo.
+            (wants / "app247-terminal.service").symlink_to(unit_path)
+
             activation = self._install(self._environment(root, desktop_home))
 
             self.assertEqual(0, activation.returncode, activation.stderr)
+            self.assertEqual(
+                unit_path, (wants / "app247-terminal.service").resolve()
+            )
             unit = unit_path.read_text(encoding="utf-8")
             launcher = root / "bin/launcher"
             self.assertIn("# Managed by App247", unit)
@@ -330,6 +338,19 @@ class InstalledUnitTest(unittest.TestCase):
             entry = desktop_home / "Desktop/Terminal 24-7.desktop"
             self.assertIn("Icon=computer\n", entry.read_text(encoding="utf-8"))
             self.assertIn("logo ausente", activation.stderr)
+
+    def test_foreign_enable_link_is_still_rejected(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            desktop_home = root / "home"
+            wants = desktop_home / ".config/systemd/user/default.target.wants"
+            wants.mkdir(parents=True)
+            (wants / "app247-terminal.service").symlink_to("/usr/lib/systemd/user/outra.service")
+
+            activation = self._install(self._environment(root, desktop_home))
+
+            self.assertNotEqual(0, activation.returncode)
+            self.assertIn("enable existente da unit não pertence", activation.stderr)
 
     def test_unrelated_unit_with_same_name_is_not_overwritten(self):
         with tempfile.TemporaryDirectory() as directory:

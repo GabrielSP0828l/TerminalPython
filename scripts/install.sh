@@ -479,7 +479,12 @@ enable_user_service_offline() {
         return 1
     fi
     if [ -e "$wants_link" ] || [ -L "$wants_link" ]; then
-        if [ ! -L "$wants_link" ] || [ "$(readlink "$wants_link")" != "../$SERVICE_NAME" ]; then
+        # `systemctl --user enable` (instalações 1.0.0/1.0.1) cria link absoluto
+        # para a mesma unit; ele é equivalente ao relativo gerado aqui.
+        if [ ! -L "$wants_link" ] || {
+            [ "$(readlink "$wants_link")" != "../$SERVICE_NAME" ] &&
+            [ "$(readlink "$wants_link")" != "$USER_SERVICE_DESTINATION" ]
+        }; then
             echo "Erro: enable existente da unit não pertence ao App247: $wants_link" >&2
             return 1
         fi
