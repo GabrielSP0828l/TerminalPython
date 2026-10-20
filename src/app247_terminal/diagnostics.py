@@ -75,21 +75,6 @@ def _check_security_settings() -> list[DiagnosticResult]:
         results.append(_result("ERROR", "Senha administrativa", "ausente ou ainda é placeholder"))
     else:
         results.append(_result("OK", "Senha administrativa", "configurada"))
-
-    if settings.LEGACY_TERMINAL_AUTH_ENABLED:
-        token = settings.TERMINAL_INTERNAL_TOKEN.strip()
-        if not token or token.lower() == "seu_token":
-            results.append(_result(
-                "ERROR", "Autenticação legada",
-                "habilitada sem token de migração válido",
-            ))
-        else:
-            results.append(_result(
-                "WARN", "Autenticação legada",
-                "habilitada; desative após provisionar a credencial individual",
-            ))
-    else:
-        results.append(_result("OK", "Autenticação legada", "desabilitada"))
     return results
 
 

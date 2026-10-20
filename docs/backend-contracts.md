@@ -16,9 +16,9 @@ X-Terminal-Id: <terminalId>
 `APP247_DEVICE_CREDENTIAL_PATH`, instalado atomicamente e com modo `0600`. Ela não
 fica no SQLite, `terminal.json`, logs ou Git.
 
-`TERMINAL_INTERNAL_TOKEN` existe somente para
-`POST /terminal/{terminalId}/credential/migrate`, quando
-`LEGACY_TERMINAL_AUTH_ENABLED=true`. Não há fallback operacional.
+A credential é instalada pelo pareamento (`POST /terminal/pairing` e
+`POST /terminal/pairing/claim`). `TERMINAL_INTERNAL_TOKEN` e a migração legada
+foram removidos em 20/10/2026. Não há fallback operacional.
 
 - 401: credential ausente, inválida, rotacionada ou revogada; bloquear novas
   vendas e exigir reprovisionamento.

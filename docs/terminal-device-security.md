@@ -13,9 +13,13 @@ symlink, arquivo não regular, tamanho/formato inválido ou permissões de
 grupo/outros.
 Não é gravado em `terminal.json`, SQLite, logs ou Git.
 
-`TERMINAL_INTERNAL_TOKEN` não autentica operação diária. Seu único uso é a
-migração explícita, quando `LEGACY_TERMINAL_AUTH_ENABLED=true`. Falhar a
-credential individual nunca aciona fallback legado.
+A credential chega pelo pareamento: sem ela, a tela de ativação mostra um código
+e um QR (`APP247-PAIR:XXXX-XXXX`). O gestor confirma no app admin e o Terminal
+recebe a credential uma única vez em `POST /terminal/pairing/claim`, trocando o
+`pairingToken`, que fica só em memória e nunca aparece na tela. O código vale
+15 minutos e é renovado sozinho. `scripts/install-device-credential.sh` continua
+disponível para instalação manual. A migração por `TERMINAL_INTERNAL_TOKEN` foi
+removida em 20/10/2026; não existe fallback legado.
 
 HTTP e WebSocket enviam `X-Terminal-Token`; rotas que exigem correlação também
 enviam `X-Terminal-Id`. 401 entra em modo seguro e exige reprovisionamento; 403

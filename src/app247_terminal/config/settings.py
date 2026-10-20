@@ -92,12 +92,6 @@ RESET_STAGING_DIR = DATA_DIR / "reset-staging"
 TERMINAL_ADMIN_PASSWORD = _env(
     "APP247_TERMINAL_ADMIN_PASSWORD", "TERMINAL_ADMIN_PASSWORD"
 )
-TERMINAL_INTERNAL_TOKEN = _env(
-    "APP247_TERMINAL_INTERNAL_TOKEN", "TERMINAL_INTERNAL_TOKEN"
-)
-LEGACY_TERMINAL_AUTH_ENABLED = _env(
-    "APP247_LEGACY_TERMINAL_AUTH_ENABLED", "LEGACY_TERMINAL_AUTH_ENABLED", "false"
-).strip().lower() == "true"
 
 
 def _int_setting(name: str, legacy: str, default: int, minimum: int) -> int:

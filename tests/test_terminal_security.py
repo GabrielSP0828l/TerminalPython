@@ -5,10 +5,8 @@ from pathlib import Path
 from unittest.mock import patch
 
 from app247_terminal.services.terminal_auth import (
-    LegacyTerminalAuthDisabled,
     TerminalCredentialMissing,
     TerminalCredentialStore,
-    legacy_migration_headers,
     terminal_auth_headers,
 )
 
@@ -77,30 +75,13 @@ class TerminalSecurityTest(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, "formato tdc_"):
                 store.install("terminal-a:plain-secret")
 
-    def test_global_token_is_never_operational_fallback(self):
-        with tempfile.TemporaryDirectory() as directory, patch(
-            "app247_terminal.services.terminal_auth.TERMINAL_INTERNAL_TOKEN", "legacy-secret"
-        ):
+    def test_missing_credential_has_no_fallback(self):
+        with tempfile.TemporaryDirectory() as directory:
             with self.assertRaises(TerminalCredentialMissing):
                 terminal_auth_headers(
                     "terminal-a",
                     store=TerminalCredentialStore(Path(directory) / "missing"),
                 )
-
-    def test_legacy_token_requires_explicit_migration_mode(self):
-        with patch("app247_terminal.services.terminal_auth.LEGACY_TERMINAL_AUTH_ENABLED", False), patch(
-            "app247_terminal.services.terminal_auth.TERMINAL_INTERNAL_TOKEN", "legacy-secret"
-        ):
-            with self.assertRaises(LegacyTerminalAuthDisabled):
-                legacy_migration_headers("terminal-a")
-
-        with patch("app247_terminal.services.terminal_auth.LEGACY_TERMINAL_AUTH_ENABLED", True), patch(
-            "app247_terminal.services.terminal_auth.TERMINAL_INTERNAL_TOKEN", "legacy-secret"
-        ):
-            self.assertEqual(
-                "legacy-secret",
-                legacy_migration_headers("terminal-a")["X-Terminal-Token"],
-            )
 
 
 if __name__ == "__main__":

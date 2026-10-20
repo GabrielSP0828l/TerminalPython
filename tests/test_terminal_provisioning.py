@@ -1,78 +1,99 @@
 import tempfile
 import unittest
 from pathlib import Path
-from unittest.mock import patch
 
 from app247_terminal.services.terminal_auth import (
     TerminalCredentialStore,
-    migrate_legacy_credential,
+    TerminalPairingExpired,
+    claim_pairing,
+    start_pairing,
 )
 
 
 class FakeResponse:
-    status_code = 200
+    def __init__(self, status_code, payload):
+        self.status_code = status_code
+        self._payload = payload
 
     def json(self):
-        return {
-            "terminalId": "terminal-a",
-            "credential": "tdc_individual",
-            "version": 1,
-            "createdAt": "2026-09-28T12:00:00Z",
-        }
+        return self._payload
 
 
 class FakeSession:
-    def __init__(self):
+    def __init__(self, *responses):
+        self.responses = list(responses)
         self.calls = []
 
     def post(self, url, **kwargs):
         self.calls.append((url, kwargs))
-        return FakeResponse()
+        return self.responses.pop(0)
 
 
-class TerminalProvisioningTest(unittest.TestCase):
-    def test_legacy_migration_installs_individual_credential_once(self):
-        with tempfile.TemporaryDirectory() as directory, patch(
-            "app247_terminal.services.terminal_auth.LEGACY_TERMINAL_AUTH_ENABLED", True
-        ), patch(
-            "app247_terminal.services.terminal_auth.TERMINAL_INTERNAL_TOKEN", "legacy-test-secret"
-        ):
+START = {
+    "pairingToken": "tpt_secret",
+    "code": "K7Q4-MZ8P",
+    "qrPayload": "APP247-PAIR:K7Q4-MZ8P",
+    "expiresAt": "2026-10-20T12:15:00Z",
+}
+
+
+class TerminalPairingTest(unittest.TestCase):
+    def test_start_sends_device_identity_and_returns_code(self):
+        session = FakeSession(FakeResponse(201, START))
+
+        pairing = start_pairing(
+            {"serialNumber": "serial-a", "macAddress": "aa:bb", "ipAddress": ""},
+            "http://backend/", session,
+        )
+
+        self.assertEqual("K7Q4-MZ8P", pairing["code"])
+        self.assertEqual("tpt_secret", pairing["pairingToken"])
+        url, kwargs = session.calls[0]
+        self.assertEqual("http://backend/terminal/pairing", url)
+        self.assertEqual({"serialNumber": "serial-a", "macAddress": "aa:bb"}, kwargs["json"])
+
+    def test_start_rejects_incomplete_response(self):
+        with self.assertRaises(ValueError):
+            start_pairing({"serialNumber": "s"}, "http://backend",
+                          FakeSession(FakeResponse(201, {"code": "X"})))
+
+    def test_claim_pending_installs_nothing(self):
+        with tempfile.TemporaryDirectory() as directory:
             store = TerminalCredentialStore(Path(directory) / "credential")
-            session = FakeSession()
-            result = migrate_legacy_credential(
-                "terminal-a", "http://backend", session, store
-            )
-            self.assertEqual("terminal-a", result["terminalId"])
+            session = FakeSession(FakeResponse(200, {"status": "PENDING"}))
+
+            self.assertIsNone(claim_pairing("tpt_secret", "http://backend", session, store))
+            self.assertIsNone(store.load())
+            self.assertEqual({"pairingToken": "tpt_secret"}, session.calls[0][1]["json"])
+
+    def test_claim_paired_installs_credential_and_returns_activation(self):
+        with tempfile.TemporaryDirectory() as directory:
+            store = TerminalCredentialStore(Path(directory) / "credential")
+            session = FakeSession(FakeResponse(200, {
+                "status": "PAIRED", "terminalId": "terminal-a", "serialNumber": "serial-a",
+                "ativo": True, "activated": True, "credential": "tdc_individual",
+                "credentialVersion": 1,
+            }))
+
+            activation = claim_pairing("tpt_secret", "http://backend", session, store)
+
             self.assertEqual("tdc_individual", store.load())
-            self.assertTrue(session.calls[0][0].endswith(
-                "/terminal/terminal-a/credential/migrate"
-            ))
-            self.assertEqual(
-                "legacy-test-secret",
-                session.calls[0][1]["headers"]["X-Terminal-Token"],
-            )
+            self.assertEqual("terminal-a", activation["terminalId"])
+            self.assertTrue(activation["activated"])
+            self.assertNotIn("credential", activation)
 
-    def test_migration_never_installs_credential_for_another_terminal(self):
-        class WrongTerminalResponse(FakeResponse):
-            def json(self):
-                payload = super().json()
-                payload["terminalId"] = "terminal-b"
-                return payload
+    def test_claim_expired_asks_for_new_code(self):
+        for status in (409, 410):
+            with self.subTest(status=status), self.assertRaises(TerminalPairingExpired):
+                claim_pairing("tpt_secret", "http://backend",
+                              FakeSession(FakeResponse(status, {"code": "PAIRING_EXPIRED"})))
 
-        class WrongSession(FakeSession):
-            def post(self, url, **kwargs):
-                return WrongTerminalResponse()
-
-        with tempfile.TemporaryDirectory() as directory, patch(
-            "app247_terminal.services.terminal_auth.LEGACY_TERMINAL_AUTH_ENABLED", True
-        ), patch(
-            "app247_terminal.services.terminal_auth.TERMINAL_INTERNAL_TOKEN", "legacy-test-secret"
-        ):
+    def test_claim_paired_without_credential_installs_nothing(self):
+        with tempfile.TemporaryDirectory() as directory:
             store = TerminalCredentialStore(Path(directory) / "credential")
             with self.assertRaises(ValueError):
-                migrate_legacy_credential(
-                    "terminal-a", "http://backend", WrongSession(), store
-                )
+                claim_pairing("tpt_secret", "http://backend", FakeSession(
+                    FakeResponse(200, {"status": "PAIRED", "terminalId": "terminal-a"})), store)
             self.assertIsNone(store.load())
 
 

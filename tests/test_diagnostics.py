@@ -75,8 +75,6 @@ class InstallationDiagnosticsTest(unittest.TestCase):
                 "app247_terminal.diagnostics.settings.CONFIG_ENV_PATH", config_file
             ), patch(
                 "app247_terminal.diagnostics.settings.TERMINAL_ADMIN_PASSWORD", "strong-password"
-            ), patch(
-                "app247_terminal.diagnostics.settings.LEGACY_TERMINAL_AUTH_ENABLED", False
             ), patch("app247_terminal.diagnostics.settings.DATA_DIR", data), patch(
                 "app247_terminal.diagnostics.settings.DATABASE_PATH", database
             ), patch(

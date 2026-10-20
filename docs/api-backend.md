@@ -11,7 +11,8 @@ e a interface recebe mensagens amigáveis.
 | Situação | Método e URL | Body/headers | Resposta | Responsável |
 | --- | --- | --- | --- | --- |
 | COMPATÍVEL | `GET /terminal/serial/{serial}` | sem body; timeout 5s | `TerminalActivationResponse` | `ActivationCheckThread` |
-| MIGRAÇÃO | `POST /terminal/{terminalId}/credential/migrate` | token global somente com flag explícita | credential individual uma vez | `migrate_legacy_credential` |
+| COMPATÍVEL | `POST /terminal/pairing` | `{serialNumber, macAddress?, ipAddress?}`; timeout 5s | `201 {pairingToken, code, qrPayload, expiresAt}` | `start_pairing` |
+| COMPATÍVEL | `POST /terminal/pairing/claim` | `{pairingToken}`; a cada 5s | `PENDING` ou, uma vez, `PAIRED` com a credential; `410` pede novo código | `claim_pairing` |
 | COMPATÍVEL | `GET /produtos/sync?uuidTerminal={uuid}&lastSync={Instant opcional}` | sem body; timeout 10s | `ProdutoSyncResponse {syncAt, fullSync, changes}` | `SyncService` |
 | COMPATÍVEL | `GET /terminal/health` | sem body; timeout 3s | health leve + latência medida localmente | `NetworkMetricsCollector` |
 | COMPATÍVEL | `POST /terminal/telemetry` | UUID + blocos system/network/application/display; timeout 5s | estado aceito e classificação atual | `TelemetryService` |
