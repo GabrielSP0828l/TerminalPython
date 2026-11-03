@@ -161,6 +161,28 @@ class CompraSession(QObject):
         if self.started_at is not None and self.remaining_seconds() > 0:
             self._set_state("CART_READY")
 
+    def lock_cart_after_failure(self, charged_payload):
+        """Cobrança encerrada fecha o carrinho no backend: ele só aceita nova tentativa."""
+        self.cart_locked = True
+        self.locked_cart_payload = charged_payload
+
+    def charge_changes_cart(self, cart_payload):
+        return self.cart_locked and (
+            not self.cart_id or cart_payload != self.locked_cart_payload
+        )
+
+    def prepare_cart_for_charge(self, cart_payload):
+        """Retorna True quando a cobrança deve reabrir o carrinho sem reescrevê-lo."""
+        if not self.cart_locked:
+            return False
+        if not self.charge_changes_cart(cart_payload):
+            return True
+        # Itens diferentes não cabem na Order congelada: a compra segue em carrinho novo.
+        self.cart_id = None
+        self.cart_locked = False
+        self.locked_cart_payload = None
+        return False
+
     def mark_timeout_check(self):
         if self.state in {"APPROVED", "SUCCESS", "IDLE", "TIMEOUT_CHECK"}:
             return False
@@ -205,6 +227,8 @@ class CompraSession(QObject):
         self.generation = None
         self.attempt_id = None
         self.cart_id = None
+        self.cart_locked = False
+        self.locked_cart_payload = None
         self.order_id = None
         self.payment_id = None
         self.payment_attempt_id = None

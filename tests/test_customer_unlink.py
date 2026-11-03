@@ -46,6 +46,41 @@ class CustomerUnlinkTest(unittest.TestCase):
         self.assertIsNone(self.session.cart_id)
         self.assertIn(PROMPT, self.terminal.customer_status.text())
 
+    def _fail_charge(self, payload):
+        self.session.cart_id = "cart-1"
+        self.session.lock_cart_after_failure(payload)
+
+    def _start_charge(self):
+        self.host.setCurrentWidget(self.host.confirmacao_compra)
+        self.host.pagamento = MagicMock()
+        self.terminal.iniciar_pagamento_confirmado()
+        return self.host.pagamento.iniciar_pagamento
+
+    def test_retry_with_same_items_keeps_the_customer(self):
+        self._scan_product()
+        self._link()
+        self._fail_charge(self.terminal.carrinho.to_dict())
+
+        with patch.object(self.terminal, "mostrar_aviso") as warning:
+            charge = self._start_charge()
+
+        warning.assert_not_called()
+        charge.assert_called_once()
+        self.assertEqual("Maria", self.terminal.customer_display_name)
+
+    def test_retry_with_changed_items_warns_and_unlinks(self):
+        self._scan_product()
+        self._link()
+        self._fail_charge({"terminalId": "terminal-1", "items": []})
+
+        with patch.object(self.terminal, "mostrar_aviso") as warning:
+            charge = self._start_charge()
+
+        warning.assert_called_once()
+        self.assertEqual("Cliente desvinculado", warning.call_args.args[0])
+        charge.assert_called_once()
+        self.assertIsNone(self.terminal.customer_display_name)
+
     def test_link_is_shown_during_the_purchase(self):
         self._link()
         self.assertEqual("Maria", self.terminal.customer_display_name)

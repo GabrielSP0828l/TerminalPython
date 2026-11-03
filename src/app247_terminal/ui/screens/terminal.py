@@ -490,8 +490,17 @@ class TerminalScreen(QWidget):
             return False
 
         logger.info("[PAYMENT-UI] navegando para preparação do pagamento")
+        cart_payload = self.carrinho.to_dict()
+        if (self.customer_display_name is not None
+                and self.parent_app.compra_session.charge_changes_cart(cart_payload)):
+            self._desvincular_cliente()
+            self.mostrar_aviso(
+                "Cliente desvinculado",
+                "Você alterou os itens depois do pagamento não aprovado, então esta "
+                "compra seguirá sem vínculo com o seu App247.",
+            )
         return self.parent_app.pagamento.iniciar_pagamento(
-            self.carrinho.to_dict(), self.totalBox.text()
+            cart_payload, self.totalBox.text()
         )
 
     def cancelar_venda(self):

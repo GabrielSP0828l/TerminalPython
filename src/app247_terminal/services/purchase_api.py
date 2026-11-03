@@ -153,8 +153,13 @@ class PurchaseApi:
             raise PurchaseApiError("Carrinho sem identificador", "cart")
         return str(cart_id)
 
-    def start_point(self, cart_payload, on_cart_created=None, existing_cart_id=None):
-        cart_id = self.ensure_cart(cart_payload, existing_cart_id)
+    def start_point(self, cart_payload, on_cart_created=None, existing_cart_id=None,
+                    reopen_cart=False):
+        if reopen_cart:
+            self.terminal_id = str(cart_payload.get("terminalId") or "") or self.terminal_id
+            cart_id = existing_cart_id
+        else:
+            cart_id = self.ensure_cart(cart_payload, existing_cart_id)
         if on_cart_created is not None:
             on_cart_created(str(cart_id))
 
@@ -299,12 +304,13 @@ class PointCheckoutWorker(QThread):
     timed_out = pyqtSignal(str, str, bool, dict)
 
     def __init__(self, payload, api_factory=PurchaseApi,
-                 existing_cart_id=None,
+                 existing_cart_id=None, reopen_cart=False,
                  cart_checkpoint=None, parent=None):
         super().__init__(parent)
         self.payload = payload
         self.api_factory = api_factory
         self.existing_cart_id = existing_cart_id
+        self.reopen_cart = reopen_cart
         self.cart_checkpoint = cart_checkpoint
         self.outcome_emitted = False
 
@@ -312,7 +318,12 @@ class PointCheckoutWorker(QThread):
         logger.info("[PAYMENT-UI] worker iniciado")
         try:
             api = self.api_factory()
-            if self.existing_cart_id:
+            if self.reopen_cart:
+                result = api.start_point(
+                    self.payload, self._checkpoint_cart, self.existing_cart_id,
+                    reopen_cart=True,
+                )
+            elif self.existing_cart_id:
                 result = api.start_point(
                     self.payload, self._checkpoint_cart, self.existing_cart_id
                 )

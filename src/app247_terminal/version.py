@@ -1,3 +1,3 @@
 """Fonte de verdade versionada da aplicação."""
 
-APP_VERSION = "1.0.4"
+APP_VERSION = "1.0.5"

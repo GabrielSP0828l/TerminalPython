@@ -122,6 +122,35 @@ class PurchaseApiTest(unittest.TestCase):
         self.assertEqual("PUT", http.calls[0][0])
         self.assertTrue(http.calls[0][1].endswith("/carrinho/cart-linked"))
 
+    def test_retry_of_closed_cart_charges_without_rewriting_it(self):
+        http = FakeSession([
+            FakeResponse({"orderId": "order-1", "status": "WAITING_PAYMENT"}),
+        ])
+        created = []
+        result = PurchaseApi("http://backend", http).start_point(
+            {"terminalId": "terminal-1", "items": [{"productId": "p1"}]},
+            created.append, "cart-closed", reopen_cart=True,
+        )
+        self.assertEqual(["cart-closed"], created)
+        self.assertEqual("cart-closed", result["cartId"])
+        self.assertEqual(1, len(http.calls))
+        self.assertEqual("POST", http.calls[0][0])
+        self.assertTrue(http.calls[0][1].endswith("/pagamento/terminal/cart-closed"))
+
+    def test_worker_reopens_closed_cart(self):
+        http = FakeSession([
+            FakeResponse({"orderId": "order-1", "status": "WAITING_PAYMENT"}),
+        ])
+        worker = PointCheckoutWorker(
+            {"terminalId": "terminal-1", "items": [{"productId": "p1"}]},
+            api_factory=lambda: PurchaseApi("http://backend", http),
+            existing_cart_id="cart-closed", reopen_cart=True,
+        )
+        worker.run()
+        self.assertTrue(worker.outcome_emitted)
+        self.assertEqual(["POST"], [call[0] for call in http.calls])
+        self.assertTrue(http.calls[0][1].endswith("/pagamento/terminal/cart-closed"))
+
     def test_active_payment_conflict_is_structured_and_ambiguous(self):
         http = FakeSession([FakeResponse({
             "code": "PAYMENT_ALREADY_ACTIVE",

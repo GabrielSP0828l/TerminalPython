@@ -58,6 +58,87 @@ class PaymentFlowTest(unittest.TestCase):
     def tearDown(self):
         self.screen.parar_workers()
 
+    def _charge(self, payload, cart_id="cart-a"):
+        with patch("app247_terminal.ui.screens.payment.PointCheckoutWorker") as worker:
+            self.assertTrue(self.screen.iniciar_pagamento(payload, "R$ 1,00"))
+        self.screen.point_worker = None
+        attempt = self.screen.current_attempt
+        self.screen._cart_created(attempt, {"cartId": cart_id})
+        self.screen._point_started(attempt, {
+            "cartId": cart_id, "orderId": "order-a",
+            "terminalId": "terminal-a", "status": "WAITING_PAYMENT",
+        })
+        return worker.call_args.kwargs
+
+    def _settle(self, status):
+        terminal = SimpleNamespace(terminalId="terminal-a")
+        with patch("app247_terminal.ui.screens.payment.Terminal.load", return_value=terminal):
+            self.screen.processar_evento({
+                "terminalId": "terminal-a", "orderId": "order-a", "status": status,
+            })
+
+    def _charge_again_after(self, status, payload, retry_payload):
+        session = self.parent.compra_session
+        session.reset()
+        self.assertFalse(self._charge(payload)["reopen_cart"])
+        self._settle(status)
+        self.assertFalse(session.payment_in_flight)
+        return self._charge(retry_payload, cart_id=session.cart_id or "cart-b")
+
+    def test_retry_after_cancel_reopens_cart_with_same_items(self):
+        payload = {"terminalId": "terminal-a", "items": [{"productId": "p1"}]}
+        retry = self._charge_again_after("CANCELED", payload, dict(payload))
+        self.assertTrue(retry["reopen_cart"])
+        self.assertEqual("cart-a", retry["existing_cart_id"])
+
+    def test_retry_after_rejection_keeps_reopening_the_same_cart(self):
+        payload = {"terminalId": "terminal-a", "items": [{"productId": "p1"}]}
+        self._charge_again_after("REJECTED", payload, dict(payload))
+        self._settle("REJECTED")
+        third = self._charge(dict(payload))
+        self.assertTrue(third["reopen_cart"])
+        self.assertEqual("cart-a", third["existing_cart_id"])
+
+    def test_retry_with_changed_items_uses_new_cart(self):
+        payload = {"terminalId": "terminal-a", "items": [{"productId": "p1"}]}
+        changed = {"terminalId": "terminal-a", "items": [{"productId": "p2"}]}
+        retry = self._charge_again_after("CANCELED", payload, changed)
+        self.assertFalse(retry["reopen_cart"])
+        self.assertIsNone(retry["existing_cart_id"])
+
+    def test_refunded_order_is_never_reopened(self):
+        payload = {"terminalId": "terminal-a", "items": [{"productId": "p1"}]}
+        retry = self._charge_again_after("REFUNDED", payload, dict(payload))
+        self.assertFalse(retry["reopen_cart"])
+        self.assertIsNone(retry["existing_cart_id"])
+
+    def test_adopted_charge_from_other_cart_is_not_reopened(self):
+        payload = {"terminalId": "terminal-a", "items": [{"productId": "p1"}]}
+        session = self.parent.compra_session
+        session.reset()
+        self._charge(payload)
+        session.cart_id = "cart-other"
+        self._settle("CANCELED")
+        retry = self._charge(dict(payload), cart_id="cart-b")
+        self.assertFalse(retry["reopen_cart"])
+        self.assertIsNone(retry["existing_cart_id"])
+
+    def test_safe_failure_before_order_keeps_rewriting_open_cart(self):
+        payload = {"terminalId": "terminal-a", "items": [{"productId": "p1"}]}
+        session = self.parent.compra_session
+        session.reset()
+        session.start_if_needed()
+        session.set_remote_ids(cart_id="cart-linked")
+        with patch("app247_terminal.ui.screens.payment.PointCheckoutWorker") as worker:
+            self.screen.iniciar_pagamento(payload, "R$ 1,00")
+        self.screen.point_worker = None
+        self.screen._safe_failure("falhou")
+        with patch("app247_terminal.ui.screens.payment.PointCheckoutWorker") as worker:
+            self.screen.iniciar_pagamento(payload, "R$ 1,00")
+        self.screen.point_worker = None
+        self.assertFalse(worker.call_args.kwargs["reopen_cart"])
+        self.assertEqual("cart-linked", worker.call_args.kwargs["existing_cart_id"])
+
     def test_approved_event_is_correlated_and_opens_existing_success_screen(self):
         terminal = SimpleNamespace(terminalId="terminal-a")
         with patch("app247_terminal.ui.screens.payment.Terminal.load", return_value=terminal):

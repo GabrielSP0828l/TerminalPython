@@ -57,6 +57,8 @@ class PagamentoScreen(QWidget):
         super().__init__(parent)
         self.parent = parent
         self.current_attempt = None
+        self.charge_payload = None
+        self.charge_cart_id = None
         self.point_worker = None
         self.status_worker = None
         self.resume_worker = None
@@ -194,6 +196,7 @@ class PagamentoScreen(QWidget):
         return page
 
     def iniciar_pagamento(self, cart_payload, total_text):
+        reopen_cart = self.parent.compra_session.prepare_cart_for_charge(cart_payload)
         try:
             attempt = self.parent.compra_session.begin_payment()
         except Exception:
@@ -203,6 +206,8 @@ class PagamentoScreen(QWidget):
             logger.warning("[PAYMENT-UI] worker não iniciado: tentativa já ativa")
             return False
         self.current_attempt = attempt
+        self.charge_payload = cart_payload
+        self.charge_cart_id = None
         self.timeout_pending = False
         self.timeout_abandoned = False
         self.reconciliation_failures = 0
@@ -219,6 +224,7 @@ class PagamentoScreen(QWidget):
         self.point_worker = PointCheckoutWorker(
             cart_payload,
             existing_cart_id=self.parent.compra_session.cart_id,
+            reopen_cart=reopen_cart,
             cart_checkpoint=lambda cart_id, token=attempt:
             self.parent.compra_session.persist_cart_checkpoint(token, cart_id),
             parent=self,
@@ -249,6 +255,7 @@ class PagamentoScreen(QWidget):
         if attempt != self.current_attempt:
             return
         cart_id = data.get("cartId")
+        self.charge_cart_id = str(cart_id)
         self.parent.compra_session.set_remote_ids(cart_id=cart_id)
         logger.info(
             "[PAYMENT] checkpoint local origin=TERMINAL_REQUEST cartId=%s localAttemptId=%s",
@@ -777,7 +784,12 @@ class PagamentoScreen(QWidget):
         )
         self.error_retry.setEnabled(True)
         self.pages.setCurrentWidget(self.error_page)
-        self.parent.compra_session.prepare_retry()
+        session = self.parent.compra_session
+        # Estorno não aceita nova tentativa, e cobrança adotada é de outro carrinho.
+        reopenable = (normalized != "REFUNDED" and self.charge_payload is not None
+                      and self.charge_cart_id == session.cart_id)
+        session.prepare_retry()
+        session.lock_cart_after_failure(self.charge_payload if reopenable else None)
         self.failure_return_timer.start(self.FAILURE_RETURN_MS)
 
     def _safe_failure(self, message):

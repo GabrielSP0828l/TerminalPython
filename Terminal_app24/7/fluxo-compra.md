@@ -66,7 +66,7 @@ O cliente identificado por QR vale para uma única compra. O vínculo autoritati
 | `CANCELAR`, pagamento cancelado ou sessão expirada | desvinculado |
 | último item removido | desvinculado, com o aviso "Cliente desvinculado" pedindo um novo QR |
 | reinício do app ou do equipamento | desvinculado |
-| recusa ou falha, com `TENTAR NOVAMENTE` | mantido: é a mesma compra e o mesmo carrinho |
+| recusa ou falha, com `TENTAR NOVAMENTE` | mantido com os mesmos itens: mesma compra e mesmo carrinho; itens alterados criam carrinho novo e desvinculam o cliente, com aviso |
 
 `CompraSession` passar para `IDLE` limpa o cliente em `TerminalScreen`, para qualquer caminho de encerramento. A geração da sessão é guardada ao iniciar o vínculo: resposta de uma compra encerrada, ou que chegue com pagamento em voo, é descartada sem aviso e não altera o `cart_id`.
 

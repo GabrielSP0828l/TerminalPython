@@ -39,7 +39,7 @@ A confirmação usa uma guarda própria para a tela `ConfirmacaoCompraScreen`. E
 
 O fluxo registra marcos `[PAYMENT-UI]`, `[PAYMENT-HTTP]` e `[PAYMENT-WORKER]`. O worker Point emite `succeeded`, `failed` ou `timed_out` e sempre termina pelo sinal nativo `finished`; se terminar sem outcome, a UI converte isso em erro operacional e encerra o loading.
 5. `PROCESSING` mantém loading; somente `APPROVED` correlacionado abre o sucesso verde;
-6. falha definitiva abre erro vermelho e “Tentar novamente” retorna ao carrinho;
+6. falha definitiva abre erro vermelho e “Tentar novamente” retorna ao carrinho; o backend fecha esse carrinho na primeira cobrança, então com os mesmos itens a nova tentativa vai direto a `POST /pagamento/terminal/{cartId}` (sem `PUT /carrinho`, que responderia 409), e com itens alterados o Terminal cria carrinho novo e avisa que o cliente foi desvinculado;
 7. no sucesso, a compra permanece em memória até `FINALIZAR` executar o reset central.
 
 Antes de persistir/cobrar, o backend recalcula cada item. O Terminal envia `expectedUnitPrice` com seis casas. Se o preço atual aumentou, `409 PRICE_CHANGED` substitui os valores locais pelos retornados, mostra a alteração e exige que o cliente revise e confirme novamente. O total local usa `Decimal`; o texto de duas casas nunca alimenta o cálculo.
