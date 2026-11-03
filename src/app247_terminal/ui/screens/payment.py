@@ -608,7 +608,7 @@ class PagamentoScreen(QWidget):
             return
         if not session.order_id:
             session.clear_unresolved_after_authoritative_absence()
-            self.parar_espera()
+            self.parent.reset_compra(outcome="cancelled")
             self.parent.setCurrentWidget(self.parent.welcome)
 
     def _active_recovery_failed(self, expected_attempt, origin, message):
@@ -743,9 +743,11 @@ class PagamentoScreen(QWidget):
         point_request_running = bool(
             self.point_worker is not None and self.point_worker.isRunning()
         )
+        # O cart pode existir só para vincular o cliente. Sem tentativa em voo não há
+        # cobrança a verificar, e a descoberta nunca encerraria essa sessão expirada.
         if (
             not session.order_id
-            and not session.cart_id
+            and (not session.cart_id or not session.payment_in_flight)
             and not point_request_running
         ):
             self._finish_expired_session()
@@ -796,9 +798,17 @@ class PagamentoScreen(QWidget):
         self.parent.compra_session.prepare_retry()
 
     def _voltar_lista(self):
-        if not self.parent.compra_session.payment_in_flight:
-            self.failure_return_timer.stop()
-            self.parent.setCurrentWidget(self.parent.terminal)
+        session = self.parent.compra_session
+        if session.payment_in_flight:
+            return
+        self.failure_return_timer.stop()
+        if session.started_at is None:
+            # Pagamento recuperado após reiniciar: os itens não existem mais, e
+            # manter o carrinho levaria o cliente dele para a próxima compra.
+            self.parent.reset_compra(outcome="cancelled")
+            self.parent.setCurrentWidget(self.parent.welcome)
+            return
+        self.parent.setCurrentWidget(self.parent.terminal)
 
     def _attention_timeout(self):
         if not self.parent.compra_session.payment_in_flight:

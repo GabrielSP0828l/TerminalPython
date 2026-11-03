@@ -27,7 +27,7 @@ from app247_terminal.ui.styles.tokens import Spacing, TouchSize
 from app247_terminal.ui.screens.session_timer import SessionTimerLabel
 from app247_terminal.models.money import format_brl, persisted
 from app247_terminal.services.scanner_router import ScannerRouter, ScanType
-from app247_terminal.services.purchase_api import CustomerLinkWorker, CustomerLinkRecoveryWorker
+from app247_terminal.services.purchase_api import CustomerLinkWorker
 from app247_terminal.services.catalog_service import CatalogService
 from app247_terminal.services.customer_link_service import CustomerLinkStateService
 
@@ -170,7 +170,7 @@ class TerminalScreen(QWidget):
         self.scanner_router = ScannerRouter()
         self.customer_link_store = CustomerLinkStateService()
         self.customer_link_worker = None
-        self.customer_recovery_worker = None
+        self.customer_link_generation = None
         self.customer_display_name = None
 
         self.listener = PaymentListener(self)
@@ -193,7 +193,12 @@ class TerminalScreen(QWidget):
         self.setAttribute(Qt.WA_StyledBackground, True)
         self.setStyleSheet(Theme.cart_stylesheet())
         self._montar_interface()
-        self._recover_customer_link()
+        # Os itens só existem em memória: depois de reiniciar não há compra para
+        # continuar, e um vínculo antigo iria para o próximo cliente.
+        self.customer_link_store.clear()
+        session = getattr(parent, "compra_session", None)
+        if session is not None:
+            session.state_changed.connect(self._compra_state_changed)
 
         self.timer_foco = QTimer(self)
         self.timer_foco.timeout.connect(self.garantir_foco)
@@ -393,8 +398,7 @@ class TerminalScreen(QWidget):
             self.parent_app.pagamento.verificar_apos_reconexao()
 
     def liberar_tela(self):
-        self.customer_link_store.clear()
-        self.customer_display_name = None
+        self._desvincular_cliente()
         if self.parent_app is not None:
             self.parent_app.compra_session.cart_id = None
         self.carrinho = Carrinho()
@@ -411,7 +415,6 @@ class TerminalScreen(QWidget):
         self.id_contador = 1
         self.peso_total_venda = 0.0
         self.atualizar_interface()
-        self._show_customer_prompt()
 
     def set_checkout_interactions_enabled(self, enabled):
         self._checkout_interactions_enabled = bool(enabled)
@@ -508,8 +511,17 @@ class TerminalScreen(QWidget):
         self._relayout_product_cards()
         self.atualizar_interface()
         if self.carrinho.vazio():
+            had_customer = (self.customer_display_name is not None
+                            or self.customer_link_worker is not None)
             self.parent_app.compra_session.cancel()
             self._show_empty_state()
+            if had_customer:
+                self.mostrar_aviso(
+                    "Cliente desvinculado",
+                    "Você removeu todos os itens, então esta compra não está mais "
+                    "vinculada ao seu App247.\n\nPara vincular, escaneie um novo QR "
+                    "do aplicativo.",
+                )
 
     def readProduct(self):
         scan = self.scanner_router.parse(self.codigo_barras.text())
@@ -593,6 +605,7 @@ class TerminalScreen(QWidget):
             return
         if not self.parent_app.compra_session.start_if_needed():
             return
+        self.customer_link_generation = self.parent_app.compra_session.generation
         self.customer_status.setText("Identificando cliente...")
         self.codigo_barras.setEnabled(False)
         self.customer_link_worker = CustomerLinkWorker(
@@ -606,19 +619,35 @@ class TerminalScreen(QWidget):
         self.customer_link_worker.finished.connect(self._customer_worker_finished)
         self.customer_link_worker.start()
 
+    def _customer_link_is_stale(self):
+        """Resposta de uma compra que já acabou não pode tocar a compra seguinte."""
+        session = self.parent_app.compra_session
+        if (self.customer_link_generation is not None
+                and self.customer_link_generation == session.generation
+                and not session.payment_in_flight):
+            return False
+        logger.info("[CUSTOMER-LINK] resposta descartada; compra de origem encerrada")
+        self.customer_link_generation = None
+        return True
+
     def _customer_linked(self, payload):
+        if self._customer_link_is_stale():
+            self._show_customer_prompt()
+            return
         cart_id = str(payload.get("cartId") or "")
         if not cart_id:
             self._customer_link_failed("CUSTOMER_LINK_FAILED", "Resposta inválida")
             return
         self.parent_app.compra_session.set_remote_ids(cart_id=cart_id)
-        self.customer_link_store.save(cart_id)
         self.customer_display_name = str(payload.get("displayName") or "Cliente")
         self.customer_status.setText(
             f"✓ Compra vinculada a {self.customer_display_name}"
         )
 
     def _customer_link_failed(self, code, _message):
+        if self._customer_link_is_stale():
+            self._show_customer_prompt()
+            return
         messages = {
             "CUSTOMER_LINK_TOKEN_EXPIRED": "QR expirado. Gere um novo QR no aplicativo.",
             "CUSTOMER_LINK_TOKEN_ALREADY_USED": "Este QR já foi utilizado. Gere um novo QR no aplicativo.",
@@ -645,26 +674,15 @@ class TerminalScreen(QWidget):
             "Vincule esta compra ao seu App247 — escaneie o QR exibido no aplicativo"
         )
 
-    def _recover_customer_link(self):
-        cart_id = self.customer_link_store.load()
-        if not cart_id:
-            return
-        self.customer_status.setText("Recuperando cliente vinculado...")
-        self.customer_recovery_worker = CustomerLinkRecoveryWorker(cart_id, parent=self)
-        self.customer_recovery_worker.succeeded.connect(self._customer_linked)
-        self.customer_recovery_worker.failed.connect(self._customer_recovery_failed)
-        self.customer_recovery_worker.finished.connect(self._customer_recovery_finished)
-        self.customer_recovery_worker.start()
-
-    def _customer_recovery_failed(self):
-        self.customer_link_store.clear()
+    def _desvincular_cliente(self):
+        self.customer_link_generation = None
+        self.customer_display_name = None
         self._show_customer_prompt()
 
-    def _customer_recovery_finished(self):
-        worker = self.customer_recovery_worker
-        self.customer_recovery_worker = None
-        if worker is not None:
-            worker.deleteLater()
+    def _compra_state_changed(self, state):
+        # O vínculo vale só para a compra atual; toda compra encerrada passa por IDLE.
+        if state == "IDLE":
+            self._desvincular_cliente()
 
     def aplicar_precos_atualizados(self, payload):
         for change in (payload or {}).get("items", []):

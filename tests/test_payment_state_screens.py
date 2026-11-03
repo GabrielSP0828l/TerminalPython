@@ -152,22 +152,21 @@ class PaymentStateScreensTest(unittest.TestCase):
         self.assertEqual("R$ 48,90", success.lbl_total.text())
         self.assertEqual([
             "ADICIONAR CPF",
-            "ENVIAR POR E-MAIL",
             "ENVIAR POR WHATSAPP",
             "FINALIZAR",
         ], [
-            success.btn_cpf.text(), success.btn_email.text(),
+            success.btn_cpf.text(),
             success.btn_whatsapp.text(), success.btn_finalizar.text(),
         ])
         self.assertEqual(0, self.parent.reset_calls)
         for button in (
-            success.btn_finalizar, success.btn_cpf, success.btn_email, success.btn_whatsapp
+            success.btn_finalizar, success.btn_cpf, success.btn_whatsapp
         ):
             self.assertGreaterEqual(button.height(), 60)
 
         self.assertFalse(success.btn_cpf.isEnabled())
-        self.assertTrue(success.btn_email.isEnabled())
         self.assertTrue(success.btn_whatsapp.isEnabled())
+        self.assertFalse(hasattr(success, "btn_email"))
         success.btn_finalizar.click()
         self.assertEqual(1, self.parent.reset_calls)
         self.assertIs(self.parent.welcome, self.parent.current)
@@ -211,7 +210,6 @@ class PaymentStateScreensTest(unittest.TestCase):
         success = self.parent.confirmacao
         success.mostrar_tela()
         self.assertFalse(success.btn_whatsapp.isEnabled())
-        self.assertFalse(success.btn_email.isEnabled())
         self.assertFalse(success.btn_finalizar.isEnabled())
         self.assertFalse(success.post_timeout_timer.isActive())
 
@@ -256,15 +254,14 @@ class PaymentStateScreensTest(unittest.TestCase):
         success.show()
         self.app.processEvents()
         for button in (
-            success.btn_finalizar, success.btn_cpf,
-            success.btn_whatsapp, success.btn_email,
+            success.btn_finalizar, success.btn_cpf, success.btn_whatsapp,
         ):
             self.assertGreaterEqual(button.height(), 60, button.text())
             self.assertLessEqual(button.geometry().bottom(), success.height())
 
-        success.btn_email.click()
+        success.btn_whatsapp.click()
         self.app.processEvents()
-        for button in success.email_keyboard.findChildren(
+        for button in success.numeric_keyboard.findChildren(
                 __import__("PyQt5.QtWidgets", fromlist=["QPushButton"]).QPushButton):
             self.assertGreaterEqual(button.height(), 48, button.text())
             self.assertLessEqual(
@@ -272,20 +269,20 @@ class PaymentStateScreensTest(unittest.TestCase):
                 success.height(), button.text(),
             )
 
-    def test_email_uses_touch_keyboard_and_validation_stays_inline(self):
+    def test_whatsapp_uses_touch_keyboard_and_validation_stays_inline(self):
         self.screen._apply_status("order-a", "APPROVED")
         success = self.parent.confirmacao
-        success.btn_email.click()
-        self.assertIs(success.email_keyboard, success.keyboard_pages.currentWidget())
-        success.destination_input.setText("invalido")
+        success.btn_whatsapp.click()
+        self.assertIs(success.numeric_keyboard, success.keyboard_pages.currentWidget())
+        success.destination_input.setText("123")
         success._send_receipt()
-        self.assertIn("e-mail válido", success.input_error.text())
+        self.assertIn("WhatsApp válido", success.input_error.text())
         self.assertIs(success.input_page, success.pages.currentWidget())
 
     def test_cancel_input_returns_to_approved_without_losing_order(self):
         self.screen._apply_status("order-a", "APPROVED")
         success = self.parent.confirmacao
-        success.btn_email.click()
+        success.btn_whatsapp.click()
         success._cancel_receipt_input()
 
         self.assertIs(success.success_page, success.pages.currentWidget())
@@ -307,7 +304,6 @@ class PaymentStateScreensTest(unittest.TestCase):
         self.assertIs(success.notice_page, success.pages.currentWidget())
         success.btn_notice_back.click()
         self.assertIs(success.success_page, success.pages.currentWidget())
-        self.assertTrue(success.btn_email.isEnabled())
         self.assertTrue(success.btn_whatsapp.isEnabled())
 
     def test_repeated_clicks_start_only_one_receipt_worker_and_pause_timeout(self):
@@ -331,14 +327,13 @@ class PaymentStateScreensTest(unittest.TestCase):
     def test_receipt_failure_keeps_approved_state_and_other_actions_available(self):
         self.screen._apply_status("order-a", "APPROVED")
         success = self.parent.confirmacao
-        success.receipt_channel = "EMAIL"
+        success.receipt_channel = "WHATSAPP"
         success.receipt_send_in_progress = True
         success._receipt_failed("Não foi possível enviar o comprovante.", "receipt")
 
         self.assertEqual("SUCCESS", self.parent.compra_session.state)
         self.assertEqual("order-a", self.parent.compra_session.order_id)
         self.assertTrue(success.btn_whatsapp.isEnabled())
-        self.assertTrue(success.btn_email.isEnabled())
         self.assertIs(success.notice_page, success.pages.currentWidget())
 
 

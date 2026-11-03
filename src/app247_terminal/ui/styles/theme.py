@@ -137,6 +137,30 @@ class Theme:
                 border-color: {Colors.DIVIDER};
             }}
 
+            /* QMessageBox herda o texto branco do QWidget acima; sem fundo próprio
+               ele usaria o cinza claro da paleta do sistema e ficaria ilegível. */
+            QMessageBox {{
+                background-color: {Colors.SURFACE_ELEVATED};
+            }}
+            QMessageBox QLabel {{
+                color: {Colors.TEXT_PRIMARY};
+                background-color: transparent;
+            }}
+            QMessageBox QPushButton {{
+                min-width: 140px;
+                background-color: {Colors.SURFACE};
+                color: {Colors.TEXT_PRIMARY};
+                border: 2px solid {Colors.PRIMARY};
+            }}
+            QMessageBox QPushButton:default {{
+                background-color: {Colors.PRIMARY};
+                color: {Colors.TEXT_ON_PRIMARY};
+            }}
+            QMessageBox QPushButton:pressed {{
+                background-color: {Colors.PRIMARY_PRESSED};
+                color: {Colors.TEXT_ON_PRIMARY};
+            }}
+
             QLabel[state="success"] {{ color: {Colors.SUCCESS}; }}
             QLabel[state="warning"] {{ color: {Colors.WARNING}; }}
             QLabel[state="error"] {{ color: {Colors.ERROR}; }}

@@ -119,6 +119,12 @@ manual das instalações 1.0.0/1.0.1 (`App247 Terminal.desktop`, que chamava o
 launcher fora da unit) é movido para `~/.local/share/app247/legacy-desktop/`,
 evitando dois atalhos; outros arquivos da área de trabalho não são tocados.
 
+No Raspberry Pi OS o pcmanfm pergunta "Executar / Executar no Terminal" para
+todo `.desktop` da área de trabalho. O instalador grava `quick_exec=1` em
+`~/.config/libfm/libfm.conf` do usuário gráfico (preservando as outras chaves;
+`APP247_DESKTOP_QUICK_EXEC=false` desativa) para o atalho abrir com um toque.
+Vale no próximo login ou após `pcmanfm --reconfigure` (BUG-057).
+
 Rollback do `--activate`: antes de gravar qualquer arquivo fora de `releases/`,
 o instalador guarda um snapshot temporário de launcher, unit, link de enable,
 política de Wi-Fi, ícone, atalhos e autostart. Se algo falhar depois da troca de

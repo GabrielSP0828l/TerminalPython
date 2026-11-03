@@ -6,6 +6,8 @@ Critério: **confirmado** quando o caminho executável ou contrato prova o compo
 
 ## BUG-001 — Crédito/débito concluem sem backend
 
+**Status:** corrigido — revisão formal em 17 de outubro de 2026. `telas/pagamento.py` não existe mais; o método (débito/crédito/PIX) é escolhido na Point e o único caminho de sucesso é `PagamentoScreen._handle_payment_approved`, alcançado somente quando `CompraSession.apply_status` recebe status definitivo do backend para a Order ativa.
+
 - **Severidade:** crítica
 - **Tipo:** confirmado
 - **Arquivo/função:** `telas/pagamento.py`, `PagamentoScreen.finalizar_venda`
@@ -14,6 +16,8 @@ Critério: **confirmado** quando o caminho executável ou contrato prova o compo
 - **Correção recomendada:** conectar ao checkout Point e só finalizar após estado definitivo do backend.
 
 ## BUG-002 — Qualquer mensagem WebSocket aprova a compra
+
+**Status:** corrigido — revisão formal em 17 de outubro de 2026. `PaymentListener.route_message` só encaminha `type=PAYMENT_STATUS`; `PagamentoScreen.processar_evento` exige `terminalId` igual ao local e `CompraSession.apply_status` exige `orderId` da sessão, `paymentAttemptId` compatível e status em `APPROVED/PAID/PROCESSED`. Testes: `test_event_from_other_terminal_never_approves`, `test_event_without_definitive_status_never_approves`.
 
 - **Severidade:** crítica
 - **Tipo:** confirmado
@@ -35,6 +39,8 @@ Critério: **confirmado** quando o caminho executável ou contrato prova o compo
 
 ## BUG-004 — Endpoint e DTO de pagamento são incompatíveis
 
+**Status:** corrigido — revisão formal em 17 de outubro de 2026. O cliente usa `POST /pagamento/terminal/{cartId}` (`PurchaseApi`), consulta `GET /order/{orderId}/status` e `GET /pagamento/terminal/{terminalId}/ativo`; todos existem no `PagamentoController`/`OrderController` atuais (ver [[auditoria-2026-10]]).
+
 - **Severidade:** crítica
 - **Tipo:** confirmado
 - **Arquivo/função:** `telas/pagamento.py:275-293`
@@ -43,6 +49,8 @@ Critério: **confirmado** quando o caminho executável ou contrato prova o compo
 - **Correção recomendada:** contrato coordenado específico para início Point.
 
 ## BUG-005 — Evento de pagamento não é publicado pelo backend ativo
+
+**Status:** corrigido — revisão formal em 17 de outubro de 2026. O backend (`07e9d4a`) publica `PaymentEvent` em `PaymentStateTransitionService` e `PaymentWebSocketHandler.sendToTerminal` envia com `@TransactionalEventListener(AFTER_COMMIT)`. O terminal mantém polling HTTP e reconciliação como rede de segurança (BUG-015).
 
 - **Severidade:** crítica
 - **Tipo:** confirmado no backend atual
@@ -86,6 +94,8 @@ Critério: **confirmado** quando o caminho executável ou contrato prova o compo
 
 ## BUG-009 — Reset de cartão não limpa o carrinho lógico
 
+**Status:** corrigido — revisão formal em 17 de outubro de 2026. `finalizar_venda` não existe mais; `MainWindow.reset_compra` chama `TerminalScreen.liberar_tela`, que recria `Carrinho()` e limpa `linhas`, e só ocorre após estado terminal ou sem pendência remota.
+
 - **Severidade:** alta
 - **Tipo:** confirmado
 - **Arquivo/função:** `PagamentoScreen.finalizar_venda`
@@ -94,6 +104,8 @@ Critério: **confirmado** quando o caminho executável ou contrato prova o compo
 - **Correção recomendada:** usar um único reset somente após resultado definitivo.
 
 ## BUG-010 — POST de carrinho pode duplicar compras
+
+**Status:** corrigido — revisão formal em 17 de outubro de 2026. `CompraSession.begin_payment` recusa tentativa concorrente; o `cartId` é gravado em checkpoint SQLite antes do pagamento, retentativas usam `PUT /carrinho/{id}`, o backend responde `PAYMENT_ALREADY_ACTIVE` e o terminal adota a cobrança existente em vez de criar outra.
 
 - **Severidade:** alta
 - **Tipo:** potencial
@@ -104,6 +116,8 @@ Critério: **confirmado** quando o caminho executável ou contrato prova o compo
 
 ## BUG-011 — Sem timeout nas chamadas de compra
 
+**Status:** corrigido — revisão formal em 17 de outubro de 2026. Todo HTTP de compra passa por `BackendClient`/`PurchaseApi` com timeout (padrão 10 s) e `requests.Timeout` vira `PurchaseApiError` tipado.
+
 - **Severidade:** alta
 - **Tipo:** confirmado
 - **Arquivo/função:** `pagamento.py`; `app_payment_screen.py`; `Produtos.get_produtos_api`
@@ -112,6 +126,8 @@ Critério: **confirmado** quando o caminho executável ou contrato prova o compo
 - **Correção recomendada:** connect/read timeouts e erros tipados centralizados.
 
 ## BUG-012 — HTTP é executado na UI thread
+
+**Status:** corrigido — revisão formal em 17 de outubro de 2026. Ativação, Point, status, retomada, comprovante e checkout por app rodam em `QThread` com signals e guarda `isRunning()`.
 
 - **Severidade:** alta
 - **Tipo:** confirmado
@@ -122,6 +138,8 @@ Critério: **confirmado** quando o caminho executável ou contrato prova o compo
 
 ## BUG-013 — Thread de checkout altera widgets Qt diretamente
 
+**Status:** corrigido — revisão formal em 17 de outubro de 2026. `AppCheckoutWorker` só emite `succeeded/failed`; `AppPaymentScreen` atualiza widgets na UI thread.
+
 - **Severidade:** alta
 - **Tipo:** potencial/race confirmada no desenho
 - **Arquivo/função:** `AppPaymentScreen.gerar_checkout:169-172`
@@ -130,6 +148,8 @@ Critério: **confirmado** quando o caminho executável ou contrato prova o compo
 - **Correção recomendada:** emitir signals para a UI thread.
 
 ## BUG-014 — Evento tardio pode liberar nova compra
+
+**Status:** corrigido — revisão formal em 17 de outubro de 2026. `reset` zera `order_id`/`payment_attempt_id` e cada compra recebe Order própria; eventos com `orderId` ou tentativa divergentes retornam `IGNORED`. Testes: `test_late_event_from_previous_purchase_does_not_release_new_one`, `test_event_from_old_payment_attempt_is_ignored`.
 
 - **Severidade:** crítica
 - **Tipo:** potencial
@@ -152,6 +172,8 @@ Critério: **confirmado** quando o caminho executável ou contrato prova o compo
 
 ## BUG-016 — Listener pode não encerrar
 
+**Status:** corrigido — revisão formal em 17 de outubro de 2026. `recv` tem timeout de 5 s, `PaymentListener.stop` fecha o socket e espera dentro do orçamento de `shutdown_budget` (BUG-047).
+
 - **Severidade:** média
 - **Tipo:** potencial
 - **Arquivo/função:** `PaymentListener.stop/run`
@@ -172,6 +194,8 @@ Critério: **confirmado** quando o caminho executável ou contrato prova o compo
 
 ## BUG-018 — Cálculo de peso é inconsistente
 
+**Status:** corrigido — revisão formal em 17 de outubro de 2026. O scanner cria itens com `received_weight=None`; `Carrinho.total` e `Carrinho.__str__` passaram a usar `Item.subtotal()`, igual à linha, e o valor cobrado continua sendo o do backend. Teste: `test_cart_total_matches_line_subtotal_for_weighted_item`.
+
 - **Severidade:** alta
 - **Tipo:** confirmado
 - **Arquivo/função:** `Item.subtotal`; `Carrinho.total`; `TerminalScreen`
@@ -180,6 +204,8 @@ Critério: **confirmado** quando o caminho executável ou contrato prova o compo
 - **Correção recomendada:** regra por unidade de medida validada no backend.
 
 ## BUG-019 — PIX pode ser confirmado manualmente
+
+**Status:** corrigido — revisão formal em 17 de outubro de 2026. `PixScreen` foi removida; não existe botão de confirmação financeira manual. A tela de pagamento apenas aguarda o backend ou solicita cancelamento via Spring.
 
 - **Severidade:** crítica
 - **Tipo:** confirmado em eventual backend legado
@@ -223,6 +249,8 @@ Critério: **confirmado** quando o caminho executável ou contrato prova o compo
 
 ## BUG-023 — Logs expõem dados e não têm estrutura
 
+**Status:** corrigido — revisão formal em 17 de outubro de 2026. `PixScreen` foi removida; o fluxo ativo usa `logging` com `orderId`/estágio, sem copia-e-cola nem credenciais. Restam `print` apenas em código morto (`Produtos.get_produtos_api`, `login.py`), rastreado em BUG-052.
+
 - **Severidade:** alta
 - **Tipo:** confirmado
 - **Arquivo/função:** `PixScreen` imprime copia-e-cola; vários `print`/`traceback.print_exc`
@@ -231,6 +259,8 @@ Critério: **confirmado** quando o caminho executável ou contrato prova o compo
 - **Correção recomendada:** logging estruturado/sanitizado com terminal, carrinho e Order.
 
 ## BUG-024 — Segredo de configuração local e URL hardcoded
+
+**Status:** corrigido — revisão formal em 17 de outubro de 2026. Não há URL hardcoded em `src/`; endpoints vêm de `config/settings.py`/`/etc/app247/terminal.env`, `.env` está no `.gitignore` e só exemplos são versionados.
 
 - **Severidade:** média
 - **Tipo:** confirmado/potencial
@@ -241,6 +271,8 @@ Critério: **confirmado** quando o caminho executável ou contrato prova o compo
 
 ## BUG-025 — Código morto contém falhas de runtime
 
+**Status:** aberto — revisão formal em 17 de outubro de 2026. `parentrminal` não existe mais, mas `TecladoScreen` ainda cancela para `parent.login` (inexistente) e `LoginScreen` usa `/usuarios/anonimo`. Inacessível hoje porque `LoginScreen` está comentada em `application.py`; tratado junto com BUG-052.
+
 - **Severidade:** baixa enquanto inacessível
 - **Tipo:** confirmado
 - **Arquivo/função:** `TecladoScreen.finalizar` (`parentrminal`); cancelamento usa `parent.login`, hoje `None`; `LoginScreen` usa endpoint ausente.
@@ -250,6 +282,8 @@ Critério: **confirmado** quando o caminho executável ou contrato prova o compo
 
 ## BUG-026 — Socket permite personificação/substituição de terminal
 
+**Status:** corrigido — revisão formal em 17 de outubro de 2026. `/terminal-socket` e `/payment-socket/{id}` enviam a credencial individual (`terminal_auth_headers`) e o `TerminalHandshakeInterceptor` do backend a valida contra o `terminalId` do path.
+
 - **Severidade:** alta
 - **Tipo:** confirmado no desenho
 - **Arquivo/função:** URLs e handlers nativos cliente/backend
@@ -258,6 +292,8 @@ Critério: **confirmado** quando o caminho executável ou contrato prova o compo
 - **Correção recomendada:** autenticação de provisionamento e vínculo no handshake.
 
 ## BUG-027 — Erros relevantes são engolidos ou exibidos ao cliente
+
+**Status:** corrigido — revisão formal em 17 de outubro de 2026. Telas de compra exibem somente textos fixos ou mapeados (`DOMAIN_MESSAGES`, mensagens de cliente/QR/comprovante); detalhes vão para o log. O único `except:` restante está em `login.py` (código morto, BUG-052).
 
 - **Severidade:** média
 - **Tipo:** confirmado
@@ -577,6 +613,63 @@ Falha, instrução e sucesso eram cards e a aprovação apagava a compra após c
 - **Correção:** `ui/responsive.py` deriva o perfil compacto da largura lógica da tela (< 760 px) e reaplica quando a geometria muda (orientação pelo painel). Em retrato: `ESPAÇO`/`LIMPAR` descem para uma linha própria no teclado, o rodapé do carrinho empilha total sobre ações, as ações do comprovante viram coluna única e os títulos de login/configurações quebram linha. Ajustes neutros em paisagem: largura mínima real das teclas 44 px, padding lateral menor em botões que já ocupam a largura toda, logo inicial em 240 px, títulos de pagamento e confirmação com quebra. Paisagem permanece visualmente igual.
 - **Paisagem (pré-existente, mesma causa):** `AdminAuthScreen` (altura mínima 798, teclas sobrepostas), `TecladoScreen` (616) e `PagamentoScreen` (606) excediam 600 px de altura em `1024×600` deitado. `PaymentStateWidget` e `ConfirmacaoScreen` escolhiam margens por `height() > width()` do próprio widget, então abriam com margens de retrato e o mínimo estourava antes do primeiro resize. Correção: ambos seguem o perfil da tela; deitado, teclas do teclado virtual têm 52 px de altura (em pé continuam 64), e o acesso admin usa margens menores, status de 30 px e `CANCELAR`/`ENTRAR` lado a lado. Maior altura mínima deitado: 578 px (admin).
 - **Testes:** `tests/test_portrait_screens.py` valida as 11 telas em `600×1024` e em `1024×600`, incluindo carrinho e confirmação da compra; falha se o mínimo de qualquer tela exceder o display ou se botão sair da área, e cobre a troca de perfil.
+
+## BUG-057 — Atalho da área de trabalho perguntava "Executar / Executar no Terminal"
+
+**Status:** corrigido em 17 de outubro de 2026 no instalador (próxima release) e aplicado manualmente no Raspberry de campo.
+
+- **Severidade:** baixa (operação)
+- **Tipo:** confirmado pelo código do libfm 1.4 do Raspberry Pi OS (`raspberrypi-ui/libfm`)
+- **Causa:** `fm_file_info_is_executable_type` trata todo `.desktop` local legível da área de trabalho como executável — com ou sem bit `+x` — e `on_exec_file` mostra o diálogo "This file is executable / seems to be an executable script" a menos que `quick_exec` esteja ativo. Nem o modo `0644` nem symlink evitam o diálogo (a exceção só vale para itens `menu://`).
+- **Correção:** `install.sh` grava `quick_exec=1` na seção `[config]` de `~/.config/libfm/libfm.conf` do usuário gráfico, partindo do arquivo do usuário ou de `/etc/xdg/libfm/libfm.conf`, sem tocar nas outras chaves; entra no snapshot de rollback; `APP247_DESKTOP_QUICK_EXEC=false` desativa. Efeito colateral aceito: para esse usuário, arquivos executáveis abertos no gerenciador de arquivos rodam sem confirmação.
+- **Junto:** `ensure_desktop_directory` agora cria cada nível com o dono gráfico; antes `~/.local/share/app247` ficava `root:root` dentro da home.
+- **Campo (17/10 03:06):** `quick_exec=1` gravado em `/home/jefro/.config/libfm/libfm.conf`, dono de `~/.local/share/app247` corrigido e `pcmanfm --reconfigure` executado, sem reiniciar.
+- **Testes:** `tests/test_service_startup.py` (criação a partir do arquivo do sistema, atualização de arquivo existente, desativação).
+
+## BUG-058 — Factory reset desfeito pela migração do layout legado
+
+**Status:** corrigido em 31 de outubro de 2026 (entra na próxima release).
+
+- **Severidade:** alta (terminal volta com a identidade e a credencial antigas e não permite novo cadastro)
+- **Tipo:** confirmado pelo operador e pelos arquivos em `data/` com data de 30/09 após o reset de 31/10
+- **Sintoma:** depois de "Restaurar padrões de fábrica", a inicialização seguinte voltava a operar com o terminal anterior.
+- **Causa:** `prepare_runtime_layout` copiava `db/` e `database/` para `data/` sempre que o destino não existia. O reset esvazia `data/` sem tocar a origem legada, então a cópia restaurava `terminal.json`, `device-credential` e `terminal.db`.
+- **Correção:** a migração roda uma única vez, controlada por `legacy-layout.migrated`. Instalações sem o marcador que já têm `reset-backups/` ou `reset-staging/` não migram.
+- **Pendente:** os arquivos legados, incluindo a credencial antiga, continuam em disco após o reset.
+- **Testes:** `tests/test_packaging_architecture.py`.
+
+## BUG-059 — Caixas de aviso ilegíveis
+
+**Status:** corrigido em 31 de outubro de 2026 (entra na próxima release).
+
+- **Severidade:** média (cliente e operador não conseguem ler avisos nem identificar os botões)
+- **Tipo:** relatado pelo operador e reproduzido em render offscreen
+- **Sintoma:** caixas de aviso com texto e botões da mesma cor do fundo, sem leitura possível.
+- **Causa:** `QWidget { color: branco }` do tema é herdado pelo `QMessageBox`, mas o tema não definia fundo para ele. A caixa ficava com o cinza claro da paleta do sistema, e os botões sem `variant` não tinham fundo.
+- **Correção:** regras de `QMessageBox` em `Theme.component_stylesheet()`, aplicadas também ao popup "Sem Internet" e à tela de recuperação local em `application.py`, que não tinham stylesheet do tema.
+- **Testes:** `tests/test_message_box_theme.py`.
+
+## BUG-060 — Sessão expirada com cliente identificado travava em "Confirmando pagamento"
+
+**Status:** corrigido em 31 de outubro de 2026 (entra na próxima release).
+
+- **Severidade:** alta (terminal fica preso até reiniciar e nenhuma compra nova começa)
+- **Tipo:** relatado pelo operador; sequência reproduzida em teste, sem log da ocorrência original
+- **Sintoma:** ao zerar o tempo, a tela fica em `CONFIRMANDO PAGAMENTO`, depois de 30 s passa a `AGUARDANDO PAGAMENTO` e não sai mais.
+- **Causa:** vincular o cliente grava `cart_id` sem iniciar pagamento. `tratar_timeout_global` tratava esse `cart_id` como possível cobrança, mas a descoberta e o abandono retornam sem efeito quando `payment_in_flight` é falso, e nada concluía a expiração.
+- **Correção:** sem Order, sem tentativa em voo e sem worker do Point, a expiração conclui direto. Com `payment_in_flight` ativo, a reconciliação continua igual.
+- **Testes:** `tests/test_payment_flow.py`.
+
+## BUG-061 — Cliente vinculado podia passar para a compra seguinte
+
+**Status:** corrigido em 31 de outubro de 2026 (entra na próxima release).
+
+- **Severidade:** alta (a compra de outra pessoa pode entrar no histórico e na fidelidade do cliente anterior)
+- **Tipo:** requisito do operador; caminhos encontrados na leitura do código e reproduzidos em teste
+- **Causa:** o vínculo só era limpo em `liberar_tela`. Remover o último item encerrava a sessão e mantinha "Compra vinculada a ...". Resposta do QR chegando depois do cancelamento gravava o `cart_id` antigo na compra nova. Pagamento recuperado após reiniciar mantinha o `cart_id` depois da falha, e a recuperação sem identidade local nunca limpava a sessão.
+- **Divergência encontrada:** a recuperação do vínculo no início nunca funcionou. Ela lia `cartId`, mas `GET /carrinho/{id}` devolve `carrinhoId`, então mostrava um aviso de erro a cada início e mantinha o estado antigo.
+- **Correção:** `IDLE` limpa o cliente em qualquer caminho, respostas de outra geração são descartadas e o vínculo não é mais recuperado ao iniciar, porque os itens não sobrevivem ao reinício. `CustomerLinkRecoveryWorker` e `PurchaseApi.get_cart` foram removidos. Na recusa, o cliente continua vinculado para a nova tentativa. Remover o último item avisa que a compra deixou de estar vinculada e pede um novo QR, para a pessoa não seguir achando que está identificada.
+- **Testes:** `tests/test_customer_unlink.py`.
 
 ## BUG-031 — Heartbeat opaco, sem confirmação do backend
 

@@ -71,6 +71,46 @@ class PaymentFlowTest(unittest.TestCase):
         self.assertTrue(self.parent.confirmacao.shown)
         self.assertIs(self.parent.confirmacao, self.parent.current)
 
+    def test_event_from_other_terminal_never_approves(self):
+        terminal = SimpleNamespace(terminalId="terminal-a")
+        with patch("app247_terminal.ui.screens.payment.Terminal.load", return_value=terminal):
+            self.screen.processar_evento({
+                "terminalId": "terminal-b", "orderId": "order-a", "status": "APPROVED"
+            })
+            self.screen.processar_evento({"orderId": "order-a", "status": "APPROVED"})
+        self.assertFalse(self.parent.confirmacao.shown)
+        self.assertTrue(self.parent.compra_session.payment_in_flight)
+
+    def test_event_without_definitive_status_never_approves(self):
+        terminal = SimpleNamespace(terminalId="terminal-a")
+        with patch("app247_terminal.ui.screens.payment.Terminal.load", return_value=terminal):
+            for payload in (
+                {"terminalId": "terminal-a", "orderId": "order-a"},
+                {"terminalId": "terminal-a", "orderId": "order-a", "paid": True},
+                {"terminalId": "terminal-a", "orderId": "order-a", "status": "ok"},
+                {"terminalId": "terminal-a", "status": "APPROVED"},
+            ):
+                self.screen.processar_evento(payload)
+        self.assertFalse(self.parent.confirmacao.shown)
+        self.assertTrue(self.parent.compra_session.payment_in_flight)
+
+    def test_late_event_from_previous_purchase_does_not_release_new_one(self):
+        self.parent.compra_session.reset()
+        attempt = self.parent.compra_session.begin_payment()
+        self.screen.current_attempt = attempt
+        self.screen._point_started(attempt, {
+            "cartId": "cart-b", "orderId": "order-b",
+            "terminalId": "terminal-a", "status": "WAITING_PAYMENT"
+        })
+        terminal = SimpleNamespace(terminalId="terminal-a")
+        with patch("app247_terminal.ui.screens.payment.Terminal.load", return_value=terminal):
+            self.screen.processar_evento({
+                "terminalId": "terminal-a", "orderId": "order-a", "status": "APPROVED"
+            })
+        self.assertFalse(self.parent.confirmacao.shown)
+        self.assertEqual("order-b", self.parent.compra_session.order_id)
+        self.assertTrue(self.parent.compra_session.payment_in_flight)
+
     def test_rejected_returns_to_cart_without_reset(self):
         self.screen._apply_status("order-a", "REJECTED")
         self.assertEqual("CART_READY", self.parent.compra_session.state)
@@ -100,6 +140,32 @@ class PaymentFlowTest(unittest.TestCase):
         self.assertTrue(self.screen.timeout_pending)
         self.assertTrue(self.screen.final_recovery_timer.isActive())
         self.assertIs(self.screen.attention_page, self.screen.pages.currentWidget())
+
+    def _expire_cart_without_payment(self):
+        session = self.parent.compra_session
+        session.reset()
+        session.start_if_needed()
+        session.set_remote_ids(cart_id="cart-identificado")
+        self.screen.tratar_timeout_global(session.generation)
+
+    def test_timeout_with_cart_but_no_payment_returns_to_welcome(self):
+        with patch.object(self.screen, "_discover_active_payment") as discover:
+            self._expire_cart_without_payment()
+        discover.assert_not_called()
+        self.assertEqual(1, self.parent.reset_calls)
+        self.assertIs(self.parent.welcome, self.parent.current)
+
+    def test_timeout_with_cart_and_payment_in_flight_still_reconciles(self):
+        self.parent.compra_session.reset()
+        attempt = self.parent.compra_session.begin_payment()
+        self.screen.current_attempt = attempt
+        self.parent.compra_session.set_remote_ids(cart_id="cart-a")
+        with patch.object(self.screen, "_discover_active_payment") as discover:
+            self.screen.tratar_timeout_global(self.parent.compra_session.generation)
+        discover.assert_called_once_with("CHECKOUT_TIMEOUT")
+        self.assertEqual(0, self.parent.reset_calls)
+        self.assertTrue(self.parent.compra_session.payment_in_flight)
+        self.assertIs(self.screen.loading_page, self.screen.pages.currentWidget())
 
     def test_timeout_while_point_request_has_no_ids_waits_for_safe_result(self):
         self.parent.compra_session.reset()

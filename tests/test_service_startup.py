@@ -178,7 +178,13 @@ class InstalledUnitTest(unittest.TestCase):
             "APP247_AUTOSTART_DIR": str(desktop_home / ".config/autostart"),
             "APP247_NM_CONF_DIR": str(root / "NetworkManager/conf.d"),
             "APP247_ICON_DESTINATION": str(root / "pixmaps/app247-terminal.png"),
+            "APP247_LIBFM_SYSTEM_CONF": str(root / "xdg-libfm.conf"),
         })
+        (root / "xdg-libfm.conf").write_text(
+            "[config]\nsingle_click=0\nterminal=x-terminal-emulator %s\n\n"
+            "[ui]\nbig_icon_size=48\n",
+            encoding="utf-8",
+        )
         (root / "NetworkManager").mkdir()
         desktop_home.mkdir(exist_ok=True)
         return environment
@@ -326,6 +332,55 @@ class InstalledUnitTest(unittest.TestCase):
             self.assertEqual(legacy_contents, backups[0].read_text(encoding="utf-8"))
             self.assertTrue(unrelated.exists())
             self.assertTrue((desktop / "Terminal 24-7.desktop").is_file())
+
+    def test_shortcut_opens_without_execute_prompt_on_pcmanfm(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            desktop_home = root / "home"
+
+            activation = self._install(self._environment(root, desktop_home))
+
+            self.assertEqual(0, activation.returncode, activation.stderr)
+            conf = desktop_home / ".config/libfm/libfm.conf"
+            contents = conf.read_text(encoding="utf-8")
+            self.assertIn("[config]\nsingle_click=0\nterminal=x-terminal-emulator %s\n", contents)
+            self.assertEqual(1, contents.count("quick_exec="))
+            config_section = contents.split("[ui]")[0]
+            self.assertIn("quick_exec=1", config_section)
+            self.assertIn("[ui]\nbig_icon_size=48", contents)
+            self.assertEqual(0o644, conf.stat().st_mode & 0o777)
+
+    def test_quick_exec_updates_existing_user_config(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            desktop_home = root / "home"
+            environment = self._environment(root, desktop_home)
+            conf = desktop_home / ".config/libfm/libfm.conf"
+            conf.parent.mkdir(parents=True)
+            conf.write_text(
+                "[config]\nquick_exec=0\nconfirm_del=0\n[places]\nplaces_home=1\n",
+                encoding="utf-8",
+            )
+
+            activation = self._install(environment)
+
+            self.assertEqual(0, activation.returncode, activation.stderr)
+            self.assertEqual(
+                "[config]\nquick_exec=1\nconfirm_del=0\n[places]\nplaces_home=1\n",
+                conf.read_text(encoding="utf-8"),
+            )
+
+    def test_quick_exec_can_be_disabled(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            desktop_home = root / "home"
+            environment = self._environment(root, desktop_home)
+            environment["APP247_DESKTOP_QUICK_EXEC"] = "false"
+
+            activation = self._install(environment)
+
+            self.assertEqual(0, activation.returncode, activation.stderr)
+            self.assertFalse((desktop_home / ".config/libfm/libfm.conf").exists())
 
     def test_desktop_shortcut_falls_back_without_logo(self):
         with tempfile.TemporaryDirectory() as directory:

@@ -23,7 +23,7 @@ scanner -> SQLite -> carrinho visual
           -> CANCELAR COMPRA: Spring -> Mercado Pago -> reconciliação
           -> falha definitiva: erro vermelho/retry
           -> APPROVED: sucesso verde
-              -> WhatsApp/e-mail: POST /comprovante em worker
+              -> WhatsApp: POST /comprovante em worker
               -> FINALIZAR: reset local
 ```
 
@@ -46,14 +46,31 @@ remaining <= 0
   -> interações bloqueadas
   -> MainWindow processa a geração ativa
       -> sem tentativa/IDs remotos: reset_compra -> boas-vindas
+      -> só cartId de cliente vinculado, sem tentativa em voo: reset_compra -> boas-vindas
       -> request Point ainda executando: aguarda callback delimitado
-      -> cartId/orderId existente: PagamentoScreen reconcilia
+      -> orderId existente ou cartId com tentativa em voo: PagamentoScreen reconcilia
           -> APPROVED: sucesso
           -> falha definitiva: reset -> boas-vindas
           -> intermediário/incerto: RECONCILIATION_PENDING
 ```
 
 O reset central limpa o carrinho, IDs, flags, timers visuais e tokens da tentativa. Scanner, `FINALIZAR` e `CONFIRMAR E PAGAR` ficam bloqueados desde a expiração. Uma nova entrada na tela de compra permite um novo scan, que cria outra `generation`, reinicia o deadline completo e não aceita callbacks da tentativa anterior.
+
+## Vínculo do cliente
+
+O cliente identificado por QR vale para uma única compra. O vínculo autoritativo é `Carrinho.user` no backend; a Order copia o usuário, então histórico e fidelidade não dependem do Terminal depois do pagamento.
+
+| Como a compra termina | Cliente |
+|---|---|
+| `FINALIZAR` ou tempo da tela de sucesso | desvinculado |
+| `CANCELAR`, pagamento cancelado ou sessão expirada | desvinculado |
+| último item removido | desvinculado, com o aviso "Cliente desvinculado" pedindo um novo QR |
+| reinício do app ou do equipamento | desvinculado |
+| recusa ou falha, com `TENTAR NOVAMENTE` | mantido: é a mesma compra e o mesmo carrinho |
+
+`CompraSession` passar para `IDLE` limpa o cliente em `TerminalScreen`, para qualquer caminho de encerramento. A geração da sessão é guardada ao iniciar o vínculo: resposta de uma compra encerrada, ou que chegue com pagamento em voo, é descartada sem aviso e não altera o `cart_id`.
+
+Depois de reiniciar, os itens não existem mais. Se um pagamento recuperado falhar, voltar à compra encerra a sessão e leva às boas-vindas.
 
 ## UX
 

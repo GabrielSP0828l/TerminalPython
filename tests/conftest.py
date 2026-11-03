@@ -18,6 +18,7 @@ os.environ["APP247_LAST_SYNC_PATH"] = str(_data_dir / "last_sync.txt")
 # O instalador grava política do NetworkManager; testes nunca tocam /etc.
 os.environ["APP247_NM_CONF_DIR"] = str(_data_dir / "NetworkManager/conf.d")
 os.environ["APP247_ICON_DESTINATION"] = str(_data_dir / "pixmaps/app247-terminal.png")
+os.environ["APP247_LIBFM_SYSTEM_CONF"] = str(_data_dir / "no-libfm.conf")
 
 
 import pytest

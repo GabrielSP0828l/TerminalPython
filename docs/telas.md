@@ -93,7 +93,7 @@ Preparação mostra loading antes do worker HTTP. Depois de uma resposta Point v
 
 `REJECTED`, `FAILED`, `CANCELED/CANCELLED`, `EXPIRED` e `REFUNDED` exibem vermelho fullscreen, `error.svg` branco, motivo humano e “TENTAR NOVAMENTE” no rodapé. A ação invalida os IDs da tentativa anterior e retorna ao carrinho preservado; nunca cria cobrança automaticamente.
 
-`APPROVED`/equivalentes correlacionados abrem verde fullscreen com `checked.svg` branco, total e quatro ações: `FINALIZAR`, `ADICIONAR CPF`, `ENVIAR COMPROVANTE POR E-MAIL` e `ENVIAR COMPROVANTE POR WHATSAPP`. Eventos aprovados duplicados são idempotentes e não interrompem a ação em curso. WhatsApp/e-mail abrem teclado virtual touch e enviam pelo Spring em worker; CPF permanece desabilitado porque ainda não existe contrato para associá-lo à Order. O timeout separado de 120 segundos pausa enquanto há entrada ou envio em andamento.
+`APPROVED`/equivalentes correlacionados abrem verde fullscreen com `checked.svg` branco, total e três ações: `FINALIZAR`, `ADICIONAR CPF` e `ENVIAR COMPROVANTE POR WHATSAPP`. Eventos aprovados duplicados são idempotentes e não interrompem a ação em curso. WhatsApp abre teclado virtual touch e envia pelo Spring em worker; CPF permanece desabilitado porque ainda não existe contrato para associá-lo à Order. O timeout separado de 120 segundos pausa enquanto há entrada ou envio em andamento.
 
 ## Testes visuais
 

@@ -6,11 +6,13 @@ Voltar para [[00-index]]. Fluxo funcional em [[fluxo-compra]] e limites de integ
 
 A interface operacional é validada prioritariamente no display físico de 7 polegadas, `1024×600` nativo. No campo ele fica **em pé** (área lógica `600×1024`) na porta HDMI 2. A janela continua fullscreen e as páginas permanecem no `QStackedWidget`; nenhuma tela de compra abre janela separada.
 
+O ponteiro do mouse fica visível: a aplicação não aplica cursor em branco.
+
 Toda tela precisa caber nas duas áreas. `ui/responsive.py` define o perfil compacto quando a largura lógica da tela é menor que 760 px e o reaplica quando a orientação muda. No perfil compacto:
 
 - teclado virtual: `ESPAÇO` e `LIMPAR` ficam em linha própria; teclas têm 44 px mínimos de largura e 64 px de altura;
 - carrinho: 2 colunas de cards (cálculo existente pelo viewport) e rodapé com `TOTAL` acima de `CANCELAR COMPRA`/`FINALIZAR`;
-- comprovante: `FINALIZAR`, WhatsApp, e-mail e CPF em coluna única;
+- comprovante: `FINALIZAR`, WhatsApp e CPF em coluna única;
 - títulos de login e configurações quebram linha.
 
 Fora do perfil compacto (deitado, 600 px de altura): teclas do teclado virtual com 52 px de altura; acesso admin com margens menores e `CANCELAR`/`ENTRAR` lado a lado; estados de pagamento e comprovante com margens de paisagem desde a construção.
@@ -24,6 +26,10 @@ O toque longo e a senha de `AdminAuthScreen` continuam sendo a única entrada. A
 `WifiScreen` mostra estado, SSID, sinal humano/percentual, IP, atualizar, desconectar/ativar e redes disponíveis. Cards têm ao menos 76 px; senha protegida usa input mascarado e teclado alfanumérico/símbolos. Scan/conexão/desconexão usam spinner, worker e timeout. O overlay offline permite entrar nesse mesmo fluxo autenticado.
 
 `DisplayScreen` mostra orientação e saída atuais e oferece apenas `HORIZONTAL`/`VERTICAL`. Compra/pagamento bloqueiam a ação; o compositor gira a saída e os layouts recebem a nova geometria, sem rotação individual de widgets.
+
+## Caixas de aviso
+
+Todo `QMessageBox` usa as regras de `Theme.component_stylesheet()`: fundo `SURFACE_ELEVATED`, texto branco, botão padrão em `PRIMARY` e demais botões com contorno. Em confirmação destrutiva o botão padrão é `CANCELAR`, então ele é o destacado. Aviso criado a partir de widget sem stylesheet do tema (janela principal) precisa aplicar `Theme.component_stylesheet()` nele mesmo. Gate: `tests/test_message_box_theme.py`.
 
 ## Tela de compra
 

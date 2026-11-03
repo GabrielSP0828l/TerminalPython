@@ -11,6 +11,16 @@ from app247_terminal.services.terminal_auth import terminal_auth_headers
 
 logger = logging.getLogger(__name__)
 
+# Só estes códigos do backend provam problema do equipamento. Outro 401/403 pode
+# vir do túnel/proxy ou de regra de negócio (ex.: QR de outro condomínio).
+DEVICE_UNAUTHORIZED_CODES = frozenset({
+    "AUTH_REQUIRED", "TERMINAL_AUTH_INVALID", "TERMINAL_UNAUTHORIZED",
+})
+DEVICE_FORBIDDEN_CODES = frozenset({
+    "TERMINAL_CONTEXT_MISMATCH", "TERMINAL_IDENTITY_MISMATCH",
+    "TERMINAL_NOT_OPERATIONAL",
+})
+
 
 class TerminalAccessState:
     def __init__(self):
@@ -43,6 +53,14 @@ class BackendHttpError(RuntimeError):
     @property
     def forbidden(self):
         return self.status == 403
+
+    @property
+    def device_unauthorized(self):
+        return self.status == 401 and self.code in DEVICE_UNAUTHORIZED_CODES
+
+    @property
+    def device_forbidden(self):
+        return self.status == 403 and self.code in DEVICE_FORBIDDEN_CODES
 
     def _default_message(self):
         if self.status == 401:
@@ -113,13 +131,14 @@ class BackendClient:
         )
         if status not in tuple(expected):
             payload = self._safe_json(response)
-            if status == 401:
-                terminal_access_state.set("AUTH_REQUIRED")
-            elif status == 403:
-                terminal_access_state.set("FORBIDDEN")
-            raise BackendHttpError(
+            error = BackendHttpError(
                 status, payload.get("code"), payload.get("message"), payload
             )
+            if error.device_unauthorized:
+                terminal_access_state.set("AUTH_REQUIRED")
+            elif error.device_forbidden:
+                terminal_access_state.set("FORBIDDEN")
+            raise error
         return response
 
     @staticmethod

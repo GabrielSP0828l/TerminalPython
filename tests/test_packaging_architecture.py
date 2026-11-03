@@ -11,6 +11,7 @@ import tarfile
 import tempfile
 import time
 import unittest
+from contextlib import contextmanager
 from pathlib import Path
 from unittest.mock import patch
 
@@ -595,13 +596,7 @@ class PackagingArchitectureTest(unittest.TestCase):
             legacy_db.write_bytes(b"legacy-db")
             destination = data / "terminal.db"
 
-            with patch("app247_terminal.runtime.SOURCE_ROOT", legacy), patch(
-                "app247_terminal.runtime.DATABASE_PATH", destination
-            ), patch("app247_terminal.runtime.TERMINAL_CONFIG_PATH", data / "terminal.json"), patch(
-                "app247_terminal.runtime.DEVICE_CREDENTIAL_PATH", data / "device-credential"
-            ), patch("app247_terminal.runtime.DISPLAY_ORIENTATION_PATH", data / "orientation"), patch(
-                "app247_terminal.runtime.LAST_SYNC_PATH", data / "last_sync.txt"
-            ):
+            with self._runtime_paths(legacy, data):
                 copied = prepare_runtime_layout()
 
             self.assertEqual(b"legacy-db", destination.read_bytes())
@@ -609,15 +604,60 @@ class PackagingArchitectureTest(unittest.TestCase):
             self.assertEqual([(legacy_db, destination)], copied)
 
             destination.write_bytes(b"new-db")
-            with patch("app247_terminal.runtime.SOURCE_ROOT", legacy), patch(
-                "app247_terminal.runtime.DATABASE_PATH", destination
-            ), patch("app247_terminal.runtime.TERMINAL_CONFIG_PATH", data / "terminal.json"), patch(
-                "app247_terminal.runtime.DEVICE_CREDENTIAL_PATH", data / "device-credential"
-            ), patch("app247_terminal.runtime.DISPLAY_ORIENTATION_PATH", data / "orientation"), patch(
-                "app247_terminal.runtime.LAST_SYNC_PATH", data / "last_sync.txt"
-            ):
+            with self._runtime_paths(legacy, data):
                 prepare_runtime_layout()
             self.assertEqual(b"new-db", destination.read_bytes())
+
+    def test_factory_reset_nao_e_desfeito_pela_migracao_legada(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            legacy = root / "legacy"
+            data = root / "data"
+            (legacy / "db").mkdir(parents=True)
+            (legacy / "db/terminal.json").write_text("{}", encoding="utf-8")
+            (legacy / "db/device-credential").write_text("tdc_antiga", encoding="ascii")
+
+            with self._runtime_paths(legacy, data):
+                self.assertEqual(2, len(prepare_runtime_layout()))
+                (data / "terminal.json").unlink()
+                (data / "device-credential").unlink()
+
+                self.assertEqual([], prepare_runtime_layout())
+
+            self.assertFalse((data / "terminal.json").exists())
+            self.assertFalse((data / "device-credential").exists())
+
+    def test_reset_anterior_ao_marcador_tambem_bloqueia_a_migracao(self):
+        for reset_dir in ("reset-backups", "reset-staging"):
+            with self.subTest(reset_dir=reset_dir), tempfile.TemporaryDirectory() as directory:
+                root = Path(directory)
+                legacy = root / "legacy"
+                data = root / "data"
+                (legacy / "db").mkdir(parents=True)
+                (legacy / "db/device-credential").write_text("tdc_antiga", encoding="ascii")
+                (data / reset_dir).mkdir(parents=True)
+
+                with self._runtime_paths(legacy, data):
+                    self.assertEqual([], prepare_runtime_layout())
+
+                self.assertFalse((data / "device-credential").exists())
+
+    @staticmethod
+    @contextmanager
+    def _runtime_paths(legacy, data):
+        paths = {
+            "SOURCE_ROOT": legacy,
+            "DATABASE_PATH": data / "terminal.db",
+            "TERMINAL_CONFIG_PATH": data / "terminal.json",
+            "DEVICE_CREDENTIAL_PATH": data / "device-credential",
+            "DISPLAY_ORIENTATION_PATH": data / "orientation",
+            "LAST_SYNC_PATH": data / "last_sync.txt",
+            "LEGACY_LAYOUT_MARKER_PATH": data / "legacy-layout.migrated",
+            "RESET_BACKUP_DIR": data / "reset-backups",
+            "RESET_STAGING_DIR": data / "reset-staging",
+        }
+        with patch.multiple("app247_terminal.runtime", **paths):
+            yield
 
 
 if __name__ == "__main__":

@@ -1,5 +1,4 @@
 import logging
-import re
 
 import requests
 from PyQt5.QtCore import QThread, pyqtSignal
@@ -102,14 +101,14 @@ class PurchaseApi:
                     "O valor da compra ainda nao foi finalizado pelo servidor.",
                     "price_not_finalized", False, payload,
                 ) from error
-            if error.authentication_failed:
+            if error.device_unauthorized:
                 raise PurchaseApiError(
                     "Terminal precisa ser reprovisionado pelo administrador.",
                     "device_auth", ambiguous, {
-                        "status": 401, "code": error.code or "TERMINAL_UNAUTHORIZED",
+                        "status": 401, "code": error.code,
                     },
                 ) from error
-            if error.forbidden:
+            if error.device_forbidden:
                 raise PurchaseApiError(
                     "Terminal sem permissao para esta operacao.",
                     "device_forbidden", ambiguous, {
@@ -191,10 +190,6 @@ class PurchaseApi:
         result["cartId"] = resolved_cart_id
         return result
 
-    def get_cart(self, cart_id):
-        result = self._request_json("GET", f"/carrinho/{cart_id}", "cart_recovery")
-        return result if isinstance(result, dict) else None
-
     def get_order(self, order_id, terminal_id):
         return self._request_json(
             "GET", f"/order/{order_id}/status", "status",
@@ -234,13 +229,6 @@ class PurchaseApi:
                     "Digite um número de WhatsApp válido.", "receipt_validation"
                 )
             return digits
-        if normalized_channel == "EMAIL":
-            email = candidate.lower()
-            if not re.match(r"^[^@\s]+@[^@\s]+\.[^@\s]+$", email):
-                raise PurchaseApiError(
-                    "Digite um e-mail válido.", "receipt_validation"
-                )
-            return email
         raise PurchaseApiError(
             "Canal de comprovante inválido.", "receipt_validation"
         )
@@ -395,27 +383,6 @@ class CustomerLinkWorker(QThread):
                 self.failed.emit("CUSTOMER_LINK_FAILED", "Não foi possível identificar o cliente")
         finally:
             self.token = None
-
-
-class CustomerLinkRecoveryWorker(QThread):
-    succeeded = pyqtSignal(dict)
-    failed = pyqtSignal()
-
-    def __init__(self, cart_id, api_factory=PurchaseApi, parent=None):
-        super().__init__(parent)
-        self.cart_id = cart_id
-        self.api_factory = api_factory
-
-    def run(self):
-        try:
-            result = self.api_factory().get_cart(self.cart_id)
-            if result and result.get("customerLinked") and not self.isInterruptionRequested():
-                self.succeeded.emit(result)
-            elif not self.isInterruptionRequested():
-                self.failed.emit()
-        except Exception:
-            if not self.isInterruptionRequested():
-                self.failed.emit()
 
 
 class OrderStatusWorker(QThread):

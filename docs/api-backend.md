@@ -52,7 +52,7 @@ No status, `paymentAttemptId` identifica a tentativa local; `paymentId` permanec
 
 CPF continua sem campo/endpoint na Order/Pagamento; o Terminal não o guarda localmente e mantém a ação desabilitada.
 
-WhatsApp/e-mail usam `POST /comprovante` com `terminalId`, `pedidoId`, `tipoEnvio` e `destinatario`. O cliente aceita apenas `ENVIADO`/`JA_ENVIADO` para a mesma Order, usa timeout `(5s,45s)` e não envia tenant, itens, valores ou status financeiro. O Spring valida Order/PaymentAttempt, monta o snapshot e integra FastAPI/n8n; o Terminal não conhece esses serviços.
+O envio por WhatsApp usa `POST /comprovante` com `terminalId`, `pedidoId`, `tipoEnvio` e `destinatario`. O cliente aceita apenas `ENVIADO`/`JA_ENVIADO` para a mesma Order, usa timeout `(5s,45s)` e não envia tenant, itens, valores ou status financeiro. O Spring valida Order/PaymentAttempt, monta o snapshot e integra FastAPI/n8n; o Terminal não conhece esses serviços.
 
 ## Carrinho
 

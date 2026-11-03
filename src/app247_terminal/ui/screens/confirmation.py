@@ -15,7 +15,7 @@ from app247_terminal.ui.styles.svg_icons import ColoredSvgLabel
 from app247_terminal.ui.styles.theme import Theme
 from app247_terminal.ui.styles.tokens import Colors, Spacing
 from app247_terminal.models.money import format_brl
-from app247_terminal.ui.screens.keyboard import EmailKeyboard, NumericKeyboard
+from app247_terminal.ui.screens.keyboard import NumericKeyboard
 from app247_terminal.services import shutdown_budget
 
 
@@ -98,10 +98,6 @@ class ConfirmacaoScreen(QWidget):
         self.btn_cpf.setToolTip(
             "Aguardando contrato do backend para associar CPF à compra"
         )
-        self.btn_email = self._button(
-            "ENVIAR POR E-MAIL", "stateSecondary"
-        )
-        self.btn_email.clicked.connect(lambda: self._open_receipt_input("EMAIL"))
         self.btn_whatsapp = self._button(
             "ENVIAR POR WHATSAPP", "stateSecondary"
         )
@@ -114,21 +110,21 @@ class ConfirmacaoScreen(QWidget):
         return page
 
     def _apply_compact(self, compact):
-        """Grade 2×2 em paisagem; coluna única no display em pé (600 px)."""
+        """Duas linhas em paisagem; coluna única no display em pé (600 px)."""
         if compact:
             positions = (
-                (self.btn_finalizar, 0, 0), (self.btn_whatsapp, 1, 0),
-                (self.btn_email, 2, 0), (self.btn_cpf, 3, 0),
+                (self.btn_finalizar, 0, 0, 1), (self.btn_whatsapp, 1, 0, 1),
+                (self.btn_cpf, 2, 0, 1),
             )
         else:
             positions = (
-                (self.btn_finalizar, 0, 0), (self.btn_cpf, 0, 1),
-                (self.btn_whatsapp, 1, 0), (self.btn_email, 1, 1),
+                (self.btn_finalizar, 0, 0, 1), (self.btn_cpf, 0, 1, 1),
+                (self.btn_whatsapp, 1, 0, 2),
             )
-        for button, _row, _column in positions:
+        for button, _row, _column, _span in positions:
             self.success_actions.removeWidget(button)
-        for button, row, column in positions:
-            self.success_actions.addWidget(button, row, column)
+        for button, row, column, span in positions:
+            self.success_actions.addWidget(button, row, column, 1, span)
 
     def _build_input_page(self):
         page = QWidget(self)
@@ -162,13 +158,9 @@ class ConfirmacaoScreen(QWidget):
         self.keyboard_container = QWidget(page)
         self.keyboard_pages = QStackedLayout(self.keyboard_container)
         self.numeric_keyboard = NumericKeyboard(self.keyboard_container)
-        self.email_keyboard = EmailKeyboard(self.keyboard_container)
         self.numeric_keyboard.set_target(self.destination_input)
-        self.email_keyboard.set_target(self.destination_input)
         self.numeric_keyboard.key_pressed.connect(self._format_phone_input)
-        self.email_keyboard.key_pressed.connect(self._clear_input_error)
         self.keyboard_pages.addWidget(self.numeric_keyboard)
-        self.keyboard_pages.addWidget(self.email_keyboard)
         root.addWidget(self.keyboard_container, 1)
 
         actions = QHBoxLayout()
@@ -239,7 +231,6 @@ class ConfirmacaoScreen(QWidget):
             and getattr(session, "state", None) in {"APPROVED", "SUCCESS"}
         )
         self.btn_whatsapp.setEnabled(approved)
-        self.btn_email.setEnabled(approved)
         self.btn_finalizar.setEnabled(approved)
         self.receipt_send_in_progress = False
         self.pages.setCurrentWidget(self.success_page)
@@ -268,18 +259,11 @@ class ConfirmacaoScreen(QWidget):
         self.receipt_channel = channel
         self.destination_input.clear()
         self._clear_input_error()
-        if channel == "WHATSAPP":
-            self.input_title.setText("ENVIAR COMPROVANTE POR WHATSAPP")
-            self.destination_input.setPlaceholderText("(75) 99999-9999")
-            self.destination_input.setMaxLength(19)
-            self.keyboard_pages.setCurrentWidget(self.numeric_keyboard)
-            self.numeric_keyboard.set_target(self.destination_input)
-        else:
-            self.input_title.setText("ENVIAR COMPROVANTE POR E-MAIL")
-            self.destination_input.setPlaceholderText("cliente@email.com")
-            self.destination_input.setMaxLength(160)
-            self.keyboard_pages.setCurrentWidget(self.email_keyboard)
-            self.email_keyboard.set_target(self.destination_input)
+        self.input_title.setText("ENVIAR COMPROVANTE POR WHATSAPP")
+        self.destination_input.setPlaceholderText("(75) 99999-9999")
+        self.destination_input.setMaxLength(19)
+        self.keyboard_pages.setCurrentWidget(self.numeric_keyboard)
+        self.numeric_keyboard.set_target(self.destination_input)
         logger.info(
             "[RECEIPT-UI] %s solicitado orderId=%s",
             channel.lower(), self.post_purchase_order_id,
@@ -404,9 +388,6 @@ class ConfirmacaoScreen(QWidget):
     @staticmethod
     def _mask_destination(destination):
         value = str(destination)
-        if "@" in value:
-            _, domain = value.split("@", 1)
-            return f"***@{domain}"
         return "*" * max(0, len(value) - 4) + value[-4:]
 
     def finalizar_e_voltar(self):

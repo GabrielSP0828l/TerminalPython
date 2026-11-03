@@ -7,11 +7,12 @@ from websocket import WebSocket, WebSocketTimeoutException
 from app247_terminal.config.settings import WS_URL
 from app247_terminal.models.terminal import Terminal
 from app247_terminal.services.terminal_auth import terminal_auth_headers
-from app247_terminal.services.backend_client import terminal_access_state
 from app247_terminal.services import shutdown_budget
 
 
 class PaymentListener(QThread):
+    AUTH_RETRY_SECONDS = 60
+
     payment_status_signal = pyqtSignal(dict)
     product_sync_required = pyqtSignal(dict)
     factory_reset_required = pyqtSignal(dict)
@@ -107,18 +108,26 @@ class PaymentListener(QThread):
             except Exception as e:
                 if self.is_running:
                     if self._is_auth_failure(e):
+                        # O handshake não traz código do backend: quem bloqueia a
+                        # operação é o HTTP. Aqui só se reduz o ritmo de tentativas.
                         self.connection_state = "AUTH_REQUIRED"
-                        terminal_access_state.set("AUTH_REQUIRED")
                         logging.getLogger(__name__).error(
-                            "[PAYMENT-WS] credencial individual recusada; "
-                            "reprovisionamento necessario"
+                            "[PAYMENT-WS] handshake recusado com 401; "
+                            "nova tentativa em %ss", self.AUTH_RETRY_SECONDS
                         )
                         self.disconnected.emit()
-                        return
+                        self._sleep_while_running(self.AUTH_RETRY_SECONDS)
+                        continue
                     self.connection_state = "RECONNECTING"
                     logging.getLogger(__name__).warning("WebSocket de pagamento desconectado: %s", e)
                     self.disconnected.emit()
                     self.sleep(5)
+
+    def _sleep_while_running(self, seconds):
+        for _ in range(seconds):
+            if not self.is_running:
+                return
+            self.sleep(1)
 
     @staticmethod
     def _is_auth_failure(error):

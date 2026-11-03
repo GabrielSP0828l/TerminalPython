@@ -88,6 +88,7 @@ RESET_MARKER_PATH = DATA_DIR / "factory-reset.pending"
 RESET_COMPLETION_MARKER_PATH = DATA_DIR / "factory-reset-completion.pending"
 RESET_BACKUP_DIR = DATA_DIR / "reset-backups"
 RESET_STAGING_DIR = DATA_DIR / "reset-staging"
+LEGACY_LAYOUT_MARKER_PATH = DATA_DIR / "legacy-layout.migrated"
 
 TERMINAL_ADMIN_PASSWORD = _env(
     "APP247_TERMINAL_ADMIN_PASSWORD", "TERMINAL_ADMIN_PASSWORD"

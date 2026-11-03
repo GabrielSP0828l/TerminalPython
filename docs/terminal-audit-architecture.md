@@ -216,7 +216,6 @@ O timer global para em aprovação. Aprovação durante timeout/cancelamento ven
 Após aprovação, `ConfirmacaoScreen` conserva `orderId` em `post_purchase_order_id` e oferece:
 
 - `FINALIZAR` — implementado;
-- `ENVIAR POR E-MAIL` — implementado;
 - `ENVIAR POR WHATSAPP` — implementado;
 - `ADICIONAR CPF` — visível e desabilitado.
 

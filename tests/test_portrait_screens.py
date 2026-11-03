@@ -140,7 +140,7 @@ class PortraitScreensTest(unittest.TestCase):
         layout_profile.force(True)
         self.assertGreaterEqual(teclado.keyboard._wrap_row_layout.indexOf(wrap_keys[0]), 0)
         self.assertEqual(QBoxLayout.TopToBottom, cart.footer_layout.direction())
-        self.assertEqual((3, 0), confirmacao.success_actions.getItemPosition(
+        self.assertEqual((2, 0), confirmacao.success_actions.getItemPosition(
             confirmacao.success_actions.indexOf(confirmacao.btn_cpf))[:2])
 
         teclado.keyboard._set_symbol_mode(True)

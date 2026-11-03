@@ -36,7 +36,6 @@ def _apply_display() -> int:
 
 def _run_gui(arguments: list[str]) -> int:
     """Inicializa o lifecycle completo somente para a execução gráfica normal."""
-    from PyQt5.QtCore import Qt
     from PyQt5.QtWidgets import QApplication
 
     from app247_terminal.application import MainWindow, present_main_window
@@ -67,7 +66,6 @@ def _run_gui(arguments: list[str]) -> int:
     signal_handler = getattr(window, "encerrar_por_sinal", None)
     if signal_handler is not None:
         install_termination_bridge(app, signal_handler)
-    app.setOverrideCursor(Qt.BlankCursor)
     present_main_window(window)
     exit_code = app.exec_()
     code = _gui_exit_code(

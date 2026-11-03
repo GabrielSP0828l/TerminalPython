@@ -6,6 +6,7 @@ os.environ["QT_AUTO_SCREEN_SCALE_FACTOR"] = "0"
 os.environ["QT_SCALE_FACTOR"] = "1"
 
 import logging
+import time
 
 from PyQt5.QtCore import Qt, QTimer
 
@@ -16,6 +17,7 @@ from PyQt5.QtWidgets import (
 
 from app247_terminal.models.terminal import Terminal
 from app247_terminal.ui.responsive import layout_profile
+from app247_terminal.ui.styles.theme import Theme
 from app247_terminal.models.purchase_session import CompraSession
 from app247_terminal.repositories.active_payment_repository import ActivePaymentStore
 from app247_terminal.services.sync_service import SyncService
@@ -54,6 +56,10 @@ from app247_terminal.services import shutdown_budget
 
 
 class MainWindow(QMainWindow):
+    # Aviso de reset chega por WebSocket; a consulta periódica é só a rede de
+    # segurança e cada uma gasta cota da entrada pública.
+    LIFECYCLE_CHECK_INTERVAL_MS = 300000
+    ACCESS_PROBE_INTERVAL_SECONDS = 30
 
     def __init__(self):
         super().__init__()
@@ -75,6 +81,7 @@ class MainWindow(QMainWindow):
         )
         self._lifecycle_worker = None
         self._factory_reset_pending = None
+        self._last_access_probe = None
         self.no_internet_popup = None
         self.is_offline = False
         self._operacao_iniciada = False
@@ -218,6 +225,7 @@ class MainWindow(QMainWindow):
         state = terminal_access_state.get()
         if state not in {"AUTH_REQUIRED", "FORBIDDEN"}:
             return
+        self._probe_device_access()
         self._set_checkout_interactions_enabled(False)
         if TerminalResetPolicy.has_unresolved_payment(self.compra_session):
             self.identity_recovery_status.setText(
@@ -238,6 +246,39 @@ class MainWindow(QMainWindow):
             )
         self.stacked_widget.setCurrentWidget(self.cadastro_terminal)
 
+    def _probe_device_access(self):
+        """Reconsulta o bootstrap enquanto bloqueado, sem exigir reinício."""
+        if self._startup_recovery_error:
+            return
+        now = time.monotonic()
+        if (self._last_access_probe is not None
+                and now - self._last_access_probe
+                < self.ACCESS_PROBE_INTERVAL_SECONDS):
+            return
+        self._last_access_probe = now
+        self._check_terminal_lifecycle("ACCESS_RECOVERY")
+
+    def _restore_device_access(self):
+        """Bootstrap 200 prova a credencial: libera a venda e preserva pagamento."""
+        if terminal_access_state.get() not in {"AUTH_REQUIRED", "FORBIDDEN"}:
+            return
+        logging.getLogger(__name__).warning(
+            "[TERMINAL-AUTH] autorizacao confirmada pelo backend; operacao liberada"
+        )
+        terminal_access_state.set("OPERATIONAL")
+        self._last_access_probe = None
+        self.cadastro_terminal.activation_timer.stop()
+        if self.terminal is None:
+            self.iniciar_operacao_terminal()
+            self.setCurrentWidget(self.welcome)
+            return
+        session = self.compra_session
+        if session.payment_in_flight or session.order_id:
+            self.pagamento.mostrar_reconciliacao_pendente(origin="ACCESS_RECOVERY")
+            return
+        self.reset_compra(outcome="cancelled")
+        self.setCurrentWidget(self.welcome)
+
     def _build_local_recovery_screen(self):
         page = QWidget(self)
         layout = QVBoxLayout(page)
@@ -245,6 +286,7 @@ class MainWindow(QMainWindow):
         message = QMessageBox(
             QMessageBox.Critical, "Recuperacao necessaria", "", parent=page
         )
+        message.setStyleSheet(Theme.component_stylesheet())
         message.setText(
             "O armazenamento local nao passou na verificacao de integridade.\n\n"
             "Uma nova compra foi bloqueada para preservar possivel estado de "
@@ -336,6 +378,7 @@ class MainWindow(QMainWindow):
             "[PAYMENT-RECOVERY] concluida sem identidade local outcome=%s", outcome
         )
         self.identity_recovery_timer.stop()
+        self.compra_session.reset()
         self.cadastro_terminal.activation_timer.start(
             self.cadastro_terminal.POLL_INTERVAL_MS
         )
@@ -460,7 +503,10 @@ class MainWindow(QMainWindow):
         self.sync_thread = self.sync_service.iniciar_sync_em_thread()
         self.socket = TerminalSocket()
         self.socket.start()
-        self.internet_monitor = InternetMonitor(interval=3)
+        self.internet_monitor = InternetMonitor(
+            interval=3,
+            channel_state_provider=lambda: self.socket.connection_state,
+        )
         self.internet_monitor.status_changed.connect(self.handle_internet)
         self.internet_monitor.start()
         self.telemetry_service = TelemetryService(
@@ -482,7 +528,7 @@ class MainWindow(QMainWindow):
             self._check_terminal_lifecycle, Qt.QueuedConnection
         )
         self.lifecycle_timer = QTimer(self)
-        self.lifecycle_timer.setInterval(60000)
+        self.lifecycle_timer.setInterval(self.LIFECYCLE_CHECK_INTERVAL_MS)
         self.lifecycle_timer.timeout.connect(
             lambda: self._check_terminal_lifecycle("PERIODIC_BOOTSTRAP")
         )
@@ -526,6 +572,9 @@ class MainWindow(QMainWindow):
             # Timeout, 5xx, offline ou JSON inválido: nunca resetar.
             return
         state = response.get("state")
+        if state in {"ACTIVE", "PAYMENT_NOT_CONFIGURED"}:
+            self._restore_device_access()
+            return
         if state != "RESET_REQUIRED":
             return
         logging.getLogger(__name__).warning(
@@ -737,6 +786,7 @@ class MainWindow(QMainWindow):
         )
         self.no_internet_popup.setIcon(QMessageBox.Critical)
         self.no_internet_popup.setStandardButtons(QMessageBox.NoButton)
+        self.no_internet_popup.setStyleSheet(Theme.component_stylesheet())
 
         self.no_internet_popup.open()
 

@@ -337,8 +337,8 @@ class CadastroTerminalScreen(QWidget):
     def verificar_ativacao(self):
         if terminal_access_state.get() in {"AUTH_REQUIRED", "FORBIDDEN"}:
             self._atualizar_status(
-                "Operacao bloqueada. Apos o reprovisionamento administrativo, "
-                "reinicie o Terminal.",
+                "Operacao bloqueada. O Terminal volta sozinho assim que o "
+                "backend confirmar a autorizacao.",
                 True,
             )
             return

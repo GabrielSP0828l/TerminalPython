@@ -43,6 +43,18 @@ class MoneyAndPromotionsTest(unittest.TestCase):
         self.assertEqual("10.165750", payload["items"][0]["expectedUnitPrice"])
         self.assertEqual(Decimal("10.165750"), persisted(cart.total()))
 
+    def test_cart_total_matches_line_subtotal_for_weighted_item(self):
+        product = Produtos(
+            id="p-2", codigo="790", nome="Banana", quantidade=1,
+            preco="8.000000", categoria="HORTIFRUTI",
+        )
+        item = Item(product, quantidade=1, received_weight="0.750")
+        cart = Carrinho(terminal_id="terminal-test")
+        cart.adicionar_item(item)
+
+        self.assertEqual(item.subtotal(), cart.total())
+        self.assertEqual(Decimal("6.000000"), persisted(cart.total()))
+
 
 if __name__ == "__main__":
     unittest.main()

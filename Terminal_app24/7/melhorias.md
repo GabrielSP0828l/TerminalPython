@@ -91,7 +91,7 @@ Voltar para [o índice](00-index.md). Cada item informa explicitamente quando j�
 
 **Status:** comprovantes implementados em 13 de setembro de 2026; CPF pendente.
 
-- WhatsApp/e-mail usam `POST /comprovante`, idempotência do backend e worker Qt;
+- WhatsApp usa `POST /comprovante`, idempotência do backend e worker Qt;
 - teclado numérico/e-mail touch, validação, loading, sucesso e erro estão cobertos;
 - envio nunca altera o estado financeiro nem finaliza a compra automaticamente;
 - CPF continua sem campo/endpoint em Order/Pagamento e permanece desabilitado;

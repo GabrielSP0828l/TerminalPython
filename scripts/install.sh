@@ -67,6 +67,9 @@ NM_CONF_DIR="${APP247_NM_CONF_DIR:-/etc/NetworkManager/conf.d}"
 ICON_SOURCE="${APP247_ICON_SOURCE:-$ARTIFACT_DIR/_internal/assets/images/logo.png}"
 ICON_DESTINATION="${APP247_ICON_DESTINATION:-/usr/local/share/pixmaps/app247-terminal.png}"
 DESKTOP_ICON="computer"
+DESKTOP_QUICK_EXEC="${APP247_DESKTOP_QUICK_EXEC:-true}"
+LIBFM_SYSTEM_CONF="${APP247_LIBFM_SYSTEM_CONF:-/etc/xdg/libfm/libfm.conf}"
+LIBFM_USER_CONF=""
 
 for argument in "$@"; do
     case "$argument" in
@@ -206,6 +209,7 @@ resolve_desktop_layout() {
     AUTOSTART_DIR="$(realpath -m -- "$AUTOSTART_DIR")"
     USER_SYSTEMD_DIR="$(realpath -m -- "$USER_SYSTEMD_DIR")"
     USER_SERVICE_DESTINATION="$USER_SYSTEMD_DIR/$SERVICE_NAME"
+    LIBFM_USER_CONF="${APP247_LIBFM_USER_CONF:-$DESKTOP_HOME/.config/libfm/libfm.conf}"
     DESKTOP_UID="$(id -u "$DESKTOP_USER")"
     USER_RUNTIME_DIR="/run/user/$DESKTOP_UID"
     if [[ "$LAUNCHER_DESTINATION" == *$'\n'* ]] || [[ "$LAUNCHER_DESTINATION" == *'"'* ]]; then
@@ -230,11 +234,73 @@ ensure_desktop_directory() {
         return 0
     fi
 
+    # Cria cada nível com o dono gráfico; `install -d -o` só ajustaria o último
+    # e deixaria pais como root dentro da home (ex.: ~/.local/share/app247).
+    if [ ! -e "$(dirname -- "$directory")" ]; then
+        ensure_desktop_directory "$(dirname -- "$directory")" || return 1
+    fi
     if [ "$(id -u)" -eq 0 ]; then
         install -d -o "$DESKTOP_USER" -g "$(id -gn "$DESKTOP_USER")" -m 0755 "$directory"
     else
         install -d -m 0755 "$directory"
     fi
+}
+
+# O pcmanfm do Raspberry Pi OS trata todo .desktop da área de trabalho como
+# executável e pergunta "Executar / Executar no Terminal" a cada toque; só
+# quick_exec=1 no libfm.conf do usuário dispensa essa pergunta. A chave é
+# gravada apenas para o usuário gráfico, preservando o restante do arquivo.
+configure_libfm_quick_exec() {
+    local user_conf="$LIBFM_USER_CONF" base temporary group
+
+    [ "$DESKTOP_QUICK_EXEC" = "true" ] || return 0
+    [ -n "$user_conf" ] || return 0
+    if [ ! -f "$LIBFM_SYSTEM_CONF" ] && [ ! -f "$user_conf" ]; then
+        return 0
+    fi
+    if [ -L "$user_conf" ] || { [ -e "$user_conf" ] && [ ! -f "$user_conf" ]; }; then
+        echo "Aviso: $user_conf não é arquivo regular; quick_exec não configurado." >&2
+        return 0
+    fi
+    if ! ensure_desktop_directory "$(dirname -- "$user_conf")"; then
+        echo "Aviso: não foi possível preparar $(dirname -- "$user_conf")." >&2
+        return 0
+    fi
+    base="$user_conf"
+    [ -f "$base" ] || base="$LIBFM_SYSTEM_CONF"
+    temporary="$user_conf.app247.$$"
+    if ! awk '
+        BEGIN { in_config = 0; done = 0; seen = 0 }
+        /^[[:space:]]*\[/ {
+            if (in_config && !done) { print "quick_exec=1"; done = 1 }
+            in_config = ($0 ~ /^[[:space:]]*\[config\][[:space:]]*$/)
+            if (in_config) seen = 1
+            print; next
+        }
+        in_config && /^[[:space:]]*quick_exec[[:space:]]*=/ {
+            if (!done) { print "quick_exec=1"; done = 1 }
+            next
+        }
+        { print }
+        END {
+            if (in_config && !done) { print "quick_exec=1"; done = 1 }
+            if (!seen) { print ""; print "[config]"; print "quick_exec=1" }
+        }
+    ' "$base" > "$temporary" || ! chmod 0644 "$temporary"; then
+        rm -f -- "$temporary"
+        echo "Aviso: não foi possível gravar $user_conf." >&2
+        return 0
+    fi
+    if [ "$(id -u)" -eq 0 ]; then
+        group="$(id -gn "$DESKTOP_USER")"
+        chown "$DESKTOP_USER:$group" "$temporary"
+    fi
+    if ! mv -f -- "$temporary" "$user_conf"; then
+        rm -f -- "$temporary"
+        echo "Aviso: não foi possível gravar $user_conf." >&2
+        return 0
+    fi
+    echo "Atalho abre sem perguntar: quick_exec=1 em $user_conf (vale no próximo login ou após pcmanfm --reconfigure)."
 }
 
 install_desktop_icon() {
@@ -300,6 +366,7 @@ install_desktop_integration() {
     done
 
     install_desktop_icon
+    configure_libfm_quick_exec
     entry_temp="$(mktemp --suffix=.desktop)" || return 1
     desktop_temp="$desktop_target.tmp.$$"
     autostart_temp="$autostart_target.tmp.$$"
@@ -758,6 +825,7 @@ if [ "$ACTIVATE" = "true" ]; then
                 "$DESKTOP_DIR/Terminal 24-7.desktop"
                 "$DESKTOP_DIR/App247 Terminal.desktop"
                 "$AUTOSTART_DIR/app247-terminal.desktop"
+                "$LIBFM_USER_CONF"
             )
         fi
         ROLLBACK_PRESENT=()
