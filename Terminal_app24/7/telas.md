@@ -41,17 +41,19 @@ O catálogo usa `QGridLayout` dentro de `QScrollArea`. O cálculo parte da largu
 - no máximo quatro colunas;
 - 3 colunas em `1024×600`;
 - espaçamento de 12 px;
-- altura fixa de 224 px;
+- altura fixa de 280 px;
 - scroll vertical sempre disponível e scroll horizontal desativado;
 - distribuição real por `row, column = divmod(index, columns)`.
 
-Cada card mostra somente nome, subtotal exibido, quantidade e a ação `REMOVER`. O nome usa 26 px e no máximo duas linhas, com elipse quando necessário; o preço usa 34 px; a quantidade usa 22 px. Nenhum barcode, UUID, categoria ou identificador técnico é exibido.
+Cada card mostra somente nome, subtotal exibido, preço unitário (só com Qtd > 1), quantidade em pílula e a lixeira de remover; em promoção, também o preço original riscado e o selo de desconto. O nome usa 26 px e no máximo três linhas, com elipse quando necessário; o preço usa 34 px e só encolhe (até 22 px) quando o valor não cabe na largura do card; a quantidade usa 22 px. Um filete azul e laranja no topo dá a identidade da marca. Detalhes em `docs/design-system.md` (Card de produto do carrinho). Nenhum barcode, UUID, categoria ou identificador técnico é exibido.
 
-O footer usa uma única faixa horizontal para aproveitar a altura de 600 px. `TOTAL` usa 28 px, o valor usa 46 px e `FINALIZAR` usa 26 px com 72 px mínimos de altura. O relógio global de 10 minutos permanece no canto superior em 20 px.
+O footer usa uma única faixa horizontal para aproveitar a altura de 600 px. `TOTAL` usa 28 px, o valor usa 46 px e `FINALIZAR` usa 26 px com 72 px mínimos de altura. O relógio global de 10 minutos fica oculto e só aparece nos últimos 60 s, em 20 px, com o aviso "Sessão prestes a encerrar". Deitado fica no canto direito do cabeçalho; em pé o cabeçalho não comporta o texto (~370 px), então o relógio ocupa uma linha própria logo abaixo do cabeçalho (lista) ou do título (confirmação), na largura toda. A troca acompanha a orientação em tempo real.
 
 Ao atingir `00:00`, o scanner, remoções, cancelamento e `FINALIZAR` são desabilitados antes da navegação. Sem pendência financeira, o controlador limpa a compra e abre a tela de boas-vindas; a lista não possui lógica própria de timeout.
 
-Não existe campo de promoção no modelo/contrato local atual; a tela não inventa preço promocional. Caso o backend passe a fornecer preço original e promocional, o contrato deve ser definido primeiro em [[api-backend]] e [[compatibilidade-backend]].
+Inatividade: após 90 s sem toque nem leitura, lista e confirmação mostram "Ainda está aí?" com contagem de 20 s e `CONTINUAR` (ação primária laranja, 72 px). O aviso (`InactivityPrompt`) cobre só a área de conteúdo — lista de produtos ou resumo — com véu escuro e cartão de borda amarela e raio de modal; cabeçalho com o relógio da sessão, total e botões continuam visíveis e livres, inclusive quando os dois avisos aparecem juntos. Em pé o cartão empilha título, contagem e botão; deitado o botão fica ao lado do texto. Sem resposta, a compra encerra pelo caminho do teto (ver [[fluxo-compra]]).
+
+Promoção vem do catálogo sincronizado: `precoOriginal`, `emPromocao`, `promocaoId` e `promocaoNome` (ver [[compatibilidade-backend]]). A tela não calcula preço promocional: exibe o `preco` recebido e, quando `emPromocao` é verdadeiro, o preço original riscado e um selo com o percentual de desconto arredondado para baixo, ou com o nome da promoção quando o percentual não pode ser calculado.
 
 ## Confirmação da compra
 
@@ -68,7 +70,7 @@ O mesmo evento global bloqueia imediatamente `VOLTAR` e `CONFIRMAR E PAGAR`; o c
 
 ## Preparação e recuperação do pagamento
 
-O loading continua usando `icon/tube-spinner.svg`, renderizado em 128×128. `Preparando pagamento...` usa 32 px. O primeiro clique bloqueia botão e estado local antes do worker; sinais seguintes são ignorados.
+O loading usa `BrandLoader` (arcos azul e laranja da marca, `ui/brand.py`), em 128×128, animado só enquanto visível. `Preparando pagamento...` usa 32 px. O primeiro clique bloqueia botão e estado local antes do worker; sinais seguintes são ignorados.
 
 Se a sessão expirar durante esse loading, a tela não libera ações. Um worker Point ainda em execução pode terminar apenas para informar com segurança se existem `cartId`/`orderId`; seu callback é aceito somente para a tentativa capturada. Sem referência remota após a resposta delimitada, ocorre reset. Com referência remota, a tela passa à reconciliação.
 
@@ -86,4 +88,12 @@ Somente um status interno aprovado e correlacionado (`APPROVED`, `PAID` ou `PROC
 
 WhatsApp abre campo controlado exclusivamente pelo `NumericKeyboard` touch da aplicação, com máscara visual e teclas `LIMPAR`/`⌫`; não depende de teclado físico ou do sistema operacional. E-mail usa `EmailKeyboard`, em minúsculas, com `@`, `.`, `_`, `-` e atalhos de domínio. Cancelar fecha a entrada e volta ao aprovado sem perder a Order. Validação inválida permanece inline.
 
-Enquanto a entrada está aberta ou o worker envia, o timeout pós-compra fica pausado. Sucesso ou falha abre feedback humano e preserva as demais ações; falha nunca volta ao pagamento. Todos os targets desta tela e dos teclados foram validados em Qt offscreen no display `1024×600`.
+O timeout pós-compra é de 45 s (`POST_PURCHASE_TIMEOUT_SECONDS`) e volta à tela inicial como `FINALIZAR`. Enquanto a entrada está aberta ou o worker envia, ele fica pausado. Sucesso ou falha abre feedback humano e preserva as demais ações; falha nunca volta ao pagamento. Todos os targets desta tela e dos teclados foram validados em Qt offscreen no display `1024×600`.
+
+## Marca e movimento
+
+`ui/brand.py` concentra o kit visual: `BrandLogo` (logotipo oficial `logo.png`; pulso suave só na `TelaBemVindos`, estático em ativação, recuperação e cabeçalho do carrinho), `BrandLoader`, `AnimatedCheck` (pagamento aprovado), `flash` (rodapé do total; o card lido tem borda laranja própria de 600 ms), `shake` (ícone da recusa) e `FadeStackedWidget` (troca de página síncrona com fade visual de 250 ms). Nenhuma camada de animação recebe toque ou foco, e `APP247_ANIMATIONS=0` desliga o movimento. Tokens e regras em `docs/design-system.md`.
+
+## Textos das telas
+
+Textos de interface centralizados em `ui/texts.py`. Telas do cliente mostram um título e uma ação; o relógio de sessão só aparece nos últimos 60 s; remover item usa ícone de lixeira (`assets/icons/trash.svg`, 56×56); o vínculo com o App247 é uma linha curta com ícone de QR. Na ativação, o loader ocupa o lugar do QR até o pareamento chegar. Falha de integridade e credencial bloqueada exibem "Terminal indisponível / Chame um atendente." e registram o motivo no log.

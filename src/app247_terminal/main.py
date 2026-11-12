@@ -62,6 +62,15 @@ def _run_gui(arguments: list[str]) -> int:
         logger.info("[TERMINAL] UUID carregado: %s", terminal.terminalId)
 
     app = QApplication([sys.argv[0], *arguments])
+    app.setApplicationDisplayName("24/7 Terminal")
+    try:
+        from PyQt5.QtGui import QIcon
+
+        from app247_terminal.utils.resources import image_path
+
+        app.setWindowIcon(QIcon(str(image_path("logo.png"))))
+    except FileNotFoundError:
+        logger.warning("[UI] logotipo ausente; janela sem ícone")
     window = MainWindow()
     signal_handler = getattr(window, "encerrar_por_sinal", None)
     if signal_handler is not None:

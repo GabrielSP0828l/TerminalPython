@@ -7,6 +7,7 @@ os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 from PyQt5.QtWidgets import QApplication, QWidget
 
+from app247_terminal.ui import texts
 from app247_terminal.models.purchase_session import CompraSession
 from app247_terminal.ui.screens.payment import PagamentoScreen
 
@@ -203,7 +204,8 @@ class PaymentFlowTest(unittest.TestCase):
         self.screen._apply_status("order-a", "WAITING_PAYMENT")
         self.assertTrue(self.parent.compra_session.payment_in_flight)
         self.assertIs(self.screen.attention_page, self.screen.pages.currentWidget())
-        self.assertEqual("FINALIZE NA MAQUININHA", self.screen.attention_page.title.text())
+        self.assertEqual(texts.PAYMENT_MACHINE_TITLE, self.screen.attention_page.title.text())
+        self.assertTrue(self.screen.attention_support.isHidden())
 
     def test_global_timeout_without_remote_payment_returns_to_welcome(self):
         self.parent.compra_session.reset()
@@ -309,7 +311,9 @@ class PaymentFlowTest(unittest.TestCase):
         })
 
         self.assertEqual("CART_READY", self.parent.compra_session.state)
-        self.assertEqual("Pagamento recusado", self.screen.error_reason.text())
+        self.assertEqual("", self.screen.error_reason.text())
+        self.assertTrue(self.screen.error_reason.isHidden())
+        self.assertEqual(texts.PAYMENT_ERROR_SUPPORT, self.screen.error_support.text())
         self.assertIs(self.screen.error_page, self.screen.pages.currentWidget())
 
     def test_reconciliation_degraded_keeps_visible_recovery_and_slow_polling(self):

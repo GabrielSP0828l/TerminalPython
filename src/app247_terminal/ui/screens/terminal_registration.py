@@ -28,6 +28,8 @@ from app247_terminal.services.terminal_auth import (
     start_pairing,
 )
 from app247_terminal.services.backend_client import terminal_access_state
+from app247_terminal.ui import texts
+from app247_terminal.ui.brand import BrandLoader, BrandLogo
 from app247_terminal.ui.styles.theme import Theme
 from app247_terminal.ui.styles.tokens import Spacing
 
@@ -193,7 +195,9 @@ class CadastroTerminalScreen(QWidget):
         layout.setContentsMargins(Spacing.XXL, Spacing.XL, Spacing.XXL, Spacing.XL)
         layout.setSpacing(Spacing.MD)
 
-        self.title = QLabel("APP 24/7")
+        self.brand_logo = BrandLogo(parent=self.card)
+        self.brand_logo.setFixedHeight(96)
+        self.title = QLabel("24/7 TERMINAL")
         self.title.setObjectName("activationTitle")
         self.title.setAlignment(Qt.AlignCenter)
 
@@ -209,6 +213,10 @@ class CadastroTerminalScreen(QWidget):
         self.qr_label.setObjectName("activationQrCode")
         self.qr_label.setAlignment(Qt.AlignCenter)
         self.qr_label.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
+        # Sem QR o label seria só um retângulo branco; o loader ocupa o lugar.
+        self.qr_label.hide()
+        self.qr_loader = BrandLoader(self.card)
+        self.qr_loader.setFixedSize(96, 96)
 
         self.info_label = QLabel()
         self.info_label.setObjectName("activationDeviceInfo")
@@ -216,7 +224,7 @@ class CadastroTerminalScreen(QWidget):
         self.info_label.setWordWrap(True)
         self.info_label.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)
 
-        self.status_label = QLabel("Preparando consulta de ativação...")
+        self.status_label = QLabel(texts.ACTIVATION_WAITING)
         self.status_label.setObjectName("activationStatus")
         self.status_label.setAlignment(Qt.AlignCenter)
         self.status_label.setWordWrap(True)
@@ -252,6 +260,7 @@ class CadastroTerminalScreen(QWidget):
         self.body_layout.setHorizontalSpacing(Spacing.XL)
         self.body_layout.setVerticalSpacing(Spacing.MD)
 
+        layout.addWidget(self.brand_logo)
         layout.addWidget(self.title)
         layout.addWidget(self.subtitle)
         layout.addWidget(self.body, 1)
@@ -276,13 +285,15 @@ class CadastroTerminalScreen(QWidget):
         else:
             self._qr_pixmap = QPixmap()
             self.qr_label.clear()
+        self.qr_label.setVisible(bool(pairing))
+        self.qr_loader.setVisible(not pairing)
 
         if self.pairing_code:
             code_line = f"Código de pareamento: {self.pairing_code}\n"
         elif self._credential_available():
             code_line = ""
         else:
-            code_line = "Gerando código de pareamento...\n"
+            code_line = ""
         self.info_label.setText(
             code_line
             + f"Serial: {self.device_info['serialNumber']}\n"
@@ -301,6 +312,7 @@ class CadastroTerminalScreen(QWidget):
             return
 
         self._layout_mode = mode
+        self.body_layout.addWidget(self.qr_loader, 0, 0, Qt.AlignCenter)
         if mode == "portrait":
             self.body_layout.addWidget(self.qr_label, 0, 0, Qt.AlignCenter)
             self.body_layout.addWidget(self.details_panel, 1, 0)
@@ -336,11 +348,7 @@ class CadastroTerminalScreen(QWidget):
 
     def verificar_ativacao(self):
         if terminal_access_state.get() in {"AUTH_REQUIRED", "FORBIDDEN"}:
-            self._atualizar_status(
-                "Operacao bloqueada. O Terminal volta sozinho assim que o "
-                "backend confirmar a autorizacao.",
-                True,
-            )
+            self._atualizar_status(texts.ACTIVATION_BLOCKED, True)
             return
         if Terminal.is_activated() and self._credential_available():
             self.activation_timer.stop()
@@ -352,7 +360,7 @@ class CadastroTerminalScreen(QWidget):
         if self.activation_worker.isRunning():
             return
 
-        self._atualizar_status("Consultando ativação...", False, state="loading")
+        self._atualizar_status(texts.ACTIVATION_WAITING, False, state="loading")
         self.activation_worker.start()
 
     @staticmethod

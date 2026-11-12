@@ -29,6 +29,13 @@ class MoneyAndPromotionsTest(unittest.TestCase):
         self.assertEqual(Decimal("10.165750"), product.preco)
         self.assertEqual("R$ 10,17", format_brl(product.preco))
 
+    def test_format_brl_uses_thousands_separator(self):
+        self.assertEqual("R$ 0,00", format_brl(0))
+        self.assertEqual("R$ 999,99", format_brl("999.99"))
+        self.assertEqual("R$ 1.299,90", format_brl("1299.9"))
+        self.assertEqual("R$ 123.456,78", format_brl("123456.78"))
+        self.assertEqual("R$ 1.234.567,89", format_brl("1234567.891"))
+
     def test_cart_sends_exact_expected_price_without_local_recalculation(self):
         product = Produtos(
             id="p-1", codigo="789", nome="Refrigerante", quantidade=1,

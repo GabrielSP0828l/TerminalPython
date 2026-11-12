@@ -12,8 +12,10 @@ from PyQt5.QtGui import QColor
 from PyQt5.QtTest import QTest
 from PyQt5.QtWidgets import QApplication, QProgressBar, QWidget
 
+from app247_terminal.ui import texts
 from app247_terminal.models.purchase_session import CompraSession
 from app247_terminal.ui.styles.svg_icons import icon_path, render_colored_svg
+from app247_terminal.ui.brand import BrandLoader
 from app247_terminal.ui.styles.animated_svg import AnimatedSvgWidget
 from app247_terminal.ui.styles.tokens import Colors, FontSize
 from app247_terminal.ui.screens.confirmation import ConfirmacaoScreen
@@ -22,7 +24,7 @@ from app247_terminal.ui.screens.payment import PagamentoScreen
 
 class CartStub:
     def total_formatado(self):
-        return "R$ 48.90"
+        return "R$ 48,90"
 
 
 class ParentStub(QWidget):
@@ -98,11 +100,15 @@ class PaymentStateScreensTest(unittest.TestCase):
 
     def test_definitive_failures_use_fullscreen_error_and_human_reason(self):
         expected = {
-            "REJECTED": "Pagamento recusado",
+            "REJECTED": "",
             "CANCELLED": "Pagamento cancelado",
-            "FAILED": "Não foi possível concluir o pagamento",
+            "FAILED": "",
             "EXPIRED": "O tempo para pagamento terminou",
+            "REFUNDED": "Pagamento estornado",
         }
+        self.assertEqual(
+            expected, {key: texts.PAYMENT_FAILURE_REASONS[key] for key in expected}
+        )
         for status, message in expected.items():
             with self.subTest(status=status):
                 self.parent.compra_session.set_remote_ids(order_id="order-a")
@@ -110,7 +116,15 @@ class PaymentStateScreensTest(unittest.TestCase):
                 self.screen._apply_status("order-a", status)
                 self.assertIs(self.screen.error_page, self.screen.pages.currentWidget())
                 self.assertEqual(message, self.screen.error_reason.text())
-                self.assertEqual("TENTAR NOVAMENTE", self.screen.error_retry.text())
+                # Recusa e falha genérica não repetem o título numa segunda linha.
+                self.assertEqual(not message, self.screen.error_reason.isHidden())
+                self.assertEqual(
+                    texts.PAYMENT_ERROR_TITLE, self.screen.error_page.title.text()
+                )
+                self.assertEqual(
+                    texts.PAYMENT_ERROR_SUPPORT, self.screen.error_support.text()
+                )
+                self.assertEqual(texts.PAYMENT_RETRY, self.screen.error_retry.text())
 
     def test_waiting_and_processing_remain_on_point_instruction_screen(self):
         self.assertIs(self.screen.attention_page, self.screen.pages.currentWidget())
@@ -122,9 +136,26 @@ class PaymentStateScreensTest(unittest.TestCase):
         self.assertNotEqual(self.screen.error_page, self.screen.pages.currentWidget())
 
     def test_orange_screen_explains_method_change_and_total_cancellation(self):
-        self.assertIn("botão verde", self.screen.attention_page.message.text())
-        self.assertIn("cancelar Débito", self.screen.attention_support.text())
-        self.assertEqual("CANCELAR COMPRA", self.screen.cancel_payment_button.text())
+        self.assertEqual(
+            texts.PAYMENT_MACHINE_TITLE, self.screen.attention_page.title.text()
+        )
+        self.assertEqual(
+            texts.PAYMENT_MACHINE_MESSAGE, self.screen.attention_page.message.text()
+        )
+        self.assertIn("botão verde", texts.PAYMENT_MACHINE_MESSAGE)
+        # A explicação sobre trocar a forma de pagamento só entra quando a
+        # cobrança demora, que é quando o cliente pode ter cancelado na Point.
+        self.assertTrue(self.screen.attention_support.isHidden())
+        self.screen._show_attention(warning=True)
+        self.assertEqual(
+            texts.PAYMENT_PENDING_TITLE, self.screen.attention_page.title.text()
+        )
+        self.assertFalse(self.screen.attention_support.isHidden())
+        self.assertEqual(
+            texts.PAYMENT_PENDING_SUPPORT, self.screen.attention_support.text()
+        )
+        self.assertIn("cancelar Débito", texts.PAYMENT_PENDING_SUPPORT)
+        self.assertEqual(texts.PAYMENT_CANCEL, self.screen.cancel_payment_button.text())
         self.assertGreaterEqual(self.screen.cancel_payment_button.height(), 60)
 
     def test_tube_spinner_is_animated_and_replaces_qt_progress_bar(self):
@@ -139,7 +170,7 @@ class PaymentStateScreensTest(unittest.TestCase):
         self.assertTrue(spinner.is_animated)
         self.assertNotEqual(first, second)
         self.assertEqual([], self.screen.findChildren(QProgressBar))
-        self.assertEqual("tube-spinner.svg", self.screen.loading_spinner.source.name)
+        self.assertIsInstance(self.screen.loading_spinner, BrandLoader)
         self.assertEqual(QSize(128, 128), self.screen.loading_spinner.size())
         self.assertEqual(FontSize.LOADING_MESSAGE, self.screen.loading.font().pixelSize())
 
@@ -173,7 +204,7 @@ class PaymentStateScreensTest(unittest.TestCase):
 
     def test_recovered_success_uses_backend_amount_when_visual_cart_was_lost(self):
         self.parent.terminal.carrinho = CartStub()
-        self.parent.terminal.carrinho.total_formatado = lambda: "R$ 0.00"
+        self.parent.terminal.carrinho.total_formatado = lambda: "R$ 0,00"
 
         self.screen.recovered_amount = "48.90"
         self.screen._apply_status("order-a", "APPROVED")

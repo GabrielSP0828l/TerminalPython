@@ -62,6 +62,7 @@ As duas funções novas vivem dentro da `ConfiguracaoScreen` existente. Um `QSta
 
 ```text
 TelaBemVindos
+  -> TOQUE PARA CONTINUAR ou leitura no scanner (abre a compra já com o item lido)
   -> TerminalScreen
       -> FINALIZAR
           -> ConfirmacaoCompraScreen
@@ -73,11 +74,13 @@ TelaBemVindos
                   -> falha: TENTAR NOVAMENTE -> TerminalScreen
 ```
 
-`PAGAR NO APP` e `PAGAR AGORA` não existem mais na tela da compra. `AppPaymentScreen` não foi apagada porque ainda representa um fluxo legado separado; não há rota ativa até ela.
+`PAGAR NO APP` e `PAGAR AGORA` não existem mais na tela da compra. `AppPaymentScreen` não foi apagada porque ainda representa um fluxo legado separado; não há rota ativa até ela. Se for reativada, a tela tem limite próprio de 5 minutos, sempre dentro do teto da compra, e encerra pelo mesmo caminho da inatividade.
 
 ## Carrinho
 
 O catálogo ocupa a área flexível e usa `QGridLayout` real dentro de `QScrollArea`. Em `1024×600`, são 3 colunas com cards de `292×224`; a largura responsiva fica entre 250 e 292 px, limitada a quatro colunas. O espaçamento é 12 px, a barra horizontal fica desativada e a altura do container acompanha a quantidade de linhas para o scroll vertical não sobrepor cards.
+
+Após 90 s sem toque nem leitura, carrinho e confirmação pré-pagamento mostram "Ainda está aí?" com 20 s de contagem e `CONTINUAR`; sem resposta a compra encerra pelo caminho do teto de 10 minutos, que nunca reseta cobrança em andamento.
 
 Cada card mostra nome em até duas linhas (26 px), preço/subtotal (34 px), quantidade (22 px) e `REMOVER`; dados técnicos não aparecem. Scanner/peso permanecem operacionais. O footer horizontal mantém `TOTAL` (28 px), valor (46 px), “Cancelar compra” e “Finalizar” (26 px/72 px) fora do scroll. `Finalizar` não cria Carrinho remoto, Order ou cobrança.
 
@@ -93,7 +96,7 @@ Preparação mostra loading antes do worker HTTP. Depois de uma resposta Point v
 
 `REJECTED`, `FAILED`, `CANCELED/CANCELLED`, `EXPIRED` e `REFUNDED` exibem vermelho fullscreen, `error.svg` branco, motivo humano e “TENTAR NOVAMENTE” no rodapé. A ação invalida os IDs da tentativa anterior e retorna ao carrinho preservado; nunca cria cobrança automaticamente.
 
-`APPROVED`/equivalentes correlacionados abrem verde fullscreen com `checked.svg` branco, total e três ações: `FINALIZAR`, `ADICIONAR CPF` e `ENVIAR COMPROVANTE POR WHATSAPP`. Eventos aprovados duplicados são idempotentes e não interrompem a ação em curso. WhatsApp abre teclado virtual touch e envia pelo Spring em worker; CPF permanece desabilitado porque ainda não existe contrato para associá-lo à Order. O timeout separado de 120 segundos pausa enquanto há entrada ou envio em andamento.
+`APPROVED`/equivalentes correlacionados abrem verde fullscreen com `checked.svg` branco, total e três ações: `FINALIZAR`, `ADICIONAR CPF` e `ENVIAR COMPROVANTE POR WHATSAPP`. Eventos aprovados duplicados são idempotentes e não interrompem a ação em curso. WhatsApp abre teclado virtual touch e envia pelo Spring em worker; CPF permanece desabilitado porque ainda não existe contrato para associá-lo à Order. O timeout separado de 45 segundos pausa enquanto há entrada ou envio em andamento.
 
 ## Testes visuais
 

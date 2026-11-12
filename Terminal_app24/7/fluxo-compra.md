@@ -54,6 +54,22 @@ remaining <= 0
           -> intermediário/incerto: RECONCILIATION_PENDING
 ```
 
+## Inatividade na lista e na confirmação
+
+Além do teto, `InactivityMonitor` (`ui/inactivity.py`) mede o tempo sem toque e sem leitura do leitor enquanto a lista de produtos ou a confirmação do pedido estão na tela. Após 90 s aparece "Ainda está aí?" com contagem de 20 s e `CONTINUAR`; qualquer toque, tecla do leitor ou `readProduct()` zera a contagem e fecha o aviso. Sem resposta, `MainWindow.encerrar_compra_por_inatividade()` chama `CompraSession.expire_for_inactivity()`, que emite o mesmo `expired(generation)` do teto:
+
+```text
+inatividade sem resposta
+  -> sessão iniciada: expire_for_inactivity() -> mesmo fluxo da expiração global acima
+      (cobrança em andamento nunca é resetada: PagamentoScreen reconcilia)
+  -> lista vazia, sem sessão: reset_compra -> boas-vindas
+  -> tentativa restaurada sem sessão: PagamentoScreen.mostrar_reconciliacao_pendente
+```
+
+Um `QMessageBox` aberto é fechado antes, para não ficar sobre a tela do próximo cliente; se ele interrompia `iniciar_pagamento_confirmado`, a cobrança não é iniciada para uma compra já encerrada. Teto e inatividade são idempotentes entre si: o primeiro que encerrar vence.
+
+Os tempos ficam no topo de `models/purchase_session.py`: teto 600 s, relógio visível nos últimos 60 s (crítico em 30 s), aviso após 90 s, contagem de 20 s, pagamento aprovado 45 s e pagamento pelo aplicativo 300 s (sempre limitado pelo teto). Os intervalos internos do Point continuam em `payment.py`.
+
 O reset central limpa o carrinho, IDs, flags, timers visuais e tokens da tentativa. Scanner, `FINALIZAR` e `CONFIRMAR E PAGAR` ficam bloqueados desde a expiração. Uma nova entrada na tela de compra permite um novo scan, que cria outra `generation`, reinicia o deadline completo e não aceita callbacks da tentativa anterior.
 
 ## Vínculo do cliente

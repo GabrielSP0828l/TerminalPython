@@ -34,9 +34,9 @@ class PurchaseApi:
     DOMAIN_MESSAGES = {
         "ACTIVE_PAYMENT_ATTEMPT_EXISTS": "Existe um pagamento em andamento.",
         "PAYMENT_ALREADY_ACTIVE": "Existe um pagamento em andamento.",
-        "ORDER_PRICE_NOT_FINALIZED": "O valor da compra ainda nao foi finalizado.",
-        "PURCHASE_NOT_FOUND": "Compra nao encontrada.",
-        "COUPON_MINIMUM_NOT_REACHED": "O valor minimo do cupom nao foi atingido.",
+        "ORDER_PRICE_NOT_FINALIZED": "O valor da compra ainda não foi finalizado.",
+        "PURCHASE_NOT_FOUND": "Compra não encontrada.",
+        "COUPON_MINIMUM_NOT_REACHED": "O valor mínimo do cupom não foi atingido.",
         "TERMINAL_UNAUTHORIZED": "Terminal precisa ser reprovisionado.",
         "TERMINAL_DISABLED": "Terminal desativado pelo administrador.",
     }
@@ -98,7 +98,7 @@ class PurchaseApi:
                 ) from error
             if error.status == 409 and error.code == "ORDER_PRICE_NOT_FINALIZED":
                 raise PurchaseApiError(
-                    "O valor da compra ainda nao foi finalizado pelo servidor.",
+                    "O valor da compra ainda não foi finalizado pelo servidor.",
                     "price_not_finalized", False, payload,
                 ) from error
             if error.device_unauthorized:
@@ -110,7 +110,7 @@ class PurchaseApi:
                 ) from error
             if error.device_forbidden:
                 raise PurchaseApiError(
-                    "Terminal sem permissao para esta operacao.",
+                    "Terminal sem permissão para esta operação.",
                     "device_forbidden", ambiguous, {
                         "status": 403, "code": error.code,
                     },

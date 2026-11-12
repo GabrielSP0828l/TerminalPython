@@ -14,7 +14,9 @@ from app247_terminal.application import MainWindow
 from app247_terminal.ui.screens.payment import PagamentoScreen as PaymentScreen
 
 
-PROMPT = "Vincule esta compra"
+from app247_terminal.ui import texts
+
+PROMPT = texts.CART_CUSTOMER_PROMPT
 
 
 class CustomerUnlinkTest(unittest.TestCase):
@@ -44,7 +46,7 @@ class CustomerUnlinkTest(unittest.TestCase):
     def _assert_unlinked(self):
         self.assertIsNone(self.terminal.customer_display_name)
         self.assertIsNone(self.session.cart_id)
-        self.assertIn(PROMPT, self.terminal.customer_status.text())
+        self.assertEqual(PROMPT, self.terminal.customer_status.text())
 
     def _fail_charge(self, payload):
         self.session.cart_id = "cart-1"

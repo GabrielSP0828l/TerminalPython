@@ -64,11 +64,11 @@ class BackendHttpError(RuntimeError):
 
     def _default_message(self):
         if self.status == 401:
-            return "Credencial do Terminal ausente, invalida ou revogada"
+            return "Credencial do Terminal ausente, inválida ou revogada"
         if self.status == 403:
-            return "Terminal autenticado sem permissao para esta operacao"
+            return "Terminal autenticado sem permissão para esta operação"
         if self.status == 404:
-            return "Recurso nao encontrado"
+            return "Recurso não encontrado"
         if self.status == 409:
             return "Operacao em conflito com o estado atual"
         if self.status == 429:

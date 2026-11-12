@@ -51,10 +51,16 @@ class ScannerQuantityTest(unittest.TestCase):
 
         self.assertEqual(2, screen.carrinho.buscar_item("789").quantidade)
         line_widget = screen.linhas["789"][0]
-        self.assertEqual(["REMOVER"], [button.text() for button in line_widget.findChildren(QPushButton)])
-        self.assertGreaterEqual(
-            line_widget.findChild(QPushButton).minimumHeight(), 56
-        )
+        buttons = line_widget.findChildren(QPushButton)
+        self.assertEqual(1, len(buttons))
+        remove = buttons[0]
+        # Só o ícone de lixeira: sem texto, mas nomeado para acessibilidade.
+        self.assertEqual("", remove.text())
+        self.assertFalse(remove.icon().isNull())
+        self.assertEqual("remove", remove.property("variant"))
+        self.assertTrue(remove.accessibleName().startswith("Remover "))
+        self.assertGreaterEqual(remove.minimumHeight(), 56)
+        self.assertGreaterEqual(remove.minimumWidth(), 56)
 
 
 if __name__ == "__main__":
