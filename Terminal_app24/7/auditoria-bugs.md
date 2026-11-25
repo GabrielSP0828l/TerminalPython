@@ -566,7 +566,7 @@ Com o app 1.0.6 instalado e operando, o terminal parou na noite de 24/11. No dia
 
 ## BUG-049 — Socket de pagamento não detecta conexão meio-aberta
 
-**Status:** aberto; potencial, identificado em 17 de outubro de 2026.
+**Status:** corrigido em 25 de novembro de 2026 (entra na próxima release); validação no Raspberry pendente. Identificado em 17 de outubro de 2026.
 
 - **Severidade:** média (mitigada)
 - **Tipo:** potencial
@@ -574,6 +574,8 @@ Com o app 1.0.6 instalado e operando, o terminal parou na noite de 24/11. No dia
 - **Cenário:** queda breve de Wi-Fi (medida perda de 13,33% no campo, ver [[wifi]]) sem FIN/RST.
 - **Impacto:** o terminal continua `CONNECTED` e não reconecta; eventos `PAYMENT_STATUS`, `PRODUCT_SYNC_REQUIRED` e reset são perdidos. Pagamento é coberto pelo polling de `/order/{id}/status`; catálogo só atualiza no sync periódico (300 s) e reset no bootstrap (60 s). A telemetria mostra estado de socket falso.
 - **Correção recomendada:** `ping` periódico com prazo de pong (ou derrubar o listener quando o heartbeat de `/terminal-socket` falhar).
+- **Correção aplicada:** `PaymentListener` lê também os frames de controle (`recv_data(control_frame=True)`). Sem nenhum frame por `PING_INTERVAL_SECONDS` (20 s) envia `ping`; se nada chegar em `PONG_TIMEOUT_SECONDS` (15 s) levanta `PaymentSocketStale` e cai no caminho normal de reconexão (`RECONNECTING`, nova conexão em 5 s, que já dispara sync e consulta de lifecycle). Qualquer frame (evento, ping ou pong) conta como tráfego. Frame `CLOSE` do servidor também força a reconexão. Detecção no pior caso: cerca de 40 s. O backend roda em Tomcat (Spring Boot), que responde ping com pong sozinho; não precisou de mudança no backend.
+- **Validação:** `tests/test_websocket_routing.py::PaymentSocketLivenessTest` (relógio falso) e teste manual com socket real em 25/11/2026: um servidor que faz o handshake e fica mudo derruba a conexão e reconecta; um servidor que responde pong mantém uma única conexão.
 
 ## BUG-050 — Logs da aplicação não sobrevivem a reinício no Raspberry
 

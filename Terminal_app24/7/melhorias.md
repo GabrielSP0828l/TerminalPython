@@ -383,7 +383,7 @@ separa `OK`, `WARN` e `ERROR` e usa exit code para bloquear ativações inválid
 - ~~recuperar `terminal.json` inválido e gravá-lo com `fsync` (BUG-046)~~ — implementado em 17/10/2026 com quarentena e reativação por serial;
 - ~~política persistente de Wi-Fi sem economia de energia~~ — implementado em 17/10/2026 pelo instalador (NetworkManager `conf.d`);
 - ~~tratar `SIGTERM` com encerramento cooperativo dentro de `TimeoutStopSec` (BUG-047)~~ — implementado em 17/10/2026 (ponte de sinais + orçamento único de 20 s);
-- ping/pong no socket de pagamento (BUG-049);
+- ~~ping/pong no socket de pagamento (BUG-049)~~ — implementado em 25 de novembro de 2026;
 - logs persistentes e rotativos sem segredos (BUG-050);
 - ~~reinício automático de heartbeat/listener ao voltar a `OPERATIONAL` (BUG-048)~~ — implementado em 2 de novembro de 2026 (`9c7fd81`, release 1.0.4).
 
