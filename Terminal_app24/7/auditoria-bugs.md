@@ -509,6 +509,21 @@ Falha, instrução e sucesso eram cards e a aprovação apagava a compra após c
 - Sistema reinstalado (imagem limpa, usuário `jefiro`, Wi-Fi `BR`); app Terminal **ainda não instalado**.
 - `mmc1: Controller never released inhibit bit(s)` aparece com o slot SD vazio; sem impacto ao bootar pelo SSD.
 
+### Ocorrência de 24–25/11/2026 — app fecha sozinho, atalho não abre, SSH recusa
+
+Com o app 1.0.6 instalado e operando, o terminal parou na noite de 24/11. No dia 25 o operador viu o app fechado, o atalho da área de trabalho não abria e o SSH respondia `kex_exchange_identification: Connection reset by peer`, mas o Pi ainda respondia ao ping.
+
+| Evidência | Resultado | Interpretação |
+|---|---|---|
+| `journalctl -b -1` (journal persistente) | app normal até a última linha: heartbeat a cada 10 s, sync e telemetria com 202. **Último registro: 24/11 23:26:04.** Sem erro do app, sem erro do kernel, sem `systemd-shutdown` | os registros param de uma vez, sem desligamento ordenado. É o padrão de quando o root (`/dev/sda2`) some: o kernel não consegue mais gravar o próprio erro |
+| sintomas sem SSH | ping ok, `sshd` aceita o TCP e reseta antes do banner; app fechado; atalho sem efeito | processos que já estavam na RAM seguem vivos, mas nada consegue carregar binários ou bibliotecas do disco. Bate com o SSD desconectado |
+| 1º boot no dia 25 (tela do bootloader 2026/09/23) | `PCIe timeout: 0x0000008f`, `USB xHC init failed` em loop | mesma falha do bootloader do dia 24; o VL805 não inicializou |
+| 2º boot no dia 25 | o controlador inicializa (`USB2 root HUB port 1 init`); `xHC-CMD err: 4 type: 11` na porta 4 em full-speed, que é o touch da tela (`0484:5750` MPI7002) e não o SSD; depois o boot segue normal | a falha do PCIe/VL805 no bootloader é **intermitente** |
+| após bootar (`lsusb -t`, `vcgencmd`) | SSD `13fd:5917` em **480M (USB 2)** com `uas`, mesmo ligado em porta azul; `throttled=0x0` | o bridge Initio não negociou SuperSpeed (em 24/11 negociou após `power cycle`); não houve subtensão neste boot. O app 1.0.6 voltou ativo sozinho |
+
+- **Conclusão:** quedas do app sem rastro no log, mais a falha intermitente do USB no bootloader e no kernel, apontam para o **case/bridge USB-SATA Initio `13fd:5917`** (ou o cabo dele) como causa principal. Não foi possível provar pelo log, porque a queda impede a gravação. Não é defeito do app.
+- **Ação recomendada:** trocar o case por um bridge ASMedia (ASM1153E/ASM235CM) ou JMicron (JMS578/JMS583); como alternativa, usar hub USB com fonte própria. Para registrar a próxima queda mesmo sem disco, considerar log remoto (`netconsole` ou `systemd-journal-remote`), o que exige autorização para alterar o Pi.
+
 ## BUG-046 — `terminal.json` vazio ou corrompido derruba o Terminal antes da UI
 
 **Status:** corrigido em 17 de outubro de 2026 (reproduzido antes da correção); validação no Raspberry pendente.
