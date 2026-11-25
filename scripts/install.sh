@@ -70,6 +70,12 @@ DESKTOP_ICON="computer"
 DESKTOP_QUICK_EXEC="${APP247_DESKTOP_QUICK_EXEC:-true}"
 LIBFM_SYSTEM_CONF="${APP247_LIBFM_SYSTEM_CONF:-/etc/xdg/libfm/libfm.conf}"
 LIBFM_USER_CONF=""
+# Regra de quiosque no labwc: janelas do Terminal sem barra de título (sem
+# minimizar/maximizar) e fora da barra de tarefas. Ver BUG-064.
+LABWC_KIOSK_RULE="${APP247_LABWC_KIOSK_RULE:-true}"
+LABWC_RELOAD="${APP247_LABWC_RELOAD:-true}"
+LABWC_SYSTEM_RC="${APP247_LABWC_SYSTEM_RC:-/etc/xdg/labwc/rc.xml}"
+LABWC_USER_RC=""
 
 for argument in "$@"; do
     case "$argument" in
@@ -210,6 +216,7 @@ resolve_desktop_layout() {
     USER_SYSTEMD_DIR="$(realpath -m -- "$USER_SYSTEMD_DIR")"
     USER_SERVICE_DESTINATION="$USER_SYSTEMD_DIR/$SERVICE_NAME"
     LIBFM_USER_CONF="${APP247_LIBFM_USER_CONF:-$DESKTOP_HOME/.config/libfm/libfm.conf}"
+    LABWC_USER_RC="${APP247_LABWC_USER_RC:-$DESKTOP_HOME/.config/labwc/rc.xml}"
     DESKTOP_UID="$(id -u "$DESKTOP_USER")"
     USER_RUNTIME_DIR="/run/user/$DESKTOP_UID"
     if [[ "$LAUNCHER_DESTINATION" == *$'\n'* ]] || [[ "$LAUNCHER_DESTINATION" == *'"'* ]]; then
@@ -347,6 +354,114 @@ retire_legacy_desktop_shortcut() {
     fi
 }
 
+# O labwc decora toda janela do app (inclusive QMessageBox) com minimizar,
+# maximizar e fechar; minimizar esconde o Terminal inteiro e, no quiosque, não
+# há como trazê-lo de volta. FramelessWindowHint não remove a decoração do
+# servidor, então a regra fica no rc.xml do usuário gráfico, num bloco
+# delimitado por marcadores que é substituído a cada instalação. O labwc do
+# Raspberry Pi OS combina este arquivo com /etc/xdg/labwc/rc.xml (o próprio
+# sistema grava ali só a configuração do touch).
+LABWC_BEGIN_MARK="<!-- app247:kiosk-rule:begin -->"
+LABWC_END_MARK="<!-- app247:kiosk-rule:end -->"
+LABWC_RULE='<windowRule identifier="app247-terminal" serverDecoration="no" skipTaskbar="yes" skipWindowSwitcher="yes"/>'
+
+configure_labwc_kiosk_rule() {
+    local user_rc="$LABWC_USER_RC" temporary group
+
+    [ "$LABWC_KIOSK_RULE" = "true" ] || return 0
+    [ -n "$user_rc" ] || return 0
+    if [ ! -f "$LABWC_SYSTEM_RC" ] && [ ! -f "$user_rc" ]; then
+        return 0
+    fi
+    if [ -L "$user_rc" ] || { [ -e "$user_rc" ] && [ ! -f "$user_rc" ]; }; then
+        echo "Aviso: $user_rc não é arquivo regular; regra de quiosque do labwc não configurada." >&2
+        return 0
+    fi
+    if [ -f "$user_rc" ] && ! grep -q '</openbox_config>' "$user_rc"; then
+        echo "Aviso: $user_rc sem </openbox_config>; regra de quiosque do labwc não configurada." >&2
+        return 0
+    fi
+    if ! ensure_desktop_directory "$(dirname -- "$user_rc")"; then
+        echo "Aviso: não foi possível preparar $(dirname -- "$user_rc")." >&2
+        return 0
+    fi
+    temporary="$user_rc.app247.$$"
+    if [ -f "$user_rc" ]; then
+        # Remove o bloco anterior e reinsere dentro do primeiro <windowRules>
+        # existente; sem ele, cria a seção antes de </openbox_config>.
+        if ! awk -v begin="$LABWC_BEGIN_MARK" -v end="$LABWC_END_MARK" -v rule="$LABWC_RULE" '
+            BEGIN { skipping = 0; done = 0; has_rules = 0 }
+            { lines[NR] = $0 }
+            END {
+                for (i = 1; i <= NR; i++) {
+                    line = lines[i]
+                    if (index(line, begin)) { skipping = 1; continue }
+                    if (skipping) { if (index(line, end)) skipping = 0; continue }
+                    kept[++n] = line
+                    if (line ~ /<windowRules[[:space:]]*>/) has_rules = 1
+                }
+                for (i = 1; i <= n; i++) {
+                    line = kept[i]
+                    if (!done && has_rules && line ~ /<windowRules[[:space:]]*>/) {
+                        print line
+                        print "    " begin; print "    " rule; print "    " end
+                        done = 1; continue
+                    }
+                    if (!done && !has_rules && line ~ /<\/openbox_config>/) {
+                        print "  " begin
+                        print "  <windowRules>"; print "    " rule; print "  </windowRules>"
+                        print "  " end
+                        done = 1
+                    }
+                    print line
+                }
+            }
+        ' "$user_rc" > "$temporary"; then
+            rm -f -- "$temporary"
+            echo "Aviso: não foi possível gravar $user_rc." >&2
+            return 0
+        fi
+    else
+        if ! printf '%s\n' \
+            '<?xml version="1.0"?>' \
+            '<openbox_config xmlns="http://openbox.org/3.4/rc">' \
+            "  $LABWC_BEGIN_MARK" \
+            '  <windowRules>' \
+            "    $LABWC_RULE" \
+            '  </windowRules>' \
+            "  $LABWC_END_MARK" \
+            '</openbox_config>' > "$temporary"; then
+            rm -f -- "$temporary"
+            echo "Aviso: não foi possível gravar $user_rc." >&2
+            return 0
+        fi
+    fi
+    if ! chmod 0644 "$temporary"; then
+        rm -f -- "$temporary"
+        return 0
+    fi
+    if [ "$(id -u)" -eq 0 ]; then
+        group="$(id -gn "$DESKTOP_USER")"
+        chown "$DESKTOP_USER:$group" "$temporary"
+    fi
+    if cmp -s -- "$temporary" "$user_rc"; then
+        rm -f -- "$temporary"
+        echo "Regra de quiosque do labwc já presente: $user_rc"
+        return 0
+    fi
+    if ! mv -f -- "$temporary" "$user_rc"; then
+        rm -f -- "$temporary"
+        echo "Aviso: não foi possível gravar $user_rc." >&2
+        return 0
+    fi
+    # SIGHUP recarrega o rc.xml; a regra vale para janelas abertas depois
+    # (o restart da unit, logo adiante, recria a janela principal).
+    if [ "$LABWC_RELOAD" = "true" ]; then
+        pkill -HUP -u "$DESKTOP_USER" -x labwc >/dev/null 2>&1 || true
+    fi
+    echo "Regra de quiosque do labwc instalada (sem barra de título, fora da barra de tarefas): $user_rc"
+}
+
 install_desktop_integration() {
     local desktop_target="$DESKTOP_DIR/Terminal 24-7.desktop"
     local autostart_target="$AUTOSTART_DIR/app247-terminal.desktop"
@@ -367,6 +482,7 @@ install_desktop_integration() {
 
     install_desktop_icon
     configure_libfm_quick_exec
+    configure_labwc_kiosk_rule
     entry_temp="$(mktemp --suffix=.desktop)" || return 1
     desktop_temp="$desktop_target.tmp.$$"
     autostart_temp="$autostart_target.tmp.$$"
@@ -826,6 +942,7 @@ if [ "$ACTIVATE" = "true" ]; then
                 "$DESKTOP_DIR/App247 Terminal.desktop"
                 "$AUTOSTART_DIR/app247-terminal.desktop"
                 "$LIBFM_USER_CONF"
+                "$LABWC_USER_RC"
             )
         fi
         ROLLBACK_PRESENT=()

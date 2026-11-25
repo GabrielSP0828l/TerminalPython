@@ -730,6 +730,18 @@ Com o app 1.0.6 instalado e operando, o terminal parou na noite de 24/11. No dia
 - **Fora do app (não alterado):** com teclado físico, os atalhos padrão do labwc no Pi ainda abrem menu (`Super`), terminal (`Ctrl+Alt+T`), executar (`Alt+F2`) e desligar/sair (`Ctrl+Alt+Del` → `pishutdown`). Pelo terminal o operador pode matar o app (agora ele volta) ou sair da sessão. No uso normal (touch + leitor de QR, sem modificadores) esses atalhos não são alcançáveis; bloqueá-los exige um `rc.xml` de quiosque no Pi.
 - **Testes:** `test_main_cli_lifecycle.py::test_external_signal_exits_non_zero_so_systemd_reopens`, `test_safe_shutdown.py::test_external_signal_is_recorded_but_admin_shutdown_is_not`, `test_shutdown_budget.py` (processo real com `SIGTERM` sai 143), `test_packaging_architecture.py` (política da unit).
 
+## BUG-064 — Setinha da janela de aviso escondia o Terminal
+
+**Status:** corrigido em 25 de novembro de 2026; regra validada no Raspberry de campo com captura de tela (`grim`); app com `app_id` fixo validado na reinstalação.
+
+- **Severidade:** alta (o Terminal some da tela e, no quiosque, não há como trazê-lo de volta sem teclado)
+- **Tipo:** confirmado no campo
+- **Sintoma:** nas janelas de aviso (`QMessageBox`) aparece uma barra com `˅`, `˄` e `×`. Tocar em `˅` "fechava o terminal".
+- **Causa:** o labwc decora pelo servidor toda janela do app, inclusive os diálogos: `titlebar layout = :iconify,max,close` em `/etc/xdg/labwc/rc.xml`. `˅` é *minimizar*, que no labwc esconde o diálogo **e a janela principal**. O app não fechava (o journal não registrou saída); ficava minimizado atrás da área de trabalho, só com o botão "24/7 Terminal" na barra de tarefas.
+- **Por que não pelo Qt:** com `Qt.FramelessWindowHint` o labwc 0.20.2 continua desenhando a mesma barra (testado no Pi com Qt 5.15.15).
+- **Correção:** `install.sh` grava em `~/.config/labwc/rc.xml` do usuário gráfico um bloco entre marcadores `app247:kiosk-rule` com `<windowRule identifier="app247-terminal" serverDecoration="no" skipTaskbar="yes" skipWindowSwitcher="yes"/>` e recarrega o labwc (`SIGHUP`). O bloco é recolocado a cada instalação, entra no `<windowRules>` existente se houver, preserva o resto (ex.: `<touch>`) e entra no snapshot de rollback. `main` fixa `setDesktopFileName("app247-terminal")` para o `app_id` casar com a regra. Sem barra, sem botão e sem entrada na barra de tarefas, não há mais como minimizar pelo toque. O Qt não desenha decoração própria quando o servidor recusa a dele (verificado).
+- **Testes:** `tests/test_service_startup.py` (`test_labwc_rule_*`: preserva o `touch`, é idempotente, entra no `<windowRules>` existente, cria o arquivo quando há labwc, não grava nada sem labwc).
+
 ## BUG-031 — Heartbeat opaco, sem confirmação do backend
 
 **Status:** corrigido em 24 de agosto de 2026.

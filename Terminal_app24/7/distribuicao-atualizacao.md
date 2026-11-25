@@ -162,3 +162,9 @@ o único código que não reabre. Sinal vindo de fora do systemd (`pkill`,
 Ctrl+C, `SIGHUP` de fim de sessão) sai com `128+N` e o systemd reabre em 3 s;
 crash ou qualquer outra saída também reabrem. A janela ignora `closeEvent` sem
 autorização (Alt+F4, fechar pela barra de tarefas) e a tecla Esc (BUG-063).
+
+No labwc, o instalador grava em `~/.config/labwc/rc.xml` do usuário gráfico
+uma regra (bloco `app247:kiosk-rule`, substituído a cada instalação) que tira a
+barra de título e a entrada na barra de tarefas das janelas `app_id
+app247-terminal`, inclusive dos avisos. Assim o toque não alcança o botão de
+minimizar (BUG-064). `APP247_LABWC_KIOSK_RULE=false` desliga a regra.

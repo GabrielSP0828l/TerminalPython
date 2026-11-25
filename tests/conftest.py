@@ -19,6 +19,9 @@ os.environ["APP247_LAST_SYNC_PATH"] = str(_data_dir / "last_sync.txt")
 os.environ["APP247_NM_CONF_DIR"] = str(_data_dir / "NetworkManager/conf.d")
 os.environ["APP247_ICON_DESTINATION"] = str(_data_dir / "pixmaps/app247-terminal.png")
 os.environ["APP247_LIBFM_SYSTEM_CONF"] = str(_data_dir / "no-libfm.conf")
+# Nunca recarregar o labwc da máquina de desenvolvimento.
+os.environ["APP247_LABWC_SYSTEM_RC"] = str(_data_dir / "no-labwc-rc.xml")
+os.environ["APP247_LABWC_RELOAD"] = "false"
 
 
 import pytest

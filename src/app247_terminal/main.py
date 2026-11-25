@@ -63,6 +63,9 @@ def _run_gui(arguments: list[str]) -> int:
 
     app = QApplication([sys.argv[0], *arguments])
     app.setApplicationDisplayName("24/7 Terminal")
+    # app_id fixo no Wayland: a regra de quiosque do labwc (install.sh) casa
+    # por "app247-terminal" e tira barra de título e entrada na barra de tarefas.
+    app.setDesktopFileName("app247-terminal")
     try:
         from PyQt5.QtGui import QIcon
 

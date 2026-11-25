@@ -350,6 +350,93 @@ class InstalledUnitTest(unittest.TestCase):
             self.assertIn("[ui]\nbig_icon_size=48", contents)
             self.assertEqual(0o644, conf.stat().st_mode & 0o777)
 
+    def _labwc_environment(self, root, desktop_home):
+        environment = self._environment(root, desktop_home)
+        system_rc = root / "xdg-labwc-rc.xml"
+        system_rc.write_text("<openbox_config/>\n", encoding="utf-8")
+        environment["APP247_LABWC_SYSTEM_RC"] = str(system_rc)
+        environment["APP247_LABWC_RELOAD"] = "false"
+        return environment
+
+    def test_labwc_rule_keeps_existing_touch_config_and_is_idempotent(self):
+        # BUG-064: rc.xml do Pi de campo, que o sistema grava só com o touch.
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            desktop_home = root / "home"
+            environment = self._labwc_environment(root, desktop_home)
+            rc = desktop_home / ".config/labwc/rc.xml"
+            rc.parent.mkdir(parents=True)
+            touch = '\t<touch deviceName="MPI7002" mapToOutput="HDMI-A-2" mouseEmulation="yes"/>'
+            rc.write_text(
+                '<?xml version="1.0"?>\n'
+                '<openbox_config xmlns="http://openbox.org/3.4/rc">\n'
+                f"{touch}\n</openbox_config>\n",
+                encoding="utf-8",
+            )
+
+            activation = self._install(environment)
+            self.assertEqual(0, activation.returncode, activation.stderr)
+            again = subprocess.run(
+                [str(PROJECT_ROOT / "scripts/install.sh"), "--activate"],
+                check=False, env=environment, capture_output=True, text=True,
+            )
+            self.assertEqual(0, again.returncode, again.stderr)
+
+            contents = rc.read_text(encoding="utf-8")
+            self.assertIn(touch, contents)
+            self.assertEqual(1, contents.count('identifier="app247-terminal"'))
+            self.assertIn('serverDecoration="no"', contents)
+            self.assertIn('skipTaskbar="yes"', contents)
+            self.assertEqual(1, contents.count("<windowRules>"))
+            self.assertTrue(contents.rstrip().endswith("</openbox_config>"))
+            import xml.etree.ElementTree as ET
+            ET.fromstring(contents.split("?>", 1)[1])
+
+    def test_labwc_rule_goes_inside_existing_window_rules(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            desktop_home = root / "home"
+            environment = self._labwc_environment(root, desktop_home)
+            rc = desktop_home / ".config/labwc/rc.xml"
+            rc.parent.mkdir(parents=True)
+            rc.write_text(
+                "<openbox_config>\n  <windowRules>\n"
+                '    <windowRule identifier="outro" skipTaskbar="yes"/>\n'
+                "  </windowRules>\n</openbox_config>\n",
+                encoding="utf-8",
+            )
+
+            activation = self._install(environment)
+            self.assertEqual(0, activation.returncode, activation.stderr)
+            contents = rc.read_text(encoding="utf-8")
+            self.assertEqual(1, contents.count("<windowRules>"))
+            self.assertIn('identifier="outro"', contents)
+            self.assertIn('identifier="app247-terminal"', contents)
+            import xml.etree.ElementTree as ET
+            rules = ET.fromstring(contents).find("windowRules")
+            self.assertEqual(2, len(rules.findall("windowRule")))
+
+    def test_labwc_rule_creates_user_rc_when_labwc_present(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            desktop_home = root / "home"
+            activation = self._install(self._labwc_environment(root, desktop_home))
+            self.assertEqual(0, activation.returncode, activation.stderr)
+            rc = desktop_home / ".config/labwc/rc.xml"
+            import xml.etree.ElementTree as ET
+            tree = ET.fromstring(rc.read_text(encoding="utf-8").split("?>", 1)[1])
+            rule = next(e for e in tree.iter() if e.tag.endswith("windowRule"))
+            self.assertEqual("app247-terminal", rule.get("identifier"))
+            self.assertEqual("no", rule.get("serverDecoration"))
+
+    def test_no_labwc_rc_written_without_labwc(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            desktop_home = root / "home"
+            activation = self._install(self._environment(root, desktop_home))
+            self.assertEqual(0, activation.returncode, activation.stderr)
+            self.assertFalse((desktop_home / ".config/labwc/rc.xml").exists())
+
     def test_quick_exec_updates_existing_user_config(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
