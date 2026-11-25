@@ -492,6 +492,23 @@ Falha, instrução e sucesso eram cards e a aprovação apagava a compra após c
 - **Procedimento operacional:** desligar somente com `sudo poweroff` e aguardar o LED verde parar antes de remover a alimentação.
 - **Próximos passos dependentes de autorização:** journal persistente (`Storage=persistent`) para capturar a próxima ocorrência; instalar `smartmontools` e ler SMART; testar outro cabo/case/porta USB 3 e fonte oficial 5,1 V/3 A; dissipador/ventoinha. Não reinstalar, não alterar `cmdline.txt`/quirks USB/kernel sem nova evidência.
 
+### Ocorrência de 24/11/2026 — boot preso no bootloader (USB não inicializa)
+
+| Evidência | Resultado | Interpretação |
+|---|---|---|
+| tela do bootloader (`order f41`, `restart 35/-1`) | SD: `Failed to open device: 'sdcard' (cmd 37a0010 status 1fff0001)`; USB-MSD: `PCIe timeout: 0x0000000f` e `USB xHC init failed` | o bootloader não conseguiu subir o PCIe/VL805, por isso **nunca leu o SSD**; ficou reiniciando em loop |
+| sem nada nas USB e com fonte trocada | mesma tela | não era periférico nem a fonte usada naquele teste |
+| SSD lido no PC | partições `bootfs`/`rootfs` íntegras (imagem recém-gravada, ainda sem expandir) | a imagem não era a causa |
+| após regravar a imagem | boot normal, primeiro boot concluído (`cloud-init: done`) | a falha **não se repetiu**; causa da falha do PCIe no bootloader segue sem confirmação (intermitente) |
+| `journalctl -k -b 0` | `brcm-pcie: link up, 5.0 GT/s`, VL805 `1106:3483`, sem `Cannot enable`/erros USB | USB normal neste boot |
+| `vcgencmd` | `throttled=0x0`, 57 °C | sem subtensão; temperatura bem menor que em 16/10 |
+| `rpi-eeprom-update` | bootloader 17/05/2026 → **23/09/2026 preparado** (`pieeprom.upd`), VL805 `000138c0` já atual | aplicado no próximo reboot |
+| journald | `/etc/systemd/journald.conf.d/90-persistent.conf` (`Storage=persistent`, `SystemMaxUse=200M`) | precisa ser `90-` para vencer `/usr/lib/.../40-rpi-volatile-storage.conf`; logs agora em `/var/log/journal` |
+
+- **Reboot de 21:32 (`systemctl reboot`, aplica o bootloader):** voltou em ~40 s; `vcgencmd bootloader_version` = `2026/09/23`, `throttled=0x0`, 60 °C. Mas o kernel registrou de novo `usb usb2-port1: Cannot enable. Maybe the USB cable is bad?` (2×) seguido de `attempt power cycle` — só então o SSD enumerou (SuperSpeed, `uas`). Também `EXT4-fs (sda2): orphan cleanup on readonly fs` mesmo após desligamento ordenado (o journal do boot `-1` termina normalmente em `systemd-shutdown`, sem erro). A falha de enumeração da porta do SSD é **reproduzível no boot**; reforça cabo/case USB-SATA Initio, porta ou alimentação, e explica o `USB xHC`/`PCIe` instável do bootloader como hipótese relacionada, não confirmada.
+- Sistema reinstalado (imagem limpa, usuário `jefiro`, Wi-Fi `BR`); app Terminal **ainda não instalado**.
+- `mmc1: Controller never released inhibit bit(s)` aparece com o slot SD vazio; sem impacto ao bootar pelo SSD.
+
 ## BUG-046 — `terminal.json` vazio ou corrompido derruba o Terminal antes da UI
 
 **Status:** corrigido em 17 de outubro de 2026 (reproduzido antes da correção); validação no Raspberry pendente.
@@ -670,6 +687,18 @@ Falha, instrução e sucesso eram cards e a aprovação apagava a compra após c
 - **Divergência encontrada:** a recuperação do vínculo no início nunca funcionou. Ela lia `cartId`, mas `GET /carrinho/{id}` devolve `carrinhoId`, então mostrava um aviso de erro a cada início e mantinha o estado antigo.
 - **Correção:** `IDLE` limpa o cliente em qualquer caminho, respostas de outra geração são descartadas e o vínculo não é mais recuperado ao iniciar, porque os itens não sobrevivem ao reinício. `CustomerLinkRecoveryWorker` e `PurchaseApi.get_cart` foram removidos. Na recusa, o cliente continua vinculado para a nova tentativa. Remover o último item avisa que a compra deixou de estar vinculada e pede um novo QR, para a pessoa não seguir achando que está identificada.
 - **Testes:** `tests/test_customer_unlink.py`.
+
+## BUG-062 — Tela de Wi-Fi conectada alargava a janela em retrato
+
+**Status:** corrigido em 24 de novembro de 2026 e validado no Raspberry de campo (build local 1.0.6 sobre `f94afa9`).
+
+- **Severidade:** alta (depois de abrir o Wi-Fi, todas as telas ficavam cortadas à direita até reiniciar o app, inclusive a de venda)
+- **Tipo:** confirmado no campo por captura de tela (`grim`) no display `1024×600` em pé (`HDMI-A-2`, transform 90)
+- **Sintoma:** em admin → Wi-Fi, `ATUALIZAR REDES`, `DESCONECTAR`, a lista e `VOLTAR` saíam da tela; ao voltar, Bem-vindo e acesso admin continuavam cortados (janela com ~690 px de largura).
+- **Causa:** o card de status punha `Conectado: <SSID>` (H3 negrito, sem quebra) e `DESCONECTAR` lado a lado. No display real isso passa de 600 px; a janela fullscreen cresce para o mínimo do layout e não volta a encolher (mesmo mecanismo do BUG-056).
+- **Por que os testes não pegaram:** a medição `QT_QPA_PLATFORM=offscreen`, inclusive rodada no próprio Pi com o `nmcli` real, dava 544 px — as métricas de fonte do offscreen são menores que as do Wayland real. Validação de largura de telas novas deve incluir captura no display.
+- **Correção:** `WifiScreen` segue `follow_layout_profile`; em retrato o card empilha SSID/sinal/IP sobre o botão (`QBoxLayout.TopToBottom`) e os dois textos quebram linha. Paisagem continua lado a lado.
+- **Testes:** `tests/test_portrait_screens.py::test_wifi_status_card_stacks_in_portrait` (direção por perfil e quebra de linha; a largura em si só é verificável no display).
 
 ## BUG-031 — Heartbeat opaco, sem confirmação do backend
 

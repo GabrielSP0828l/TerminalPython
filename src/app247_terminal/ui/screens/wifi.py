@@ -1,5 +1,6 @@
 from PyQt5.QtCore import Qt, QTimer
 from PyQt5.QtWidgets import (
+    QBoxLayout,
     QFrame,
     QHBoxLayout,
     QLabel,
@@ -15,6 +16,7 @@ from PyQt5.QtWidgets import (
 from app247_terminal.services.wifi_service import WifiService, WifiWorker
 from app247_terminal.ui import texts
 from app247_terminal.ui.brand import BrandLoader
+from app247_terminal.ui.responsive import follow_layout_profile
 from app247_terminal.ui.styles.theme import Theme
 from app247_terminal.ui.styles.tokens import Spacing
 from app247_terminal.ui.screens.keyboard import VirtualKeyboard
@@ -47,6 +49,7 @@ class WifiScreen(QWidget):
         self.feedback_page = self._build_feedback_page()
         for page in (self.main_page, self.password_page, self.feedback_page):
             self.pages.addWidget(page)
+        follow_layout_profile(self._apply_compact)
 
     def _build_main_page(self):
         page = QWidget(self)
@@ -69,11 +72,14 @@ class WifiScreen(QWidget):
         status_card.setObjectName("wifiStatusCard")
         status_layout = QHBoxLayout(status_card)
         status_layout.setContentsMargins(Spacing.LG, Spacing.MD, Spacing.LG, Spacing.MD)
+        self.status_layout = status_layout
         current = QVBoxLayout()
         self.current_state = QLabel(texts.WIFI_CHECKING)
         self.current_state.setObjectName("wifiCurrentSsid")
+        self.current_state.setWordWrap(True)
         self.current_details = QLabel()
         self.current_details.setObjectName("wifiCurrentDetails")
+        self.current_details.setWordWrap(True)
         current.addWidget(self.current_state)
         current.addWidget(self.current_details)
         self.disconnect_button = QPushButton("DESCONECTAR")
@@ -189,6 +195,17 @@ class WifiScreen(QWidget):
         root.addStretch(1)
         root.addLayout(self.feedback_actions)
         return page
+
+    def _apply_compact(self, compact):
+        """Em pé (600 px) o botão do status desce para baixo do SSID/IP.
+
+        Lado a lado, SSID + DESCONECTAR passam de 600 px no display real;
+        a janela fullscreen cresce para o mínimo do layout e não volta a
+        encolher, cortando as demais telas (BUG-062).
+        """
+        self.status_layout.setDirection(
+            QBoxLayout.TopToBottom if compact else QBoxLayout.LeftToRight
+        )
 
     def show_page(self):
         self._page_active = True
