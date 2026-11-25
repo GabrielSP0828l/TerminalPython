@@ -396,3 +396,22 @@ separa `OK`, `WARN` e `ERROR` e usa exit code para bloquear ativações inválid
 - widgets que mudam de arranjo assinam `follow_layout_profile` com método próprio (desconexão automática ao destruir);
 - novas telas devem caber em `600×1024` e em `1024×600`; `tests/test_portrait_screens.py` é o gate;
 - telas com teclado e estados de pagamento também cabem em `1024×600` deitado (gate de paisagem no mesmo teste).
+
+
+## MEL-039 — Reduzir o consumo de CPU com o Terminal ocioso
+
+**Status:** proposta em 25 de novembro de 2026; medida em [[hardware-desempenho]].
+
+- parado no Bem-vindo, o app gasta cerca de 10% de um núcleo do Pi 4 de forma constante;
+- provável origem: animações (pulso do logo, indicadores) e relógio; confirmar por perfil antes de mudar;
+- no Pi 4 pesa em calor e energia; numa placa mais fraca consome boa parte da folga.
+
+
+## MEL-040 — Abrir a confirmação da compra mais rápido
+
+**Status:** proposta em 25 de novembro de 2026; medida em [[hardware-desempenho]].
+
+- abrir a confirmação com 40 itens leva cerca de 165 ms no Pi 4, a operação mais lenta da compra;
+- é a que mais piora com CPU lenta (431 ms a 40% do núcleo, 1,26 s a 25%);
+- investigar a montagem da lista; reaproveitar widgets entre aberturas é o candidato óbvio.
+

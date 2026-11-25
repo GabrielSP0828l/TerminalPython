@@ -16,6 +16,7 @@ Estado funcional verificado em 31 de agosto de 2026. O Terminal está adaptado a
 - [[menu-administrativo]] — autenticação efêmera, opções e guardas operacionais.
 - [[wifi]] — NetworkManager/`nmcli`, segurança, timeouts e validação física.
 - [[display]] — orientação do compositor e persistência no boot.
+- [[hardware-desempenho]] — hardware mínimo, teste de carga no Raspberry e armazenamento.
 
 ## Integrações e persistência
 
