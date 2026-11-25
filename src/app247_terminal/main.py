@@ -78,7 +78,9 @@ def _run_gui(arguments: list[str]) -> int:
     present_main_window(window)
     exit_code = app.exec_()
     code = _gui_exit_code(
-        exit_code, shutdown_was_requested=window.shutdown_was_requested
+        exit_code,
+        shutdown_was_requested=window.shutdown_was_requested,
+        shutdown_signal=getattr(window, "shutdown_signal", None),
     )
     if window.shutdown_was_requested:
         # Serviços já foram parados dentro do orçamento. Um QThread que ainda
@@ -147,11 +149,21 @@ def install_termination_bridge(app, on_signal):
     return restore
 
 
-def _gui_exit_code(exit_code: int, *, shutdown_was_requested: bool) -> int:
-    """Mantém um encerramento administrativo como sucesso para systemd --user."""
-    # O painel administrativo solicita um encerramento cooperativo. Qt retorna
-    # normalmente 0 para quit(), e esta normalização mantém o contrato explícito
-    # para Restart=on-failure da unit de usuário.
+def _gui_exit_code(
+    exit_code: int, *, shutdown_was_requested: bool, shutdown_signal: str | None = None
+) -> int:
+    """Só o encerramento pelo painel administrativo (ou backend) sai com 0.
+
+    A unit usa ``Restart=always`` + ``RestartPreventExitStatus=0``: código 0
+    mantém o Terminal fechado; qualquer outro reabre. Um sinal vindo de fora do
+    systemd (``pkill``, Ctrl+C, fim de sessão) sai com 128+N e o Terminal volta.
+    ``systemctl stop`` não reinicia, e ``SuccessExitStatus`` evita marcar falha.
+    """
+    if shutdown_signal:
+        import signal
+
+        number = getattr(signal, shutdown_signal, None)
+        return 128 + int(number) if number is not None else 1
     if shutdown_was_requested:
         return 0
     return exit_code

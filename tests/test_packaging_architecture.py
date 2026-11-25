@@ -116,8 +116,8 @@ class PackagingArchitectureTest(unittest.TestCase):
             self.assertIn("# Managed by App247", unit)
             self.assertIn(f"ExecStart={root}/bin/launcher", unit)
             self.assertIn(f"ExecStartPre=-{root}/bin/launcher --apply-display", unit)
-            self.assertIn("Restart=on-failure", unit)
-            self.assertNotIn("Restart=always", unit)
+            self.assertIn("Restart=always", unit)
+            self.assertIn("RestartPreventExitStatus=0", unit)
             self.assertNotIn("User=", unit)
             self.assertIn("UMask=0007", unit)
             self.assertTrue(
@@ -185,10 +185,13 @@ class PackagingArchitectureTest(unittest.TestCase):
             "ExecStartPre=-/usr/local/bin/app247-terminal-launcher --apply-display",
             unit,
         )
-        self.assertIn("Restart=on-failure", unit)
+        # Só o painel (código 0) mantém o Terminal fechado; o resto reabre.
+        self.assertIn("Restart=always", unit)
+        self.assertIn("RestartPreventExitStatus=0", unit)
+        self.assertIn("SuccessExitStatus=129 130 143", unit)
+        self.assertNotIn("Restart=on-failure", unit)
         self.assertIn("StartLimitIntervalSec=60", unit)
         self.assertIn("StartLimitBurst=5", unit)
-        self.assertNotIn("Restart=always", unit)
         self.assertNotIn("/opt/app247/current/app247-terminal", unit)
 
     @unittest.skipIf(os.getuid() == 0, "o launcher gráfico recusa root")

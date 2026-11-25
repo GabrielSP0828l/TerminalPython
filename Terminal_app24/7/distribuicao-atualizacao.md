@@ -134,7 +134,8 @@ existiam) junto com o symlink, e a unit anterior é recarregada antes do restart
 `systemctl --user stop`, reboot e `poweroff` enviam `SIGTERM`: o Terminal faz o
 mesmo encerramento cooperativo do painel administrativo dentro de
 `APP247_SHUTDOWN_BUDGET_SECONDS` (padrão 20 s, abaixo de `TimeoutStopSec=30`) e
-sai com código 0, sem reinício pelo `Restart=on-failure` (BUG-047).
+sai com `128+N` (143 para `SIGTERM`), que `SuccessExitStatus` trata como
+sucesso. Parada explícita pelo systemd nunca reinicia (BUG-047, BUG-063).
 
 No `--activate`, o instalador resolve o usuário gráfico por override,
 `SUDO_USER` ou uma única sessão local Wayland/X11 ativa no `loginctl`. A unit
@@ -152,8 +153,12 @@ exceção: pertence ao usuário gráfico, grupo `app247`, modo `0600`, e o runti
 recusa UID diferente ou qualquer leitura de grupo/outros. Assim SQLite,
 identidade, sync e orientação são compartilhados sem tornar segredos públicos.
 
-A unit usa `Restart=on-failure`, limite de cinco partidas por minuto e ignora
-somente erro de orientação no `ExecStartPre`. O fechamento pelo painel chama
-`QApplication.quit()` após parar workers, timers, socket, heartbeat, sync,
-telemetria e monitores; `main` retorna `0` para esse caminho intencional. Crash
-ou saída não-zero continuam reiniciáveis.
+A unit usa `Restart=always` com `RestartPreventExitStatus=0`, limite de cinco
+partidas por minuto, e ignora somente erro de orientação no `ExecStartPre`.
+**Só o painel administrativo fecha o Terminal de vez:** "Fechar Terminal" (e a
+restauração local/remota) chama `QApplication.quit()` após parar workers,
+timers, socket, heartbeat, sync, telemetria e monitores, e `main` retorna `0`,
+o único código que não reabre. Sinal vindo de fora do systemd (`pkill`,
+Ctrl+C, `SIGHUP` de fim de sessão) sai com `128+N` e o systemd reabre em 3 s;
+crash ou qualquer outra saída também reabrem. A janela ignora `closeEvent` sem
+autorização (Alt+F4, fechar pela barra de tarefas) e a tecla Esc (BUG-063).

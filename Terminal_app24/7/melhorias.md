@@ -23,12 +23,16 @@ Voltar para [o índice](00-index.md). Cada item informa explicitamente quando j�
 
 ## MEL-002 — Definir contrato terminal-oriented de produtos disponíveis
 
+**Status:** implementada — revisão de status em 25 de novembro de 2026. O catálogo vem do `ProdutoSyncService` orientado a Terminal/`EstoqueCondominio` (BUG-007, BUG-008).
+
 - **Prioridade:** P0
 - **Complexidade:** alta (cliente + backend)
 - **Benefício:** terminal recebe somente catálogo vendável do próprio condomínio, sem escolher empresa/condomínio.
 - **Arquivos envolvidos:** `SyncService.py`, `Produtos.py`, backend Produto/Estoque/Terminal controllers e DTOs, documentação API.
 
 ## MEL-003 — Migrar cache SQLite para UUID e schema versionado
+
+**Status:** implementada — revisão de status em 25 de novembro de 2026. PK textual, `schema_version` e migrações em `repositories/product_repository.py` (BUG-006).
 
 - **Prioridade:** P0
 - **Complexidade:** média
@@ -37,12 +41,16 @@ Voltar para [o índice](00-index.md). Cada item informa explicitamente quando j�
 
 ## MEL-004 — Implementar estado explícito da tentativa de compra
 
+**Status:** implementada — revisão de status em 25 de novembro de 2026. `CompraSession` controla a tentativa e recusa concorrência e eventos antigos (BUG-009, BUG-010, BUG-014).
+
 - **Prioridade:** P0
 - **Complexidade:** alta
 - **Benefício:** impede reset prematuro, cliques duplicados e eventos antigos; permite recuperação.
 - **Arquivos envolvidos:** `TerminalScreen`, `PagamentoScreen`, `ConfirmacaoScreen`, modelos/persistência operacional.
 
 ## MEL-005 — Conectar checkout Point incrementalmente
+
+**Status:** implementada — revisão de status em 25 de novembro de 2026. Point via `POST /pagamento/terminal/{cartId}`; sucesso só com status definitivo do backend (BUG-001, BUG-004).
 
 - **Prioridade:** P0
 - **Complexidade:** alta
@@ -51,12 +59,16 @@ Voltar para [o índice](00-index.md). Cada item informa explicitamente quando j�
 
 ## MEL-006 — Corrigir entrega e correlação de status
 
+**Status:** implementada — revisão de status em 25 de novembro de 2026. Correlação por `terminalId`, `orderId` e `paymentAttemptId` (BUG-002, BUG-005, BUG-014).
+
 - **Prioridade:** P0
 - **Complexidade:** alta (cliente + backend)
 - **Benefício:** somente a Order ativa do terminal correto pode liberar a UI.
 - **Arquivos envolvidos:** `PaymentListener.py`, `terminal_screen.py`, backend `PagamentoService`, `PaymentEvent`, handlers WebSocket.
 
 ## MEL-007 — Reconciliação após startup/reconexão
+
+**Status:** implementada — revisão de status em 25 de novembro de 2026. Reconciliação após reconexão (BUG-015) e após reboot via MEL-017.
 
 - **Prioridade:** P0
 - **Complexidade:** alta
@@ -65,12 +77,16 @@ Voltar para [o índice](00-index.md). Cada item informa explicitamente quando j�
 
 ## MEL-008 — Idempotência do envio do carrinho/checkout
 
+**Status:** implementada — revisão de status em 25 de novembro de 2026. Checkpoint do `cartId`, `PUT /carrinho/{id}` em retentativas e adoção de `PAYMENT_ALREADY_ACTIVE` (BUG-010).
+
 - **Prioridade:** P0
 - **Complexidade:** alta (contrato conjunto)
 - **Benefício:** evita carrinhos, Orders e cobranças duplicadas após timeout/clique duplo.
 - **Arquivos envolvidos:** telas de pagamento, serviço HTTP, backend Carrinho/Order/Pagamento e banco.
 
 ## MEL-009 — Centralizar HTTP com workers Qt
+
+**Status:** implementada — revisão de status em 25 de novembro de 2026. `BackendClient`/`PurchaseApi` com timeout e workers `QThread` (BUG-011, BUG-012, BUG-013).
 
 - **Prioridade:** P1
 - **Complexidade:** média
@@ -108,6 +124,8 @@ Voltar para [o índice](00-index.md). Cada item informa explicitamente quando j�
 
 ## MEL-012 — Autenticar terminal e WebSockets
 
+**Status:** implementada — revisão de status em 25 de novembro de 2026. Credencial individual em HTTP e nos dois WebSockets, validada pelo backend (BUG-003, BUG-026).
+
 - **Prioridade:** P1 antes de produção
 - **Complexidade:** alta
 - **Benefício:** impede personificação e vazamento/liberação cross-terminal.
@@ -124,12 +142,16 @@ Voltar para [o índice](00-index.md). Cada item informa explicitamente quando j�
 
 ## MEL-014 — Normalizar preço, quantidade e peso
 
+**Status:** implementada — revisão de status em 25 de novembro de 2026. `Carrinho.total` usa `Item.subtotal()`; o valor cobrado continua sendo o do backend (BUG-018).
+
 - **Prioridade:** P1
 - **Complexidade:** média
 - **Benefício:** linha, total visual e validação backend usam semântica consistente por unidade de medida.
 - **Arquivos envolvidos:** `Item.py`, `Carrinho.py`, `terminal_screen.py`, DTO/item backend.
 
 ## MEL-015 — Logging estruturado e sanitizado
+
+**Status:** implementada no fluxo ativo — revisão de status em 25 de novembro de 2026. `logging` com `orderId`/estágio, sem segredos (BUG-023); restam `print` só em código morto (MEL-020). Persistência dos logs no Raspberry segue em BUG-050.
 
 - **Prioridade:** P1
 - **Complexidade:** baixa
@@ -138,12 +160,16 @@ Voltar para [o índice](00-index.md). Cada item informa explicitamente quando j�
 
 ## MEL-016 — Monitorar backend e estado da compra
 
+**Status:** implementada — revisão de status em 25 de novembro de 2026. `InternetMonitor` verifica `API_URL` e não altera estado financeiro (BUG-022).
+
 - **Prioridade:** P1
 - **Complexidade:** média
 - **Benefício:** offline/reconexão deixam de depender do Google e não alteram status financeiro localmente.
 - **Arquivos envolvidos:** `InternetMonitor.py`, `main.py`, overlay, client HTTP/socket.
 
 ## MEL-017 — Persistir estado operacional mínimo
+
+**Status:** implementada em 3 de outubro de 2026 (`c60514c`) — revisão de status em 25 de novembro de 2026. A tabela SQLite `active_payment` guarda `cartId`, `orderId`, `paymentId` e `paymentAttemptId`; o startup chama `restore_pending_payment` e reconcilia com o backend. Teste: `test_restart_restores_unresolved_attempt_with_all_correlation_ids`.
 
 - **Prioridade:** P1
 - **Complexidade:** média
@@ -161,12 +187,16 @@ Voltar para [o índice](00-index.md). Cada item informa explicitamente quando j�
 
 ## MEL-019 — Remover confirmação manual financeira do PIX legado
 
+**Status:** implementada — revisão de status em 25 de novembro de 2026. `PixScreen` removida; não há confirmação financeira manual (BUG-019).
+
 - **Prioridade:** P1
 - **Complexidade:** baixa após contrato correto
 - **Benefício:** impede aprovação por ação do usuário.
 - **Arquivos envolvidos:** `pix.py`, fluxo de status.
 
 ## MEL-020 — Revisar código morto em etapa isolada
+
+**Status:** pendente — revisão de status em 25 de novembro de 2026. Ainda existem `ui/screens/login.py`, `Produtos.get_produtos_api` e os diretórios legados com `__pycache__` (BUG-025, BUG-052).
 
 - **Prioridade:** P2
 - **Complexidade:** baixa
@@ -338,10 +368,11 @@ separa `OK`, `WARN` e `ERROR` e usa exit code para bloquear ativações inválid
   home do usuário gráfico descoberto;
 - launcher carrega env, espera Wayland/X11 válido e mantém lock; atalho e
   autostart usam `systemctl --user` e não criam cópia direta;
-- `Restart=on-failure`, limite de cinco partidas/minuto e orientação não fatal
-  eliminam o loop de reinício causado por display indisponível;
+- limite de cinco partidas/minuto e orientação não fatal eliminam o loop de
+  reinício causado por display indisponível;
 - fechar pelo painel para serviços cooperativamente e finaliza `main` com
-  código zero; crash real permanece reiniciável;
+  código zero, o único que não reabre (`Restart=always` +
+  `RestartPreventExitStatus=0`); crash, `pkill` ou Ctrl+C reabrem (BUG-063);
 - dados compartilhados ficam no grupo `app247`; credencial continua privada
   (`0600`) e deve pertencer ao usuário gráfico.
 
@@ -354,7 +385,7 @@ separa `OK`, `WARN` e `ERROR` e usa exit code para bloquear ativações inválid
 - ~~tratar `SIGTERM` com encerramento cooperativo dentro de `TimeoutStopSec` (BUG-047)~~ — implementado em 17/10/2026 (ponte de sinais + orçamento único de 20 s);
 - ping/pong no socket de pagamento (BUG-049);
 - logs persistentes e rotativos sem segredos (BUG-050);
-- reinício automático de heartbeat/listener ao voltar a `OPERATIONAL` (BUG-048).
+- ~~reinício automático de heartbeat/listener ao voltar a `OPERATIONAL` (BUG-048)~~ — implementado em 2 de novembro de 2026 (`9c7fd81`, release 1.0.4).
 
 
 ## MEL-038 — Layout responsivo à orientação do display

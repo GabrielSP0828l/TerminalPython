@@ -117,6 +117,7 @@ class SigtermEndToEndTest(unittest.TestCase):
                     self.worker.requestInterruption()
                     self.worker.wait(shutdown_budget.wait_ms(25000))
                     self.shutdown_was_requested = True
+                    self.shutdown_signal = name
                     QApplication.instance().quit()
 
             with patch.object(application, "MainWindow", Window), \\
@@ -160,7 +161,8 @@ class SigtermEndToEndTest(unittest.TestCase):
                     process.kill()
             elapsed = time.monotonic() - started
 
-        self.assertEqual(0, process.returncode, stderr)
+        # 128+SIGTERM: a unit reabre o Terminal (só o painel sai com 0).
+        self.assertEqual(143, process.returncode, stderr)
         self.assertIn("SIGNAL SIGTERM", stdout)
         self.assertNotIn("Destroyed while thread", stderr)
         self.assertLess(elapsed, 5)

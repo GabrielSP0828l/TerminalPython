@@ -160,7 +160,7 @@ Critério: **confirmado** quando o caminho executável ou contrato prova o compo
 
 ## BUG-015 — Aprovação durante desconexão não é recuperada
 
-**Status:** corrigido para queda/reconexão do backend e perda de WebSocket; persistência após reboot físico permanece em [[melhorias]].
+**Status:** corrigido para queda/reconexão do backend e perda de WebSocket; a recuperação após reboot físico foi implementada em 3 de outubro de 2026 pela MEL-017 (tabela `active_payment`) — revisão de status em 25 de novembro de 2026.
 
 - **Severidade:** alta
 - **Tipo:** corrigido
@@ -553,7 +553,7 @@ Com o app 1.0.6 instalado e operando, o terminal parou na noite de 24/11. No dia
 
 ## BUG-048 — Um único 401/403 bloqueia o Terminal até reiniciar
 
-**Status:** aberto; confirmado por código em 17 de outubro de 2026 (impacto de 403 depende do backend).
+**Status:** corrigido em 2 de novembro de 2026 (`9c7fd81`, release 1.0.4); revisão de status em 25 de novembro de 2026. Aberto originalmente em 17 de outubro de 2026.
 
 - **Severidade:** média
 - **Tipo:** confirmado (latch) / potencial (403 por regra de negócio)
@@ -561,6 +561,8 @@ Com o app 1.0.6 instalado e operando, o terminal parou na noite de 24/11. No dia
 - **Cenário:** credencial rotacionada/revogada e depois restaurada, ou um 403 pontual em endpoint não essencial.
 - **Impacto:** operação bloqueada, heartbeat e socket de pagamento mortos até reinício manual, mesmo depois de reprovisionado. O texto atual pede reinício, então é comportamento conhecido, mas não automático.
 - **Correção recomendada:** restringir o latch a endpoints de identidade/handshake, revalidar periodicamente e reiniciar heartbeat/listener ao voltar a `OPERATIONAL`.
+- **Correção aplicada:** `BackendClient` só bloqueia com 401 de `DEVICE_UNAUTHORIZED_CODES` ou 403 de `DEVICE_FORBIDDEN_CODES` (outros 401/403, como QR de outro condomínio, não bloqueiam); `MainWindow._probe_device_access` reconsulta o bootstrap com limite de frequência e `_restore_device_access` volta a `OPERATIONAL` sem reinício, preservando pagamento pendente; `TerminalSocket` e `PaymentListener` aguardam e tentam de novo após 401 em vez de encerrar.
+- **Validação:** `tests/test_device_access_recovery.py`, `tests/test_terminal_heartbeat.py`, `tests/test_purchase_api.py`. Validação no Raspberry pendente.
 
 ## BUG-049 — Socket de pagamento não detecta conexão meio-aberta
 
@@ -714,6 +716,19 @@ Com o app 1.0.6 instalado e operando, o terminal parou na noite de 24/11. No dia
 - **Por que os testes não pegaram:** a medição `QT_QPA_PLATFORM=offscreen`, inclusive rodada no próprio Pi com o `nmcli` real, dava 544 px — as métricas de fonte do offscreen são menores que as do Wayland real. Validação de largura de telas novas deve incluir captura no display.
 - **Correção:** `WifiScreen` segue `follow_layout_profile`; em retrato o card empilha SSID/sinal/IP sobre o botão (`QBoxLayout.TopToBottom`) e os dois textos quebram linha. Paisagem continua lado a lado.
 - **Testes:** `tests/test_portrait_screens.py::test_wifi_status_card_stacks_in_portrait` (direção por perfil e quebra de linha; a largura em si só é verificável no display).
+
+## BUG-063 — Terminal podia ser fechado fora do painel administrativo
+
+**Status:** corrigido em 25 de novembro de 2026; validação no Raspberry de campo pendente (exige reinstalar a unit).
+
+- **Severidade:** média
+- **Tipo:** confirmado por código e por teste da semântica do systemd (`systemd-run --user` com unidades temporárias)
+- **Requisito:** cliente ou gestor só fecham o Terminal por admin → "Fechar Terminal".
+- **O que já estava certo:** `MainWindow.closeEvent` ignora fechamento sem `_shutdown_authorized` (Alt+F4, fechar pela barra de tarefas ou menu do labwc) e `keyPressEvent` ignora Esc.
+- **Brecha:** `SIGTERM`/`SIGINT`/`SIGHUP` vindos de fora do systemd (`pkill app247`, Ctrl+C num terminal, `SIGHUP` de fim de sessão) usavam o mesmo encerramento cooperativo do painel e saíam com **0**. Com `Restart=on-failure`, o systemd tratava isso como fechamento intencional e o Terminal **ficava fechado**.
+- **Correção:** `encerrar_por_sinal` registra o sinal (`MainWindow.shutdown_signal`, só quando o encerramento ainda não começou pelo painel) e `main._gui_exit_code` devolve `128+N` (129/130/143). A unit passou a `Restart=always` + `RestartPreventExitStatus=0` + `SuccessExitStatus=129 130 143`: só o código 0 (painel ou restauração) mantém fechado; sinal externo, crash e qualquer outra saída reabrem em 3 s; `systemctl stop`, reboot e `poweroff` não reabrem e não marcam falha. O motivo que levou a trocar `always` por `on-failure` no BUG-044 (reabrir após o fechamento administrativo) fica coberto pelo `RestartPreventExitStatus=0`. O launcher continua saindo com 0 quando já há instância (lock), sem loop.
+- **Fora do app (não alterado):** com teclado físico, os atalhos padrão do labwc no Pi ainda abrem menu (`Super`), terminal (`Ctrl+Alt+T`), executar (`Alt+F2`) e desligar/sair (`Ctrl+Alt+Del` → `pishutdown`). Pelo terminal o operador pode matar o app (agora ele volta) ou sair da sessão. No uso normal (touch + leitor de QR, sem modificadores) esses atalhos não são alcançáveis; bloqueá-los exige um `rc.xml` de quiosque no Pi.
+- **Testes:** `test_main_cli_lifecycle.py::test_external_signal_exits_non_zero_so_systemd_reopens`, `test_safe_shutdown.py::test_external_signal_is_recorded_but_admin_shutdown_is_not`, `test_shutdown_budget.py` (processo real com `SIGTERM` sai 143), `test_packaging_architecture.py` (política da unit).
 
 ## BUG-031 — Heartbeat opaco, sem confirmação do backend
 

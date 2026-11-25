@@ -115,6 +115,8 @@ class MainWindow(QMainWindow):
         self._expiring_checkout_generation = None
         self._shutdown_authorized = False
         self._shutdown_started = False
+        # Sinal que iniciou o encerramento; None quando veio do painel/backend.
+        self._shutdown_signal = None
         self._services_stopped = False
         self.identity_recovery_worker = None
         self.identity_recovery_timer = QTimer(self)
@@ -712,6 +714,8 @@ class MainWindow(QMainWindow):
             self.compra_session.payment_in_flight,
             self.compra_session.order_id,
         )
+        if not self._shutdown_started:
+            self._shutdown_signal = signal_name
         self.encerrar_terminal()
 
     def encerrar_terminal(self):
@@ -723,6 +727,11 @@ class MainWindow(QMainWindow):
         app = QApplication.instance()
         if app is not None:
             app.quit()
+
+    @property
+    def shutdown_signal(self):
+        """Nome do sinal que encerrou o Terminal, ou None se foi o painel/backend."""
+        return self._shutdown_signal
 
     @property
     def shutdown_was_requested(self):
