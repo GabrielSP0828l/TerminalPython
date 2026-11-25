@@ -151,7 +151,7 @@ Voltar para [o índice](00-index.md). Cada item informa explicitamente quando j�
 
 ## MEL-015 — Logging estruturado e sanitizado
 
-**Status:** implementada no fluxo ativo — revisão de status em 25 de novembro de 2026. `logging` com `orderId`/estágio, sem segredos (BUG-023); restam `print` só em código morto (MEL-020). Persistência dos logs no Raspberry segue em BUG-050.
+**Status:** implementada no fluxo ativo — revisão de status em 25 de novembro de 2026. `logging` com `orderId`/estágio, sem segredos (BUG-023); restam `print` só em código morto (MEL-020). Persistência dos logs no Raspberry implementada em 25 de novembro de 2026 (BUG-050).
 
 - **Prioridade:** P1
 - **Complexidade:** baixa
@@ -384,7 +384,7 @@ separa `OK`, `WARN` e `ERROR` e usa exit code para bloquear ativações inválid
 - ~~política persistente de Wi-Fi sem economia de energia~~ — implementado em 17/10/2026 pelo instalador (NetworkManager `conf.d`);
 - ~~tratar `SIGTERM` com encerramento cooperativo dentro de `TimeoutStopSec` (BUG-047)~~ — implementado em 17/10/2026 (ponte de sinais + orçamento único de 20 s);
 - ~~ping/pong no socket de pagamento (BUG-049)~~ — implementado em 25 de novembro de 2026;
-- logs persistentes e rotativos sem segredos (BUG-050);
+- ~~logs persistentes e rotativos sem segredos (BUG-050)~~ — implementado em 25 de novembro de 2026 (`/var/lib/app247/logs/terminal.log`);
 - ~~reinício automático de heartbeat/listener ao voltar a `OPERATIONAL` (BUG-048)~~ — implementado em 2 de novembro de 2026 (`9c7fd81`, release 1.0.4).
 
 

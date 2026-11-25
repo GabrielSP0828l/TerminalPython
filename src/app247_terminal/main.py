@@ -41,14 +41,13 @@ def _run_gui(arguments: list[str]) -> int:
     from app247_terminal.application import MainWindow, present_main_window
     from app247_terminal.config.settings import API_URL, DATABASE_PATH
     from app247_terminal.models.terminal import Terminal
+    from app247_terminal.logging_setup import configure_logging
     from app247_terminal.runtime import prepare_runtime_layout
 
-    logging.basicConfig(
-        level=logging.INFO,
-        format="%(asctime)s %(levelname)s %(name)s %(message)s",
-    )
+    log_path = configure_logging()
     prepare_runtime_layout()
     logger = logging.getLogger(__name__)
+    logger.info("[LOG] versão=%s arquivo=%s", APP_VERSION, log_path or "indisponível")
     logger.info("[API] Backend: %s", API_URL or "não configurado")
     logger.info("[SYNC] SQLite path: %s", DATABASE_PATH.resolve())
     try:

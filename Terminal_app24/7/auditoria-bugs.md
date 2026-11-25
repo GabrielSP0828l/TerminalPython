@@ -579,13 +579,17 @@ Com o app 1.0.6 instalado e operando, o terminal parou na noite de 24/11. No dia
 
 ## BUG-050 — Logs da aplicação não sobrevivem a reinício no Raspberry
 
-**Status:** aberto; confirmado no Raspberry em 16 de outubro de 2026.
+**Status:** corrigido em 25 de novembro de 2026 (entra na próxima release); validação no Raspberry pendente. Confirmado no Raspberry em 16 de outubro de 2026.
 
 - **Severidade:** média
 - **Tipo:** confirmado
 - **Arquivo/função:** o app só registra em stdout (`logging.basicConfig`), a unit `systemd --user` envia ao journal e o journald do equipamento está com `Storage=volatile`. Não há arquivo de log.
 - **Impacto:** as 6 falhas de partida do `app247-terminal.service` em 16/10 (14:29–14:37) e qualquer incidente de pagamento antes de um reboot não podem ser investigados.
 - **Correção recomendada:** journald persistente com limite (`SystemMaxUse`) ou log rotativo próprio em `/var/lib/app247/logs`, sem segredos.
+- **Correção aplicada:** log rotativo próprio (`logging_setup.configure_logging`, chamado no início de `_run_gui`) em `LOG_DIR/terminal.log`, por padrão `/var/lib/app247/logs/terminal.log`, com 5 MiB por arquivo e 4 arquivos antigos (cerca de 25 MiB no total; `APP247_LOG_DIR`, `APP247_LOG_MAX_BYTES`, `APP247_LOG_BACKUP_COUNT`). O journal continua recebendo as mesmas linhas pelo stderr. Se o diretório não puder ser aberto ou o arquivo for link simbólico, o Terminal sobe só com o journal e registra o motivo. A configuração do journald do sistema não foi alterada. O arquivo contém as mesmas linhas do journal: a regra de nunca registrar token, credencial ou senha continua valendo para quem escreve o log. O factory reset não apaga os logs.
+- **Limite:** o arquivo fica no mesmo SSD. Se o disco cair (BUG-045), nem o journal nem este arquivo registram a queda; para isso continua valendo a sugestão de log remoto do BUG-045.
+- **Observação de campo:** em 25/11/2026 o journal do equipamento já estava persistente (`journalctl -b -1` funcionou; ver BUG-045). O arquivo próprio continua útil porque não depende dessa configuração manual nem sai do equipamento numa reinstalação do sistema.
+- **Validação:** `tests/test_logging_setup.py` (gravação, rotação com limite, sem handler duplicado, diretório inválido, link simbólico) e partida real da GUI offscreen em 25/11/2026: o arquivo foi criado e recebeu até a linha de encerramento por `SIGTERM`.
 
 ## BUG-051 — Instalação de campo diverge do layout e das permissões atuais
 

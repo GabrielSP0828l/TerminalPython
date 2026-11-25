@@ -109,6 +109,11 @@ def _float_setting(name: str, legacy: str, default: float, minimum: float) -> fl
         return default
 
 
+# Log rotativo persistente (BUG-050): o journald do equipamento é volátil.
+LOG_DIR = Path(_env("APP247_LOG_DIR", default=str(DATA_DIR / "logs"))).expanduser()
+LOG_MAX_BYTES = _int_setting("APP247_LOG_MAX_BYTES", None, 5 * 1024 * 1024, 64 * 1024)
+LOG_BACKUP_COUNT = _int_setting("APP247_LOG_BACKUP_COUNT", None, 4, 1)
+
 PRODUCT_SYNC_INTERVAL_SECONDS = _int_setting(
     "APP247_PRODUCT_SYNC_INTERVAL_SECONDS", "PRODUCT_SYNC_INTERVAL_SECONDS", 300, 60
 )
