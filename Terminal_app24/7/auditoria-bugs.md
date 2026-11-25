@@ -763,6 +763,22 @@ Com o app 1.0.6 instalado e operando, o terminal parou na noite de 24/11. No dia
 - **Testes:** `tests/test_payment_not_configured.py` (12 casos, incluindo a cadeia completa do Terminal já preso: classificação do 409, tela sem loop, falha ambígua comum continua reconciliando, retomada recusada, tentativa restaurada após reinício volta à tela inicial e apaga `active_payment`, bloqueio antes do carrinho, estado desconhecido não bloqueia, bootstrap atualiza o estado). Contra o código antigo, os casos do defeito falham.
 - **Terminal já preso:** ao instalar a 1.0.7, a tentativa salva é restaurada, a descoberta não acha pagamento ativo, a retomada repete o `POST`, recebe o 409 e a tentativa é liberada sozinha: o Terminal volta à tela inicial e `active_payment` é apagado, sem intervenção manual. Coberto por `StuckTerminalAfterUpgradeTest` (cadeia desde `restore_pending_payment` até a tela inicial, com banco real em diretório temporário); falta confirmar no equipamento.
 
+## BUG-066 — Tela cortada à direita depois da instalação da 1.0.7
+
+**Status:** em diagnóstico. Causa não confirmada; registro do tamanho da janela implementado em 25 de novembro de 2026 (ainda não instalado no Raspberry).
+
+- **Severidade:** alta (o lado direito de todas as telas some até reiniciar o app)
+- **Tipo:** observado no campo por captura de tela (`grim`) no display `1024×600` em pé (`HDMI-A-2`, transform 90), em 25/11/2026 às 18:58, com a 1.0.7 iniciada às 18:53 logo após a instalação
+- **Sintoma:** janela com cerca de 658 px de largura num display de 600; "BEM-VINDO" deslocado para a direita. Reiniciar o app (`systemctl --user restart app247-terminal`) às 19:02 corrigiu.
+- **Descartado, medindo no próprio display:**
+  - largura das páginas: todas cabem em 600 no retrato (maior: confirmação da compra, 565), inclusive com o catálogo real;
+  - sequência do log até o corte (carrinho, duas recusas com a caixa "Pagamento indisponível", aviso de inatividade, expiração, nova compra cancelada): janela sempre 600×1024 em tela cheia;
+  - todos os estados da tela de pagamento (enviando, confirmando, verificando, aguardando, não concluído, maquininha): janela 600×1024, conteúdo com no máximo 453 px;
+  - `SIGHUP` do labwc (feito pelo instalador) durante a abertura da janela: a janela termina em 600×1024.
+- **Hipótese:** ao abrir, a janela passa ~150 ms com o tamanho natural (658×868) antes de o labwc aplicar a tela cheia; na partida das 18:53 ela teria ficado presa na largura natural. O log não registrava tamanho de janela, então não há como confirmar.
+- **Diagnóstico implementado:** `ui/window_geometry.py` (`WindowGeometryLogger`, instalado em `present_main_window`) registra `[WINDOW] origem=SHOW|RESIZE|STATE|SCREEN janela=… tela=… fullscreen=… pagina=…` a cada mudança. No kiosk, se a janela continuar diferente da tela 2 s depois da última mudança, emite warning com a largura mínima e a página mais larga. Com o log persistente (BUG-050), a próxima ocorrência fica em `/var/lib/app247/logs/terminal.log`.
+- **Testes:** `tests/test_window_geometry.py`.
+
 ## BUG-031 — Heartbeat opaco, sem confirmação do backend
 
 **Status:** corrigido em 24 de agosto de 2026.

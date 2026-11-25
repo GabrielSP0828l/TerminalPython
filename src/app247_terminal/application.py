@@ -23,6 +23,7 @@ from app247_terminal.ui.styles.theme import Theme
 from app247_terminal.ui.styles.tokens import Colors, Spacing
 from app247_terminal.ui.brand import BrandLogo, FadeStackedWidget
 from app247_terminal.ui.inactivity import InactivityMonitor
+from app247_terminal.ui.window_geometry import WindowGeometryLogger
 from app247_terminal.models.purchase_session import CompraSession
 from app247_terminal.repositories.active_payment_repository import ActivePaymentStore
 from app247_terminal.services.sync_service import SyncService
@@ -906,6 +907,8 @@ class MainWindow(QMainWindow):
 
 def present_main_window(window, production=IS_PRODUCTION):
     """Aplica explicitamente o contrato de janela para dev ou kiosk."""
+    # Antes do show, para registrar também o primeiro tamanho (BUG-066).
+    window.geometry_logger = WindowGeometryLogger(window, kiosk=production)
     if production:
         window.showFullScreen()
     else:
