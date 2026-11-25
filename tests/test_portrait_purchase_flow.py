@@ -15,7 +15,7 @@ from app247_terminal.models.product import Produtos
 from app247_terminal.ui.screens.purchase_confirmation import ConfirmacaoCompraScreen
 from app247_terminal.ui.screens.offline_overlay import OfflineOverlay
 from app247_terminal.ui.screens.payment import PagamentoScreen
-from app247_terminal.ui.screens.terminal import TerminalScreen
+from app247_terminal.ui.screens.terminal import ProductCard, TerminalScreen
 
 
 PRODUCT_ROW = (
@@ -128,9 +128,18 @@ class PortraitPurchaseFlowTest(unittest.TestCase):
         self.assertEqual(Qt.ScrollBarAlwaysOff, self.terminal.scroll.horizontalScrollBarPolicy())
         self.assertFalse(self.terminal.scroll.horizontalScrollBar().isVisible())
         self.assertTrue(all("Código" not in card.findChild(QLabel).text() for card in cards))
-        self.assertLessEqual(len(cards[0].name.text().splitlines()), 2)
+        self.assertLessEqual(
+            len(cards[0].name.text().splitlines()), ProductCard.MAX_NAME_LINES
+        )
         self.assertGreaterEqual(cards[0].name.font().pixelSize(), 26)
-        self.assertGreaterEqual(cards[0].price.font().pixelSize(), 34)
+        # R$ 123.456,78 não cabe em 34 px: a fonte encolhe só nesse card.
+        self.assertLess(cards[0].price.font().pixelSize(), 34)
+        self.assertGreaterEqual(cards[0].price.font().pixelSize(), 22)
+        self.assertLessEqual(
+            cards[0].price.fontMetrics().horizontalAdvance(cards[0].price.text()),
+            cards[0]._content_width(),
+        )
+        self.assertTrue(all(card.price.font().pixelSize() == 34 for card in cards[1:]))
         self.assertGreaterEqual(cards[0].quantity.font().pixelSize(), 22)
         self.assertGreaterEqual(self.terminal.totalBox.font().pixelSize(), 40)
         self.assertEqual(26, self.terminal.btn_finalizar.font().pixelSize())
@@ -164,7 +173,7 @@ class PortraitPurchaseFlowTest(unittest.TestCase):
         self.terminal.ir_para_pagamento()
         self.assertIs(self.parent.confirmacao_compra, self.parent.stacked_widget.currentWidget())
         self.assertEqual("3 itens", self.parent.confirmacao_compra.item_count.text())
-        self.assertEqual("R$ 370370,34", self.parent.confirmacao_compra.total.text())
+        self.assertEqual("R$ 370.370,34", self.parent.confirmacao_compra.total.text())
         self.parent.pagamento.iniciar_pagamento.assert_not_called()
 
     def test_back_preserves_same_cart_and_confirmation_starts_existing_point_flow(self):

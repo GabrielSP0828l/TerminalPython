@@ -36,7 +36,7 @@ main.py
 │   ├── SyncService.py
 │   ├── TerminalSocket.py
 │   ├── TerminalInfo.py
-│   ├── InternetMonitor.py (ativo após ativação; monitora API_URL)
+│   ├── InternetMonitor.py (ativo após ativação; usa o heartbeat, com /terminal/health só se o canal cair)
 │   └── HoldToExitLabel.py
 ├── database/
 │   ├── DatabaseProdutos.py

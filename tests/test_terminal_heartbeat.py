@@ -116,30 +116,36 @@ class TerminalHeartbeatTest(unittest.TestCase):
             )
             self.assertIsNone(service._load_active_terminal())
 
-    def test_unauthorized_handshake_enters_safe_mode_without_retry_loop(self):
+    def test_unauthorized_handshake_retries_slowly_and_recovers(self):
         class Unauthorized(RuntimeError):
             status_code = 401
 
         with tempfile.TemporaryDirectory() as directory:
             terminal_path = self.save_terminal(Path(directory))
             attempts = []
+            connected = threading.Event()
 
             def factory():
                 attempts.append(True)
-                raise Unauthorized("unauthorized")
+                if len(attempts) < 3:
+                    raise Unauthorized("unauthorized")
+                return FakeWebSocket(connected_event=connected)
 
             service = TerminalSocket(
                 ws_url="ws://backend",
                 terminal_path=terminal_path,
-                retry_seconds=0.01,
+                retry_seconds=30,
+                auth_retry_seconds=0.01,
                 websocket_factory=factory,
                 credential_store=self.save_credential(Path(directory)),
             )
-            thread = service.start()
-            thread.join(timeout=1)
-            self.assertFalse(thread.is_alive())
-            self.assertEqual("AUTH_REQUIRED", service.connection_state)
-            self.assertEqual(1, len(attempts))
+            service.start()
+            try:
+                self.assertTrue(connected.wait(timeout=2))
+            finally:
+                service.stop()
+            self.assertEqual("OPERATIONAL", terminal_access_state.get())
+            self.assertEqual(3, len(attempts))
 
     @staticmethod
     def save_credential(root):

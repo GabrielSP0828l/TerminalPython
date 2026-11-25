@@ -45,6 +45,15 @@ class MainCliLifecycleTest(unittest.TestCase):
         self.assertEqual(0, main._gui_exit_code(5, shutdown_was_requested=True))
         self.assertEqual(5, main._gui_exit_code(5, shutdown_was_requested=False))
 
+    def test_external_signal_exits_non_zero_so_systemd_reopens(self):
+        # Só o painel administrativo fecha o Terminal de vez (código 0).
+        self.assertEqual(143, main._gui_exit_code(
+            0, shutdown_was_requested=True, shutdown_signal="SIGTERM"))
+        self.assertEqual(130, main._gui_exit_code(
+            0, shutdown_was_requested=True, shutdown_signal="SIGINT"))
+        self.assertEqual(129, main._gui_exit_code(
+            0, shutdown_was_requested=True, shutdown_signal="SIGHUP"))
+
 
 if __name__ == "__main__":
     unittest.main()

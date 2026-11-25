@@ -122,6 +122,35 @@ class PurchaseApiTest(unittest.TestCase):
         self.assertEqual("PUT", http.calls[0][0])
         self.assertTrue(http.calls[0][1].endswith("/carrinho/cart-linked"))
 
+    def test_retry_of_closed_cart_charges_without_rewriting_it(self):
+        http = FakeSession([
+            FakeResponse({"orderId": "order-1", "status": "WAITING_PAYMENT"}),
+        ])
+        created = []
+        result = PurchaseApi("http://backend", http).start_point(
+            {"terminalId": "terminal-1", "items": [{"productId": "p1"}]},
+            created.append, "cart-closed", reopen_cart=True,
+        )
+        self.assertEqual(["cart-closed"], created)
+        self.assertEqual("cart-closed", result["cartId"])
+        self.assertEqual(1, len(http.calls))
+        self.assertEqual("POST", http.calls[0][0])
+        self.assertTrue(http.calls[0][1].endswith("/pagamento/terminal/cart-closed"))
+
+    def test_worker_reopens_closed_cart(self):
+        http = FakeSession([
+            FakeResponse({"orderId": "order-1", "status": "WAITING_PAYMENT"}),
+        ])
+        worker = PointCheckoutWorker(
+            {"terminalId": "terminal-1", "items": [{"productId": "p1"}]},
+            api_factory=lambda: PurchaseApi("http://backend", http),
+            existing_cart_id="cart-closed", reopen_cart=True,
+        )
+        worker.run()
+        self.assertTrue(worker.outcome_emitted)
+        self.assertEqual(["POST"], [call[0] for call in http.calls])
+        self.assertTrue(http.calls[0][1].endswith("/pagamento/terminal/cart-closed"))
+
     def test_active_payment_conflict_is_structured_and_ambiguous(self):
         http = FakeSession([FakeResponse({
             "code": "PAYMENT_ALREADY_ACTIVE",
@@ -150,10 +179,13 @@ class PurchaseApiTest(unittest.TestCase):
         self.assertTrue(raised.exception.ambiguous)
 
     def test_401_requires_reprovision_and_403_preserves_credential(self):
-        for status, expected_stage in ((401, "device_auth"), (403, "device_forbidden")):
+        for status, code, expected_stage in (
+            (401, "TERMINAL_AUTH_INVALID", "device_auth"),
+            (403, "TERMINAL_NOT_OPERATIONAL", "device_forbidden"),
+        ):
             with self.subTest(status=status):
                 http = FakeSession([FakeResponse({
-                    "code": "TERMINAL_UNAUTHORIZED",
+                    "code": code,
                 }, status_code=status)])
                 with self.assertRaises(PurchaseApiError) as raised:
                     PurchaseApi("http://backend", http).get_active_payment(
@@ -161,6 +193,16 @@ class PurchaseApiTest(unittest.TestCase):
                     )
                 self.assertEqual(expected_stage, raised.exception.stage)
                 self.assertEqual(status, raised.exception.context["status"])
+
+    def test_business_403_keeps_backend_message_and_is_not_device_error(self):
+        http = FakeSession([FakeResponse({
+            "code": "CUSTOMER_LINK_TENANT_MISMATCH",
+            "message": "QR não pode ser usado neste Terminal",
+        }, status_code=403)])
+        with self.assertRaises(PurchaseApiError) as raised:
+            PurchaseApi("http://backend", http).get_active_payment("terminal-a")
+        self.assertNotEqual("device_forbidden", raised.exception.stage)
+        self.assertEqual("QR não pode ser usado neste Terminal", str(raised.exception))
 
     def test_start_point_preserves_active_attempt_cart_on_conflict(self):
         http = FakeSession([
@@ -259,15 +301,9 @@ class PurchaseApiTest(unittest.TestCase):
         }, kwargs["json"])
         self.assertEqual(PurchaseApi.RECEIPT_TIMEOUT, kwargs["timeout"])
 
-    def test_receipt_normalizes_email_and_rejects_invalid_destinations(self):
-        self.assertEqual(
-            "cliente@email.com",
-            PurchaseApi.normalize_receipt_destination(
-                "EMAIL", " Cliente@Email.COM "
-            ),
-        )
+    def test_receipt_rejects_email_channel_and_invalid_destinations(self):
         for channel, destination in (
-            ("EMAIL", "sem-arroba"), ("WHATSAPP", "123"),
+            ("EMAIL", "cliente@email.com"), ("WHATSAPP", "123"),
         ):
             with self.subTest(channel=channel):
                 with self.assertRaises(PurchaseApiError):
@@ -290,7 +326,7 @@ class PurchaseApiTest(unittest.TestCase):
                 raise PurchaseApiError("HTTP 502", "receipt")
 
         worker = ReceiptSendWorker(
-            "order-1", "terminal-1", "EMAIL", "cliente@email.com",
+            "order-1", "terminal-1", "WHATSAPP", "5575999999999",
             api_factory=BrokenReceiptApi,
         )
         failed = QSignalSpy(worker.failed)

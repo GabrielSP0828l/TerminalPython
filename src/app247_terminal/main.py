@@ -36,20 +36,18 @@ def _apply_display() -> int:
 
 def _run_gui(arguments: list[str]) -> int:
     """Inicializa o lifecycle completo somente para a execução gráfica normal."""
-    from PyQt5.QtCore import Qt
     from PyQt5.QtWidgets import QApplication
 
     from app247_terminal.application import MainWindow, present_main_window
     from app247_terminal.config.settings import API_URL, DATABASE_PATH
     from app247_terminal.models.terminal import Terminal
+    from app247_terminal.logging_setup import configure_logging
     from app247_terminal.runtime import prepare_runtime_layout
 
-    logging.basicConfig(
-        level=logging.INFO,
-        format="%(asctime)s %(levelname)s %(name)s %(message)s",
-    )
+    log_path = configure_logging()
     prepare_runtime_layout()
     logger = logging.getLogger(__name__)
+    logger.info("[LOG] versão=%s arquivo=%s", APP_VERSION, log_path or "indisponível")
     logger.info("[API] Backend: %s", API_URL or "não configurado")
     logger.info("[SYNC] SQLite path: %s", DATABASE_PATH.resolve())
     try:
@@ -63,15 +61,28 @@ def _run_gui(arguments: list[str]) -> int:
         logger.info("[TERMINAL] UUID carregado: %s", terminal.terminalId)
 
     app = QApplication([sys.argv[0], *arguments])
+    app.setApplicationDisplayName("24/7 Terminal")
+    # app_id fixo no Wayland: a regra de quiosque do labwc (install.sh) casa
+    # por "app247-terminal" e tira barra de título e entrada na barra de tarefas.
+    app.setDesktopFileName("app247-terminal")
+    try:
+        from PyQt5.QtGui import QIcon
+
+        from app247_terminal.utils.resources import image_path
+
+        app.setWindowIcon(QIcon(str(image_path("logo.png"))))
+    except FileNotFoundError:
+        logger.warning("[UI] logotipo ausente; janela sem ícone")
     window = MainWindow()
     signal_handler = getattr(window, "encerrar_por_sinal", None)
     if signal_handler is not None:
         install_termination_bridge(app, signal_handler)
-    app.setOverrideCursor(Qt.BlankCursor)
     present_main_window(window)
     exit_code = app.exec_()
     code = _gui_exit_code(
-        exit_code, shutdown_was_requested=window.shutdown_was_requested
+        exit_code,
+        shutdown_was_requested=window.shutdown_was_requested,
+        shutdown_signal=getattr(window, "shutdown_signal", None),
     )
     if window.shutdown_was_requested:
         # Serviços já foram parados dentro do orçamento. Um QThread que ainda
@@ -140,11 +151,21 @@ def install_termination_bridge(app, on_signal):
     return restore
 
 
-def _gui_exit_code(exit_code: int, *, shutdown_was_requested: bool) -> int:
-    """Mantém um encerramento administrativo como sucesso para systemd --user."""
-    # O painel administrativo solicita um encerramento cooperativo. Qt retorna
-    # normalmente 0 para quit(), e esta normalização mantém o contrato explícito
-    # para Restart=on-failure da unit de usuário.
+def _gui_exit_code(
+    exit_code: int, *, shutdown_was_requested: bool, shutdown_signal: str | None = None
+) -> int:
+    """Só o encerramento pelo painel administrativo (ou backend) sai com 0.
+
+    A unit usa ``Restart=always`` + ``RestartPreventExitStatus=0``: código 0
+    mantém o Terminal fechado; qualquer outro reabre. Um sinal vindo de fora do
+    systemd (``pkill``, Ctrl+C, fim de sessão) sai com 128+N e o Terminal volta.
+    ``systemctl stop`` não reinicia, e ``SuccessExitStatus`` evita marcar falha.
+    """
+    if shutdown_signal:
+        import signal
+
+        number = getattr(signal, shutdown_signal, None)
+        return 128 + int(number) if number is not None else 1
     if shutdown_was_requested:
         return 0
     return exit_code

@@ -14,9 +14,11 @@ dependem do diretório corrente nem da release ativa.
 | `./data/last_sync.txt` | `/var/lib/app247/last_sync.txt` | espelho legado do `syncAt` |
 
 `APP247_DB_PATH` sobrescreve o banco e `APP247_DATA_DIR` define os demais
-estados. O startup copia arquivos legados apenas quando o destino não existe;
-origem e destino existente são preservados. `FactoryResetService` usa os mesmos
-paths persistentes e nunca alcança `/opt/app247/releases`.
+estados. O startup copia arquivos legados uma única vez, apenas quando o destino
+não existe; origem e destino existente são preservados. O marcador
+`legacy-layout.migrated` impede que a cópia desfaça um factory reset (BUG-058).
+`FactoryResetService` usa os mesmos paths persistentes e nunca alcança
+`/opt/app247/releases` nem a origem legada, que continua em disco após o reset.
 
 ## Schema de produtos
 
@@ -89,6 +91,10 @@ Existe no máximo uma pendência por instalação. O registro nasce no primeiro 
 `cancellation_requested=1` preserva `CANCELLING` em reinício ou queda de energia. A coluna é adicionada automaticamente em instalações existentes; ela não representa cancelamento confirmado.
 
 O `UNIQUE(codigo_barras)` local é seguro porque há apenas um tenant no catálogo do Terminal. A regra global continua no backend por empresa.
+
+## Vínculo do cliente
+
+`customer_link_state` não recebe mais gravações. A tabela é mantida para instalações existentes e limpa ao abrir `TerminalScreen`, porque o vínculo vale só para a compra atual e os itens ficam em memória. Ver [[fluxo-compra]].
 
 ## Aplicação de alterações
 

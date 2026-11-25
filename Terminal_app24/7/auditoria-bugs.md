@@ -6,6 +6,8 @@ Critério: **confirmado** quando o caminho executável ou contrato prova o compo
 
 ## BUG-001 — Crédito/débito concluem sem backend
 
+**Status:** corrigido — revisão formal em 17 de outubro de 2026. `telas/pagamento.py` não existe mais; o método (débito/crédito/PIX) é escolhido na Point e o único caminho de sucesso é `PagamentoScreen._handle_payment_approved`, alcançado somente quando `CompraSession.apply_status` recebe status definitivo do backend para a Order ativa.
+
 - **Severidade:** crítica
 - **Tipo:** confirmado
 - **Arquivo/função:** `telas/pagamento.py`, `PagamentoScreen.finalizar_venda`
@@ -14,6 +16,8 @@ Critério: **confirmado** quando o caminho executável ou contrato prova o compo
 - **Correção recomendada:** conectar ao checkout Point e só finalizar após estado definitivo do backend.
 
 ## BUG-002 — Qualquer mensagem WebSocket aprova a compra
+
+**Status:** corrigido — revisão formal em 17 de outubro de 2026. `PaymentListener.route_message` só encaminha `type=PAYMENT_STATUS`; `PagamentoScreen.processar_evento` exige `terminalId` igual ao local e `CompraSession.apply_status` exige `orderId` da sessão, `paymentAttemptId` compatível e status em `APPROVED/PAID/PROCESSED`. Testes: `test_event_from_other_terminal_never_approves`, `test_event_without_definitive_status_never_approves`.
 
 - **Severidade:** crítica
 - **Tipo:** confirmado
@@ -35,6 +39,8 @@ Critério: **confirmado** quando o caminho executável ou contrato prova o compo
 
 ## BUG-004 — Endpoint e DTO de pagamento são incompatíveis
 
+**Status:** corrigido — revisão formal em 17 de outubro de 2026. O cliente usa `POST /pagamento/terminal/{cartId}` (`PurchaseApi`), consulta `GET /order/{orderId}/status` e `GET /pagamento/terminal/{terminalId}/ativo`; todos existem no `PagamentoController`/`OrderController` atuais (ver [[auditoria-2026-10]]).
+
 - **Severidade:** crítica
 - **Tipo:** confirmado
 - **Arquivo/função:** `telas/pagamento.py:275-293`
@@ -43,6 +49,8 @@ Critério: **confirmado** quando o caminho executável ou contrato prova o compo
 - **Correção recomendada:** contrato coordenado específico para início Point.
 
 ## BUG-005 — Evento de pagamento não é publicado pelo backend ativo
+
+**Status:** corrigido — revisão formal em 17 de outubro de 2026. O backend (`07e9d4a`) publica `PaymentEvent` em `PaymentStateTransitionService` e `PaymentWebSocketHandler.sendToTerminal` envia com `@TransactionalEventListener(AFTER_COMMIT)`. O terminal mantém polling HTTP e reconciliação como rede de segurança (BUG-015).
 
 - **Severidade:** crítica
 - **Tipo:** confirmado no backend atual
@@ -86,6 +94,8 @@ Critério: **confirmado** quando o caminho executável ou contrato prova o compo
 
 ## BUG-009 — Reset de cartão não limpa o carrinho lógico
 
+**Status:** corrigido — revisão formal em 17 de outubro de 2026. `finalizar_venda` não existe mais; `MainWindow.reset_compra` chama `TerminalScreen.liberar_tela`, que recria `Carrinho()` e limpa `linhas`, e só ocorre após estado terminal ou sem pendência remota.
+
 - **Severidade:** alta
 - **Tipo:** confirmado
 - **Arquivo/função:** `PagamentoScreen.finalizar_venda`
@@ -94,6 +104,8 @@ Critério: **confirmado** quando o caminho executável ou contrato prova o compo
 - **Correção recomendada:** usar um único reset somente após resultado definitivo.
 
 ## BUG-010 — POST de carrinho pode duplicar compras
+
+**Status:** corrigido — revisão formal em 17 de outubro de 2026. `CompraSession.begin_payment` recusa tentativa concorrente; o `cartId` é gravado em checkpoint SQLite antes do pagamento, retentativas usam `PUT /carrinho/{id}`, o backend responde `PAYMENT_ALREADY_ACTIVE` e o terminal adota a cobrança existente em vez de criar outra.
 
 - **Severidade:** alta
 - **Tipo:** potencial
@@ -104,6 +116,8 @@ Critério: **confirmado** quando o caminho executável ou contrato prova o compo
 
 ## BUG-011 — Sem timeout nas chamadas de compra
 
+**Status:** corrigido — revisão formal em 17 de outubro de 2026. Todo HTTP de compra passa por `BackendClient`/`PurchaseApi` com timeout (padrão 10 s) e `requests.Timeout` vira `PurchaseApiError` tipado.
+
 - **Severidade:** alta
 - **Tipo:** confirmado
 - **Arquivo/função:** `pagamento.py`; `app_payment_screen.py`; `Produtos.get_produtos_api`
@@ -112,6 +126,8 @@ Critério: **confirmado** quando o caminho executável ou contrato prova o compo
 - **Correção recomendada:** connect/read timeouts e erros tipados centralizados.
 
 ## BUG-012 — HTTP é executado na UI thread
+
+**Status:** corrigido — revisão formal em 17 de outubro de 2026. Ativação, Point, status, retomada, comprovante e checkout por app rodam em `QThread` com signals e guarda `isRunning()`.
 
 - **Severidade:** alta
 - **Tipo:** confirmado
@@ -122,6 +138,8 @@ Critério: **confirmado** quando o caminho executável ou contrato prova o compo
 
 ## BUG-013 — Thread de checkout altera widgets Qt diretamente
 
+**Status:** corrigido — revisão formal em 17 de outubro de 2026. `AppCheckoutWorker` só emite `succeeded/failed`; `AppPaymentScreen` atualiza widgets na UI thread.
+
 - **Severidade:** alta
 - **Tipo:** potencial/race confirmada no desenho
 - **Arquivo/função:** `AppPaymentScreen.gerar_checkout:169-172`
@@ -130,6 +148,8 @@ Critério: **confirmado** quando o caminho executável ou contrato prova o compo
 - **Correção recomendada:** emitir signals para a UI thread.
 
 ## BUG-014 — Evento tardio pode liberar nova compra
+
+**Status:** corrigido — revisão formal em 17 de outubro de 2026. `reset` zera `order_id`/`payment_attempt_id` e cada compra recebe Order própria; eventos com `orderId` ou tentativa divergentes retornam `IGNORED`. Testes: `test_late_event_from_previous_purchase_does_not_release_new_one`, `test_event_from_old_payment_attempt_is_ignored`.
 
 - **Severidade:** crítica
 - **Tipo:** potencial
@@ -140,7 +160,7 @@ Critério: **confirmado** quando o caminho executável ou contrato prova o compo
 
 ## BUG-015 — Aprovação durante desconexão não é recuperada
 
-**Status:** corrigido para queda/reconexão do backend e perda de WebSocket; persistência após reboot físico permanece em [[melhorias]].
+**Status:** corrigido para queda/reconexão do backend e perda de WebSocket; a recuperação após reboot físico foi implementada em 3 de outubro de 2026 pela MEL-017 (tabela `active_payment`) — revisão de status em 25 de novembro de 2026.
 
 - **Severidade:** alta
 - **Tipo:** corrigido
@@ -151,6 +171,8 @@ Critério: **confirmado** quando o caminho executável ou contrato prova o compo
 - **Validação:** testes cobrem `APPROVED`, `WAITING_PAYMENT` e `REJECTED` recebidos pela consulta pós-reconexão.
 
 ## BUG-016 — Listener pode não encerrar
+
+**Status:** corrigido — revisão formal em 17 de outubro de 2026. `recv` tem timeout de 5 s, `PaymentListener.stop` fecha o socket e espera dentro do orçamento de `shutdown_budget` (BUG-047).
 
 - **Severidade:** média
 - **Tipo:** potencial
@@ -172,6 +194,8 @@ Critério: **confirmado** quando o caminho executável ou contrato prova o compo
 
 ## BUG-018 — Cálculo de peso é inconsistente
 
+**Status:** corrigido — revisão formal em 17 de outubro de 2026. O scanner cria itens com `received_weight=None`; `Carrinho.total` e `Carrinho.__str__` passaram a usar `Item.subtotal()`, igual à linha, e o valor cobrado continua sendo o do backend. Teste: `test_cart_total_matches_line_subtotal_for_weighted_item`.
+
 - **Severidade:** alta
 - **Tipo:** confirmado
 - **Arquivo/função:** `Item.subtotal`; `Carrinho.total`; `TerminalScreen`
@@ -180,6 +204,8 @@ Critério: **confirmado** quando o caminho executável ou contrato prova o compo
 - **Correção recomendada:** regra por unidade de medida validada no backend.
 
 ## BUG-019 — PIX pode ser confirmado manualmente
+
+**Status:** corrigido — revisão formal em 17 de outubro de 2026. `PixScreen` foi removida; não existe botão de confirmação financeira manual. A tela de pagamento apenas aguarda o backend ou solicita cancelamento via Spring.
 
 - **Severidade:** crítica
 - **Tipo:** confirmado em eventual backend legado
@@ -223,6 +249,8 @@ Critério: **confirmado** quando o caminho executável ou contrato prova o compo
 
 ## BUG-023 — Logs expõem dados e não têm estrutura
 
+**Status:** corrigido — revisão formal em 17 de outubro de 2026. `PixScreen` foi removida; o fluxo ativo usa `logging` com `orderId`/estágio, sem copia-e-cola nem credenciais. Restam `print` apenas em código morto (`Produtos.get_produtos_api`, `login.py`), rastreado em BUG-052.
+
 - **Severidade:** alta
 - **Tipo:** confirmado
 - **Arquivo/função:** `PixScreen` imprime copia-e-cola; vários `print`/`traceback.print_exc`
@@ -231,6 +259,8 @@ Critério: **confirmado** quando o caminho executável ou contrato prova o compo
 - **Correção recomendada:** logging estruturado/sanitizado com terminal, carrinho e Order.
 
 ## BUG-024 — Segredo de configuração local e URL hardcoded
+
+**Status:** corrigido — revisão formal em 17 de outubro de 2026. Não há URL hardcoded em `src/`; endpoints vêm de `config/settings.py`/`/etc/app247/terminal.env`, `.env` está no `.gitignore` e só exemplos são versionados.
 
 - **Severidade:** média
 - **Tipo:** confirmado/potencial
@@ -241,6 +271,8 @@ Critério: **confirmado** quando o caminho executável ou contrato prova o compo
 
 ## BUG-025 — Código morto contém falhas de runtime
 
+**Status:** aberto — revisão formal em 17 de outubro de 2026. `parentrminal` não existe mais, mas `TecladoScreen` ainda cancela para `parent.login` (inexistente) e `LoginScreen` usa `/usuarios/anonimo`. Inacessível hoje porque `LoginScreen` está comentada em `application.py`; tratado junto com BUG-052.
+
 - **Severidade:** baixa enquanto inacessível
 - **Tipo:** confirmado
 - **Arquivo/função:** `TecladoScreen.finalizar` (`parentrminal`); cancelamento usa `parent.login`, hoje `None`; `LoginScreen` usa endpoint ausente.
@@ -250,6 +282,8 @@ Critério: **confirmado** quando o caminho executável ou contrato prova o compo
 
 ## BUG-026 — Socket permite personificação/substituição de terminal
 
+**Status:** corrigido — revisão formal em 17 de outubro de 2026. `/terminal-socket` e `/payment-socket/{id}` enviam a credencial individual (`terminal_auth_headers`) e o `TerminalHandshakeInterceptor` do backend a valida contra o `terminalId` do path.
+
 - **Severidade:** alta
 - **Tipo:** confirmado no desenho
 - **Arquivo/função:** URLs e handlers nativos cliente/backend
@@ -258,6 +292,8 @@ Critério: **confirmado** quando o caminho executável ou contrato prova o compo
 - **Correção recomendada:** autenticação de provisionamento e vínculo no handshake.
 
 ## BUG-027 — Erros relevantes são engolidos ou exibidos ao cliente
+
+**Status:** corrigido — revisão formal em 17 de outubro de 2026. Telas de compra exibem somente textos fixos ou mapeados (`DOMAIN_MESSAGES`, mensagens de cliente/QR/comprovante); detalhes vão para o log. O único `except:` restante está em `login.py` (código morto, BUG-052).
 
 - **Severidade:** média
 - **Tipo:** confirmado
@@ -456,6 +492,38 @@ Falha, instrução e sucesso eram cards e a aprovação apagava a compra após c
 - **Procedimento operacional:** desligar somente com `sudo poweroff` e aguardar o LED verde parar antes de remover a alimentação.
 - **Próximos passos dependentes de autorização:** journal persistente (`Storage=persistent`) para capturar a próxima ocorrência; instalar `smartmontools` e ler SMART; testar outro cabo/case/porta USB 3 e fonte oficial 5,1 V/3 A; dissipador/ventoinha. Não reinstalar, não alterar `cmdline.txt`/quirks USB/kernel sem nova evidência.
 
+### Ocorrência de 24/11/2026 — boot preso no bootloader (USB não inicializa)
+
+| Evidência | Resultado | Interpretação |
+|---|---|---|
+| tela do bootloader (`order f41`, `restart 35/-1`) | SD: `Failed to open device: 'sdcard' (cmd 37a0010 status 1fff0001)`; USB-MSD: `PCIe timeout: 0x0000000f` e `USB xHC init failed` | o bootloader não conseguiu subir o PCIe/VL805, por isso **nunca leu o SSD**; ficou reiniciando em loop |
+| sem nada nas USB e com fonte trocada | mesma tela | não era periférico nem a fonte usada naquele teste |
+| SSD lido no PC | partições `bootfs`/`rootfs` íntegras (imagem recém-gravada, ainda sem expandir) | a imagem não era a causa |
+| após regravar a imagem | boot normal, primeiro boot concluído (`cloud-init: done`) | a falha **não se repetiu**; causa da falha do PCIe no bootloader segue sem confirmação (intermitente) |
+| `journalctl -k -b 0` | `brcm-pcie: link up, 5.0 GT/s`, VL805 `1106:3483`, sem `Cannot enable`/erros USB | USB normal neste boot |
+| `vcgencmd` | `throttled=0x0`, 57 °C | sem subtensão; temperatura bem menor que em 16/10 |
+| `rpi-eeprom-update` | bootloader 17/05/2026 → **23/09/2026 preparado** (`pieeprom.upd`), VL805 `000138c0` já atual | aplicado no próximo reboot |
+| journald | `/etc/systemd/journald.conf.d/90-persistent.conf` (`Storage=persistent`, `SystemMaxUse=200M`) | precisa ser `90-` para vencer `/usr/lib/.../40-rpi-volatile-storage.conf`; logs agora em `/var/log/journal` |
+
+- **Reboot de 21:32 (`systemctl reboot`, aplica o bootloader):** voltou em ~40 s; `vcgencmd bootloader_version` = `2026/09/23`, `throttled=0x0`, 60 °C. Mas o kernel registrou de novo `usb usb2-port1: Cannot enable. Maybe the USB cable is bad?` (2×) seguido de `attempt power cycle` — só então o SSD enumerou (SuperSpeed, `uas`). Também `EXT4-fs (sda2): orphan cleanup on readonly fs` mesmo após desligamento ordenado (o journal do boot `-1` termina normalmente em `systemd-shutdown`, sem erro). A falha de enumeração da porta do SSD é **reproduzível no boot**; reforça cabo/case USB-SATA Initio, porta ou alimentação, e explica o `USB xHC`/`PCIe` instável do bootloader como hipótese relacionada, não confirmada.
+- Sistema reinstalado (imagem limpa, usuário `jefiro`, Wi-Fi `BR`); app Terminal **ainda não instalado**.
+- `mmc1: Controller never released inhibit bit(s)` aparece com o slot SD vazio; sem impacto ao bootar pelo SSD.
+
+### Ocorrência de 24–25/11/2026 — app fecha sozinho, atalho não abre, SSH recusa
+
+Com o app 1.0.6 instalado e operando, o terminal parou na noite de 24/11. No dia 25 o operador viu o app fechado, o atalho da área de trabalho não abria e o SSH respondia `kex_exchange_identification: Connection reset by peer`, mas o Pi ainda respondia ao ping.
+
+| Evidência | Resultado | Interpretação |
+|---|---|---|
+| `journalctl -b -1` (journal persistente) | app normal até a última linha: heartbeat a cada 10 s, sync e telemetria com 202. **Último registro: 24/11 23:26:04.** Sem erro do app, sem erro do kernel, sem `systemd-shutdown` | os registros param de uma vez, sem desligamento ordenado. É o padrão de quando o root (`/dev/sda2`) some: o kernel não consegue mais gravar o próprio erro |
+| sintomas sem SSH | ping ok, `sshd` aceita o TCP e reseta antes do banner; app fechado; atalho sem efeito | processos que já estavam na RAM seguem vivos, mas nada consegue carregar binários ou bibliotecas do disco. Bate com o SSD desconectado |
+| 1º boot no dia 25 (tela do bootloader 2026/09/23) | `PCIe timeout: 0x0000008f`, `USB xHC init failed` em loop | mesma falha do bootloader do dia 24; o VL805 não inicializou |
+| 2º boot no dia 25 | o controlador inicializa (`USB2 root HUB port 1 init`); `xHC-CMD err: 4 type: 11` na porta 4 em full-speed, que é o touch da tela (`0484:5750` MPI7002) e não o SSD; depois o boot segue normal | a falha do PCIe/VL805 no bootloader é **intermitente** |
+| após bootar (`lsusb -t`, `vcgencmd`) | SSD `13fd:5917` em **480M (USB 2)** com `uas`, mesmo ligado em porta azul; `throttled=0x0` | o bridge Initio não negociou SuperSpeed (em 24/11 negociou após `power cycle`); não houve subtensão neste boot. O app 1.0.6 voltou ativo sozinho |
+
+- **Conclusão:** quedas do app sem rastro no log, mais a falha intermitente do USB no bootloader e no kernel, apontam para o **case/bridge USB-SATA Initio `13fd:5917`** (ou o cabo dele) como causa principal. Não foi possível provar pelo log, porque a queda impede a gravação. Não é defeito do app.
+- **Ação recomendada:** trocar o case por um bridge ASMedia (ASM1153E/ASM235CM) ou JMicron (JMS578/JMS583); como alternativa, usar hub USB com fonte própria. Para registrar a próxima queda mesmo sem disco, considerar log remoto (`netconsole` ou `systemd-journal-remote`), o que exige autorização para alterar o Pi.
+
 ## BUG-046 — `terminal.json` vazio ou corrompido derruba o Terminal antes da UI
 
 **Status:** corrigido em 17 de outubro de 2026 (reproduzido antes da correção); validação no Raspberry pendente.
@@ -485,7 +553,7 @@ Falha, instrução e sucesso eram cards e a aprovação apagava a compra após c
 
 ## BUG-048 — Um único 401/403 bloqueia o Terminal até reiniciar
 
-**Status:** aberto; confirmado por código em 17 de outubro de 2026 (impacto de 403 depende do backend).
+**Status:** corrigido em 2 de novembro de 2026 (`9c7fd81`, release 1.0.4); revisão de status em 25 de novembro de 2026. Aberto originalmente em 17 de outubro de 2026.
 
 - **Severidade:** média
 - **Tipo:** confirmado (latch) / potencial (403 por regra de negócio)
@@ -493,10 +561,12 @@ Falha, instrução e sucesso eram cards e a aprovação apagava a compra após c
 - **Cenário:** credencial rotacionada/revogada e depois restaurada, ou um 403 pontual em endpoint não essencial.
 - **Impacto:** operação bloqueada, heartbeat e socket de pagamento mortos até reinício manual, mesmo depois de reprovisionado. O texto atual pede reinício, então é comportamento conhecido, mas não automático.
 - **Correção recomendada:** restringir o latch a endpoints de identidade/handshake, revalidar periodicamente e reiniciar heartbeat/listener ao voltar a `OPERATIONAL`.
+- **Correção aplicada:** `BackendClient` só bloqueia com 401 de `DEVICE_UNAUTHORIZED_CODES` ou 403 de `DEVICE_FORBIDDEN_CODES` (outros 401/403, como QR de outro condomínio, não bloqueiam); `MainWindow._probe_device_access` reconsulta o bootstrap com limite de frequência e `_restore_device_access` volta a `OPERATIONAL` sem reinício, preservando pagamento pendente; `TerminalSocket` e `PaymentListener` aguardam e tentam de novo após 401 em vez de encerrar.
+- **Validação:** `tests/test_device_access_recovery.py`, `tests/test_terminal_heartbeat.py`, `tests/test_purchase_api.py`. Validação no Raspberry pendente.
 
 ## BUG-049 — Socket de pagamento não detecta conexão meio-aberta
 
-**Status:** aberto; potencial, identificado em 17 de outubro de 2026.
+**Status:** corrigido em 25 de novembro de 2026 (entra na próxima release); validação no Raspberry pendente. Identificado em 17 de outubro de 2026.
 
 - **Severidade:** média (mitigada)
 - **Tipo:** potencial
@@ -504,16 +574,22 @@ Falha, instrução e sucesso eram cards e a aprovação apagava a compra após c
 - **Cenário:** queda breve de Wi-Fi (medida perda de 13,33% no campo, ver [[wifi]]) sem FIN/RST.
 - **Impacto:** o terminal continua `CONNECTED` e não reconecta; eventos `PAYMENT_STATUS`, `PRODUCT_SYNC_REQUIRED` e reset são perdidos. Pagamento é coberto pelo polling de `/order/{id}/status`; catálogo só atualiza no sync periódico (300 s) e reset no bootstrap (60 s). A telemetria mostra estado de socket falso.
 - **Correção recomendada:** `ping` periódico com prazo de pong (ou derrubar o listener quando o heartbeat de `/terminal-socket` falhar).
+- **Correção aplicada:** `PaymentListener` lê também os frames de controle (`recv_data(control_frame=True)`). Sem nenhum frame por `PING_INTERVAL_SECONDS` (20 s) envia `ping`; se nada chegar em `PONG_TIMEOUT_SECONDS` (15 s) levanta `PaymentSocketStale` e cai no caminho normal de reconexão (`RECONNECTING`, nova conexão em 5 s, que já dispara sync e consulta de lifecycle). Qualquer frame (evento, ping ou pong) conta como tráfego. Frame `CLOSE` do servidor também força a reconexão. Detecção no pior caso: cerca de 40 s. O backend roda em Tomcat (Spring Boot), que responde ping com pong sozinho; não precisou de mudança no backend.
+- **Validação:** `tests/test_websocket_routing.py::PaymentSocketLivenessTest` (relógio falso) e teste manual com socket real em 25/11/2026: um servidor que faz o handshake e fica mudo derruba a conexão e reconecta; um servidor que responde pong mantém uma única conexão.
 
 ## BUG-050 — Logs da aplicação não sobrevivem a reinício no Raspberry
 
-**Status:** aberto; confirmado no Raspberry em 16 de outubro de 2026.
+**Status:** corrigido em 25 de novembro de 2026 (entra na próxima release); validação no Raspberry pendente. Confirmado no Raspberry em 16 de outubro de 2026.
 
 - **Severidade:** média
 - **Tipo:** confirmado
 - **Arquivo/função:** o app só registra em stdout (`logging.basicConfig`), a unit `systemd --user` envia ao journal e o journald do equipamento está com `Storage=volatile`. Não há arquivo de log.
 - **Impacto:** as 6 falhas de partida do `app247-terminal.service` em 16/10 (14:29–14:37) e qualquer incidente de pagamento antes de um reboot não podem ser investigados.
 - **Correção recomendada:** journald persistente com limite (`SystemMaxUse`) ou log rotativo próprio em `/var/lib/app247/logs`, sem segredos.
+- **Correção aplicada:** log rotativo próprio (`logging_setup.configure_logging`, chamado no início de `_run_gui`) em `LOG_DIR/terminal.log`, por padrão `/var/lib/app247/logs/terminal.log`, com 5 MiB por arquivo e 4 arquivos antigos (cerca de 25 MiB no total; `APP247_LOG_DIR`, `APP247_LOG_MAX_BYTES`, `APP247_LOG_BACKUP_COUNT`). O journal continua recebendo as mesmas linhas pelo stderr. Se o diretório não puder ser aberto ou o arquivo for link simbólico, o Terminal sobe só com o journal e registra o motivo. A configuração do journald do sistema não foi alterada. O arquivo contém as mesmas linhas do journal: a regra de nunca registrar token, credencial ou senha continua valendo para quem escreve o log. O factory reset não apaga os logs.
+- **Limite:** o arquivo fica no mesmo SSD. Se o disco cair (BUG-045), nem o journal nem este arquivo registram a queda; para isso continua valendo a sugestão de log remoto do BUG-045.
+- **Observação de campo:** em 25/11/2026 o journal do equipamento já estava persistente (`journalctl -b -1` funcionou; ver BUG-045). O arquivo próprio continua útil porque não depende dessa configuração manual nem sai do equipamento numa reinstalação do sistema.
+- **Validação:** `tests/test_logging_setup.py` (gravação, rotação com limite, sem handler duplicado, diretório inválido, link simbólico) e partida real da GUI offscreen em 25/11/2026: o arquivo foi criado e recebeu até a linha de encerramento por `SIGTERM`.
 
 ## BUG-051 — Instalação de campo diverge do layout e das permissões atuais
 
@@ -577,6 +653,131 @@ Falha, instrução e sucesso eram cards e a aprovação apagava a compra após c
 - **Correção:** `ui/responsive.py` deriva o perfil compacto da largura lógica da tela (< 760 px) e reaplica quando a geometria muda (orientação pelo painel). Em retrato: `ESPAÇO`/`LIMPAR` descem para uma linha própria no teclado, o rodapé do carrinho empilha total sobre ações, as ações do comprovante viram coluna única e os títulos de login/configurações quebram linha. Ajustes neutros em paisagem: largura mínima real das teclas 44 px, padding lateral menor em botões que já ocupam a largura toda, logo inicial em 240 px, títulos de pagamento e confirmação com quebra. Paisagem permanece visualmente igual.
 - **Paisagem (pré-existente, mesma causa):** `AdminAuthScreen` (altura mínima 798, teclas sobrepostas), `TecladoScreen` (616) e `PagamentoScreen` (606) excediam 600 px de altura em `1024×600` deitado. `PaymentStateWidget` e `ConfirmacaoScreen` escolhiam margens por `height() > width()` do próprio widget, então abriam com margens de retrato e o mínimo estourava antes do primeiro resize. Correção: ambos seguem o perfil da tela; deitado, teclas do teclado virtual têm 52 px de altura (em pé continuam 64), e o acesso admin usa margens menores, status de 30 px e `CANCELAR`/`ENTRAR` lado a lado. Maior altura mínima deitado: 578 px (admin).
 - **Testes:** `tests/test_portrait_screens.py` valida as 11 telas em `600×1024` e em `1024×600`, incluindo carrinho e confirmação da compra; falha se o mínimo de qualquer tela exceder o display ou se botão sair da área, e cobre a troca de perfil.
+
+## BUG-057 — Atalho da área de trabalho perguntava "Executar / Executar no Terminal"
+
+**Status:** corrigido em 17 de outubro de 2026 no instalador (próxima release) e aplicado manualmente no Raspberry de campo.
+
+- **Severidade:** baixa (operação)
+- **Tipo:** confirmado pelo código do libfm 1.4 do Raspberry Pi OS (`raspberrypi-ui/libfm`)
+- **Causa:** `fm_file_info_is_executable_type` trata todo `.desktop` local legível da área de trabalho como executável — com ou sem bit `+x` — e `on_exec_file` mostra o diálogo "This file is executable / seems to be an executable script" a menos que `quick_exec` esteja ativo. Nem o modo `0644` nem symlink evitam o diálogo (a exceção só vale para itens `menu://`).
+- **Correção:** `install.sh` grava `quick_exec=1` na seção `[config]` de `~/.config/libfm/libfm.conf` do usuário gráfico, partindo do arquivo do usuário ou de `/etc/xdg/libfm/libfm.conf`, sem tocar nas outras chaves; entra no snapshot de rollback; `APP247_DESKTOP_QUICK_EXEC=false` desativa. Efeito colateral aceito: para esse usuário, arquivos executáveis abertos no gerenciador de arquivos rodam sem confirmação.
+- **Junto:** `ensure_desktop_directory` agora cria cada nível com o dono gráfico; antes `~/.local/share/app247` ficava `root:root` dentro da home.
+- **Campo (17/10 03:06):** `quick_exec=1` gravado em `/home/jefro/.config/libfm/libfm.conf`, dono de `~/.local/share/app247` corrigido e `pcmanfm --reconfigure` executado, sem reiniciar.
+- **Testes:** `tests/test_service_startup.py` (criação a partir do arquivo do sistema, atualização de arquivo existente, desativação).
+
+## BUG-058 — Factory reset desfeito pela migração do layout legado
+
+**Status:** corrigido em 31 de outubro de 2026 (entra na próxima release).
+
+- **Severidade:** alta (terminal volta com a identidade e a credencial antigas e não permite novo cadastro)
+- **Tipo:** confirmado pelo operador e pelos arquivos em `data/` com data de 30/09 após o reset de 31/10
+- **Sintoma:** depois de "Restaurar padrões de fábrica", a inicialização seguinte voltava a operar com o terminal anterior.
+- **Causa:** `prepare_runtime_layout` copiava `db/` e `database/` para `data/` sempre que o destino não existia. O reset esvazia `data/` sem tocar a origem legada, então a cópia restaurava `terminal.json`, `device-credential` e `terminal.db`.
+- **Correção:** a migração roda uma única vez, controlada por `legacy-layout.migrated`. Instalações sem o marcador que já têm `reset-backups/` ou `reset-staging/` não migram.
+- **Pendente:** os arquivos legados, incluindo a credencial antiga, continuam em disco após o reset.
+- **Testes:** `tests/test_packaging_architecture.py`.
+
+## BUG-059 — Caixas de aviso ilegíveis
+
+**Status:** corrigido em 31 de outubro de 2026 (entra na próxima release).
+
+- **Severidade:** média (cliente e operador não conseguem ler avisos nem identificar os botões)
+- **Tipo:** relatado pelo operador e reproduzido em render offscreen
+- **Sintoma:** caixas de aviso com texto e botões da mesma cor do fundo, sem leitura possível.
+- **Causa:** `QWidget { color: branco }` do tema é herdado pelo `QMessageBox`, mas o tema não definia fundo para ele. A caixa ficava com o cinza claro da paleta do sistema, e os botões sem `variant` não tinham fundo.
+- **Correção:** regras de `QMessageBox` em `Theme.component_stylesheet()`, aplicadas também ao popup "Sem Internet" e à tela de recuperação local em `application.py`, que não tinham stylesheet do tema.
+- **Testes:** `tests/test_message_box_theme.py`.
+
+## BUG-060 — Sessão expirada com cliente identificado travava em "Confirmando pagamento"
+
+**Status:** corrigido em 31 de outubro de 2026 (entra na próxima release).
+
+- **Severidade:** alta (terminal fica preso até reiniciar e nenhuma compra nova começa)
+- **Tipo:** relatado pelo operador; sequência reproduzida em teste, sem log da ocorrência original
+- **Sintoma:** ao zerar o tempo, a tela fica em `CONFIRMANDO PAGAMENTO`, depois de 30 s passa a `AGUARDANDO PAGAMENTO` e não sai mais.
+- **Causa:** vincular o cliente grava `cart_id` sem iniciar pagamento. `tratar_timeout_global` tratava esse `cart_id` como possível cobrança, mas a descoberta e o abandono retornam sem efeito quando `payment_in_flight` é falso, e nada concluía a expiração.
+- **Correção:** sem Order, sem tentativa em voo e sem worker do Point, a expiração conclui direto. Com `payment_in_flight` ativo, a reconciliação continua igual.
+- **Testes:** `tests/test_payment_flow.py`.
+
+## BUG-061 — Cliente vinculado podia passar para a compra seguinte
+
+**Status:** corrigido em 31 de outubro de 2026 (entra na próxima release).
+
+- **Severidade:** alta (a compra de outra pessoa pode entrar no histórico e na fidelidade do cliente anterior)
+- **Tipo:** requisito do operador; caminhos encontrados na leitura do código e reproduzidos em teste
+- **Causa:** o vínculo só era limpo em `liberar_tela`. Remover o último item encerrava a sessão e mantinha "Compra vinculada a ...". Resposta do QR chegando depois do cancelamento gravava o `cart_id` antigo na compra nova. Pagamento recuperado após reiniciar mantinha o `cart_id` depois da falha, e a recuperação sem identidade local nunca limpava a sessão.
+- **Divergência encontrada:** a recuperação do vínculo no início nunca funcionou. Ela lia `cartId`, mas `GET /carrinho/{id}` devolve `carrinhoId`, então mostrava um aviso de erro a cada início e mantinha o estado antigo.
+- **Correção:** `IDLE` limpa o cliente em qualquer caminho, respostas de outra geração são descartadas e o vínculo não é mais recuperado ao iniciar, porque os itens não sobrevivem ao reinício. `CustomerLinkRecoveryWorker` e `PurchaseApi.get_cart` foram removidos. Na recusa, o cliente continua vinculado para a nova tentativa. Remover o último item avisa que a compra deixou de estar vinculada e pede um novo QR, para a pessoa não seguir achando que está identificada.
+- **Testes:** `tests/test_customer_unlink.py`.
+
+## BUG-062 — Tela de Wi-Fi conectada alargava a janela em retrato
+
+**Status:** corrigido em 24 de novembro de 2026 e validado no Raspberry de campo (build local 1.0.6 sobre `f94afa9`).
+
+- **Severidade:** alta (depois de abrir o Wi-Fi, todas as telas ficavam cortadas à direita até reiniciar o app, inclusive a de venda)
+- **Tipo:** confirmado no campo por captura de tela (`grim`) no display `1024×600` em pé (`HDMI-A-2`, transform 90)
+- **Sintoma:** em admin → Wi-Fi, `ATUALIZAR REDES`, `DESCONECTAR`, a lista e `VOLTAR` saíam da tela; ao voltar, Bem-vindo e acesso admin continuavam cortados (janela com ~690 px de largura).
+- **Causa:** o card de status punha `Conectado: <SSID>` (H3 negrito, sem quebra) e `DESCONECTAR` lado a lado. No display real isso passa de 600 px; a janela fullscreen cresce para o mínimo do layout e não volta a encolher (mesmo mecanismo do BUG-056).
+- **Por que os testes não pegaram:** a medição `QT_QPA_PLATFORM=offscreen`, inclusive rodada no próprio Pi com o `nmcli` real, dava 544 px — as métricas de fonte do offscreen são menores que as do Wayland real. Validação de largura de telas novas deve incluir captura no display.
+- **Correção:** `WifiScreen` segue `follow_layout_profile`; em retrato o card empilha SSID/sinal/IP sobre o botão (`QBoxLayout.TopToBottom`) e os dois textos quebram linha. Paisagem continua lado a lado.
+- **Testes:** `tests/test_portrait_screens.py::test_wifi_status_card_stacks_in_portrait` (direção por perfil e quebra de linha; a largura em si só é verificável no display).
+
+## BUG-063 — Terminal podia ser fechado fora do painel administrativo
+
+**Status:** corrigido em 25 de novembro de 2026; validação no Raspberry de campo pendente (exige reinstalar a unit).
+
+- **Severidade:** média
+- **Tipo:** confirmado por código e por teste da semântica do systemd (`systemd-run --user` com unidades temporárias)
+- **Requisito:** cliente ou gestor só fecham o Terminal por admin → "Fechar Terminal".
+- **O que já estava certo:** `MainWindow.closeEvent` ignora fechamento sem `_shutdown_authorized` (Alt+F4, fechar pela barra de tarefas ou menu do labwc) e `keyPressEvent` ignora Esc.
+- **Brecha:** `SIGTERM`/`SIGINT`/`SIGHUP` vindos de fora do systemd (`pkill app247`, Ctrl+C num terminal, `SIGHUP` de fim de sessão) usavam o mesmo encerramento cooperativo do painel e saíam com **0**. Com `Restart=on-failure`, o systemd tratava isso como fechamento intencional e o Terminal **ficava fechado**.
+- **Correção:** `encerrar_por_sinal` registra o sinal (`MainWindow.shutdown_signal`, só quando o encerramento ainda não começou pelo painel) e `main._gui_exit_code` devolve `128+N` (129/130/143). A unit passou a `Restart=always` + `RestartPreventExitStatus=0` + `SuccessExitStatus=129 130 143`: só o código 0 (painel ou restauração) mantém fechado; sinal externo, crash e qualquer outra saída reabrem em 3 s; `systemctl stop`, reboot e `poweroff` não reabrem e não marcam falha. O motivo que levou a trocar `always` por `on-failure` no BUG-044 (reabrir após o fechamento administrativo) fica coberto pelo `RestartPreventExitStatus=0`. O launcher continua saindo com 0 quando já há instância (lock), sem loop.
+- **Fora do app (não alterado):** com teclado físico, os atalhos padrão do labwc no Pi ainda abrem menu (`Super`), terminal (`Ctrl+Alt+T`), executar (`Alt+F2`) e desligar/sair (`Ctrl+Alt+Del` → `pishutdown`). Pelo terminal o operador pode matar o app (agora ele volta) ou sair da sessão. No uso normal (touch + leitor de QR, sem modificadores) esses atalhos não são alcançáveis; bloqueá-los exige um `rc.xml` de quiosque no Pi.
+- **Testes:** `test_main_cli_lifecycle.py::test_external_signal_exits_non_zero_so_systemd_reopens`, `test_safe_shutdown.py::test_external_signal_is_recorded_but_admin_shutdown_is_not`, `test_shutdown_budget.py` (processo real com `SIGTERM` sai 143), `test_packaging_architecture.py` (política da unit).
+
+## BUG-064 — Setinha da janela de aviso escondia o Terminal
+
+**Status:** corrigido em 25 de novembro de 2026; regra validada no Raspberry de campo com captura de tela (`grim`); app com `app_id` fixo validado na reinstalação.
+
+- **Severidade:** alta (o Terminal some da tela e, no quiosque, não há como trazê-lo de volta sem teclado)
+- **Tipo:** confirmado no campo
+- **Sintoma:** nas janelas de aviso (`QMessageBox`) aparece uma barra com `˅`, `˄` e `×`. Tocar em `˅` "fechava o terminal".
+- **Causa:** o labwc decora pelo servidor toda janela do app, inclusive os diálogos: `titlebar layout = :iconify,max,close` em `/etc/xdg/labwc/rc.xml`. `˅` é *minimizar*, que no labwc esconde o diálogo **e a janela principal**. O app não fechava (o journal não registrou saída); ficava minimizado atrás da área de trabalho, só com o botão "24/7 Terminal" na barra de tarefas.
+- **Por que não pelo Qt:** com `Qt.FramelessWindowHint` o labwc 0.20.2 continua desenhando a mesma barra (testado no Pi com Qt 5.15.15).
+- **Correção:** `install.sh` grava em `~/.config/labwc/rc.xml` do usuário gráfico um bloco entre marcadores `app247:kiosk-rule` com `<windowRule identifier="app247-terminal" serverDecoration="no" skipTaskbar="yes" skipWindowSwitcher="yes"/>` e recarrega o labwc (`SIGHUP`). O bloco é recolocado a cada instalação, entra no `<windowRules>` existente se houver, preserva o resto (ex.: `<touch>`) e entra no snapshot de rollback. `main` fixa `setDesktopFileName("app247-terminal")` para o `app_id` casar com a regra. Sem barra, sem botão e sem entrada na barra de tarefas, não há mais como minimizar pelo toque. O Qt não desenha decoração própria quando o servidor recusa a dele (verificado).
+- **Testes:** `tests/test_service_startup.py` (`test_labwc_rule_*`: preserva o `touch`, é idempotente, entra no `<windowRules>` existente, cria o arquivo quando há labwc, não grava nada sem labwc).
+
+## BUG-065 — Terminal sem maquininha ficava preso em "Confirmando pagamento"
+
+**Status:** corrigido em 25 de novembro de 2026 (entra na 1.0.7); validação no Raspberry pendente. Sintoma relatado no campo em 25/11/2026 com um Terminal sem maquininha cadastrada; causa confirmada por código e teste, ainda não pelo log do equipamento (sem acesso SSH).
+
+- **Severidade:** alta (Terminal inutilizável até intervenção manual)
+- **Tipo:** confirmado por código e por reprodução em teste
+- **Causa:** o bootstrap responde `PAYMENT_NOT_CONFIGURED`, mas `MainWindow._handle_lifecycle_response` tratava esse estado igual a `ACTIVE` e a venda seguia. O `POST /pagamento/terminal/{cartId}` responde `409 MERCADO_PAGO_NOT_CONFIGURED` antes de criar cobrança, mas a chamada é feita com `ambiguous=True` e o 409 genérico mantinha a marca. `PagamentoScreen._point_failed` entrava em "CONFIRMANDO PAGAMENTO — Verificando se a cobrança foi enviada...". O polling não achava pagamento ativo, `_retomar_inicio_point` repetia o mesmo `POST` e recebia o mesmo 409 em `_resume_failed`. Depois de três falhas a tela ficava em pagamento pendente consultando a cada 30 s, sem fim. A tentativa fica em `active_payment` (MEL-017), então reiniciar o app voltava para a mesma tela.
+- **Correção:**
+  - `PurchaseApi` classifica `409 MERCADO_PAGO_NOT_CONFIGURED` como recusa definitiva (`stage=payment_not_configured`, `ambiguous=False`);
+  - `PointResumeWorker` passa o estágio no contexto da falha;
+  - `PagamentoScreen._payment_unavailable` (usado por `_point_failed` e `_resume_failed`) para o polling, libera a tentativa (apaga `active_payment`) e mostra "Pagamento indisponível". Com itens na tela, volta ao carrinho; numa tentativa retomada após reinício, volta à tela inicial;
+  - `MainWindow.payment_configured` segue o bootstrap (`ACTIVE` → `True`, `PAYMENT_NOT_CONFIGURED` → `False`; resposta inválida mantém o valor anterior; sem resposta ainda fica `None` e o backend decide). `TerminalScreen.iniciar_pagamento_confirmado` recusa o início com `False`, avisa o cliente e pede novo bootstrap (`CHECKOUT_BLOCKED`), sem criar carrinho nem cobrança. A recusa 409 também marca `False` e pede novo bootstrap; ao vincular a maquininha, o próximo bootstrap (no máximo 5 min, ou na próxima tentativa) libera a venda.
+- **Testes:** `tests/test_payment_not_configured.py` (12 casos, incluindo a cadeia completa do Terminal já preso: classificação do 409, tela sem loop, falha ambígua comum continua reconciliando, retomada recusada, tentativa restaurada após reinício volta à tela inicial e apaga `active_payment`, bloqueio antes do carrinho, estado desconhecido não bloqueia, bootstrap atualiza o estado). Contra o código antigo, os casos do defeito falham.
+- **Terminal já preso:** ao instalar a 1.0.7, a tentativa salva é restaurada, a descoberta não acha pagamento ativo, a retomada repete o `POST`, recebe o 409 e a tentativa é liberada sozinha: o Terminal volta à tela inicial e `active_payment` é apagado, sem intervenção manual. Coberto por `StuckTerminalAfterUpgradeTest` (cadeia desde `restore_pending_payment` até a tela inicial, com banco real em diretório temporário); falta confirmar no equipamento.
+
+## BUG-066 — Tela cortada à direita depois da instalação da 1.0.7
+
+**Status:** em diagnóstico. Causa não confirmada; registro do tamanho da janela implementado em 25 de novembro de 2026 (ainda não instalado no Raspberry).
+
+- **Severidade:** alta (o lado direito de todas as telas some até reiniciar o app)
+- **Tipo:** observado no campo por captura de tela (`grim`) no display `1024×600` em pé (`HDMI-A-2`, transform 90), em 25/11/2026 às 18:58, com a 1.0.7 iniciada às 18:53 logo após a instalação
+- **Sintoma:** janela com cerca de 658 px de largura num display de 600; "BEM-VINDO" deslocado para a direita. Reiniciar o app (`systemctl --user restart app247-terminal`) às 19:02 corrigiu.
+- **Descartado, medindo no próprio display:**
+  - largura das páginas: todas cabem em 600 no retrato (maior: confirmação da compra, 565), inclusive com o catálogo real;
+  - sequência do log até o corte (carrinho, duas recusas com a caixa "Pagamento indisponível", aviso de inatividade, expiração, nova compra cancelada): janela sempre 600×1024 em tela cheia;
+  - todos os estados da tela de pagamento (enviando, confirmando, verificando, aguardando, não concluído, maquininha): janela 600×1024, conteúdo com no máximo 453 px;
+  - `SIGHUP` do labwc (feito pelo instalador) durante a abertura da janela: a janela termina em 600×1024.
+- **Hipótese:** ao abrir, a janela passa ~150 ms com o tamanho natural (658×868) antes de o labwc aplicar a tela cheia; na partida das 18:53 ela teria ficado presa na largura natural. O log não registrava tamanho de janela, então não há como confirmar.
+- **Diagnóstico implementado:** `ui/window_geometry.py` (`WindowGeometryLogger`, instalado em `present_main_window`) registra `[WINDOW] origem=SHOW|RESIZE|STATE|SCREEN janela=… tela=… fullscreen=… pagina=…` a cada mudança. No kiosk, se a janela continuar diferente da tela 2 s depois da última mudança, emite warning com a largura mínima e a página mais larga. Com o log persistente (BUG-050), a próxima ocorrência fica em `/var/lib/app247/logs/terminal.log`.
+- **Testes:** `tests/test_window_geometry.py`.
 
 ## BUG-031 — Heartbeat opaco, sem confirmação do backend
 

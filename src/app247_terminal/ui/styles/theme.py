@@ -77,6 +77,22 @@ class Theme:
                 background-color: {Colors.PRIMARY_PRESSED};
             }}
 
+            /* A ação dominante da etapa usa o laranja da marca. */
+            QPushButton[variant="primary"][primaryAction="true"] {{
+                background-color: {Colors.BRAND_ORANGE};
+                color: {Colors.TEXT_ON_PRIMARY};
+            }}
+            QPushButton[variant="primary"][primaryAction="true"]:hover {{
+                background-color: {Colors.BRAND_ORANGE_LIGHT};
+            }}
+            QPushButton[variant="primary"][primaryAction="true"]:pressed {{
+                background-color: {Colors.BRAND_ORANGE_PRESSED};
+            }}
+            QPushButton[variant="primary"][primaryAction="true"]:disabled {{
+                background-color: {Colors.DISABLED_BACKGROUND};
+                color: {Colors.TEXT_DISABLED};
+            }}
+
             QPushButton[variant="secondary"] {{
                 background-color: {Colors.SURFACE_ELEVATED};
                 color: {Colors.TEXT_SECONDARY};
@@ -108,6 +124,10 @@ class Theme:
             QPushButton[variant="ghost"]:hover {{
                 background-color: {Colors.SURFACE_HOVER};
             }}
+            QPushButton[variant="ghost"]:pressed {{
+                background-color: {Colors.BACKGROUND_SECONDARY};
+                border-color: {Colors.PRIMARY};
+            }}
 
             QPushButton:disabled {{
                 background-color: {Colors.DISABLED_BACKGROUND};
@@ -135,6 +155,30 @@ class Theme:
                 background-color: {Colors.DISABLED_BACKGROUND};
                 color: {Colors.TEXT_DISABLED};
                 border-color: {Colors.DIVIDER};
+            }}
+
+            /* QMessageBox herda o texto branco do QWidget acima; sem fundo próprio
+               ele usaria o cinza claro da paleta do sistema e ficaria ilegível. */
+            QMessageBox {{
+                background-color: {Colors.SURFACE_ELEVATED};
+            }}
+            QMessageBox QLabel {{
+                color: {Colors.TEXT_PRIMARY};
+                background-color: transparent;
+            }}
+            QMessageBox QPushButton {{
+                min-width: 140px;
+                background-color: {Colors.SURFACE};
+                color: {Colors.TEXT_PRIMARY};
+                border: 2px solid {Colors.PRIMARY};
+            }}
+            QMessageBox QPushButton:default {{
+                background-color: {Colors.PRIMARY};
+                color: {Colors.TEXT_ON_PRIMARY};
+            }}
+            QMessageBox QPushButton:pressed {{
+                background-color: {Colors.PRIMARY_PRESSED};
+                color: {Colors.TEXT_ON_PRIMARY};
             }}
 
             QLabel[state="success"] {{ color: {Colors.SUCCESS}; }}
@@ -205,12 +249,13 @@ class Theme:
                 font-weight: {FontWeight.BOLD};
             }}
             QLabel#cartTotal {{
-                color: {Colors.TEXT_PRIMARY}; font-size: {FontSize.CART_TOTAL_VALUE}px;
+                color: {Colors.BRAND_ORANGE_LIGHT}; font-size: {FontSize.CART_TOTAL_VALUE}px;
                 font-weight: {FontWeight.BOLD};
             }}
+            /* Filete de marca no topo e borda do recém-bipado: ProductCard.paintEvent. */
             QFrame#productRow {{
                 background-color: {Colors.SURFACE_ELEVATED};
-                border: 2px solid {Colors.BORDER};
+                border: 2px solid {Colors.CARD_BORDER_BRAND};
                 border-radius: {Radius.CARD}px;
             }}
             QLabel[role="productCardName"] {{
@@ -221,28 +266,51 @@ class Theme:
                 color: {Colors.TEXT_PRIMARY}; font-size: {FontSize.PRODUCT_PRICE}px;
                 font-weight: {FontWeight.EXTRA_BOLD};
             }}
+            QLabel[role="productCardPrice"][promotion="true"] {{
+                color: {Colors.BRAND_ORANGE_LIGHT};
+            }}
             QLabel[role="productCardOriginalPrice"] {{
-                color: {Colors.TEXT_SECONDARY}; font-size: {FontSize.SMALL}px;
+                color: {Colors.PRICE_ORIGINAL}; font-size: {FontSize.SMALL}px;
+                font-weight: {FontWeight.MEDIUM};
                 text-decoration: line-through;
             }}
             QLabel[role="promotionBadge"] {{
-                color: {Colors.PAYMENT_STATE_FOREGROUND};
-                background-color: {Colors.SUCCESS};
+                color: {Colors.TEXT_ON_PRIMARY};
+                background-color: {Colors.BRAND_ORANGE};
                 border-radius: {Radius.SMALL}px;
                 padding: 3px {Spacing.SM}px;
                 font-size: {FontSize.CAPTION}px;
-                font-weight: {FontWeight.BOLD};
+                font-weight: {FontWeight.EXTRA_BOLD};
+            }}
+            QLabel[role="productCardUnitPrice"] {{
+                color: {Colors.TEXT_SECONDARY}; font-size: {FontSize.SMALL}px;
+                font-weight: {FontWeight.MEDIUM};
             }}
             QLabel[role="productCardQuantity"] {{
-                color: {Colors.TEXT_SECONDARY}; font-size: {FontSize.PRODUCT_QUANTITY}px;
+                color: {Colors.TEXT_PRIMARY}; font-size: {FontSize.PRODUCT_QUANTITY}px;
                 font-weight: {FontWeight.BOLD};
+                background-color: {Colors.QUANTITY_PILL};
+                border-radius: {Radius.INPUT}px;
+                padding: {Spacing.XS}px {Spacing.MD}px;
             }}
+            /* Área de toque de 56 px; a margem deixa o contorno visível em 44 px.
+               No QSS, min/max medem só o conteúdo (sem margem e borda). */
             QPushButton[variant="remove"] {{
-                min-width: 108px;
-                min-height: {TouchSize.MINIMUM}px;
-                padding: 0 {Spacing.MD}px; background-color: {Colors.ERROR};
-                color: {Colors.PAYMENT_STATE_FOREGROUND}; border: 2px solid {Colors.ERROR};
-                font-size: {FontSize.SMALL}px;
+                min-width: {TouchSize.REMOVE_VISUAL - 4}px;
+                max-width: {TouchSize.REMOVE_VISUAL - 4}px;
+                min-height: {TouchSize.REMOVE_VISUAL - 4}px;
+                max-height: {TouchSize.REMOVE_VISUAL - 4}px;
+                margin: {(TouchSize.MINIMUM - TouchSize.REMOVE_VISUAL) // 2}px;
+                padding: 0; background-color: transparent;
+                border: 2px solid {Colors.ERROR};
+                border-radius: {Radius.BUTTON}px;
+            }}
+            QPushButton[variant="remove"]:pressed {{
+                background-color: {Colors.PAYMENT_ACTION_DANGER};
+            }}
+            QPushButton[variant="remove"]:disabled {{
+                background-color: transparent;
+                border-color: {Colors.DIVIDER};
             }}
         """
 
@@ -266,7 +334,7 @@ class Theme:
             }}
             QFrame#confirmationTotalCard {{
                 background-color: {Colors.LIGHT_SURFACE};
-                border: 3px solid {Colors.PRIMARY};
+                border: 3px solid {Colors.BRAND_ORANGE};
                 border-radius: {Radius.INPUT}px;
             }}
             QLabel#confirmationTotalCaption {{
@@ -308,7 +376,7 @@ class Theme:
                 font-weight: {FontWeight.EXTRA_BOLD};
             }}
             QLabel#welcomeSubtitle {{
-                color: {Colors.TEXT_SECONDARY}; font-size: {FontSize.H3}px;
+                color: {Colors.BRAND_ORANGE_LIGHT}; font-size: {FontSize.H3}px;
                 font-weight: {FontWeight.MEDIUM}; letter-spacing: 4px;
             }}
             QLabel#welcomeClock {{
@@ -346,6 +414,10 @@ class Theme:
                 text-align: left; background-color: {Colors.SURFACE_ELEVATED};
                 color: {Colors.TEXT_PRIMARY}; border: 2px solid {Colors.BORDER};
                 font-size: {FontSize.LABEL}px;
+            }}
+            QPushButton[wifiNetwork="true"]:pressed {{
+                background-color: {Colors.BACKGROUND_SECONDARY};
+                border-color: {Colors.PRIMARY};
             }}
             QPushButton[wifiNetwork="true"][connected="true"] {{
                 border-color: {Colors.SUCCESS}; color: {Colors.SUCCESS};
@@ -416,6 +488,25 @@ class Theme:
                 font-weight: {FontWeight.BOLD};
             }}
             QLabel#appPaymentTimer {{ color: {Colors.WARNING}; font-size: {FontSize.H2}px; font-weight: {FontWeight.BOLD}; }}
+        """
+
+    @classmethod
+    def inactivity_prompt_stylesheet(cls):
+        """Só especializa o aviso; botões vêm da folha da página que o contém."""
+        return f"""
+            QWidget#inactivityPrompt {{ background-color: {Colors.OVERLAY}; }}
+            QFrame#inactivityCard {{
+                background-color: {Colors.SURFACE_ELEVATED};
+                border: 2px solid {Colors.WARNING}; border-radius: {Radius.MODAL}px;
+            }}
+            QLabel#inactivityTitle {{
+                color: {Colors.TEXT_PRIMARY}; font-size: {FontSize.H1}px;
+                font-weight: {FontWeight.BOLD};
+            }}
+            QLabel#inactivityCountdown {{
+                color: {Colors.WARNING}; font-size: {FontSize.H3}px;
+                font-weight: {FontWeight.BOLD};
+            }}
         """
 
     @classmethod
@@ -604,6 +695,11 @@ class Theme:
                 color: {Colors.PAYMENT_STATE_FOREGROUND};
                 font-size: {FontSize.BODY}px;
             }}
+            QLabel#receiptInputLabel {{
+                color: {Colors.PAYMENT_STATE_FOREGROUND};
+                font-size: {FontSize.LABEL}px;
+                font-weight: {FontWeight.BOLD};
+            }}
             QLabel#receiptInputError {{
                 min-height: 28px;
                 color: {Colors.PAYMENT_STATE_FOREGROUND};
@@ -619,6 +715,13 @@ class Theme:
             QWidget#receiptInputPage QLineEdit {{
                 min-height: 58px;
                 font-size: {FontSize.H3}px;
+            }}
+            /* Somente leitura por causa do teclado na tela, não por estar
+               desabilitado: mantém a aparência de campo editável. */
+            QWidget#receiptInputPage QLineEdit:read-only {{
+                background-color: {Colors.INPUT_BACKGROUND};
+                color: {Colors.INPUT_TEXT};
+                border-color: {Colors.PRIMARY};
             }}
             QWidget[paymentState] QPushButton:disabled {{
                 background-color: {Colors.BORDER};

@@ -23,7 +23,7 @@ scanner -> SQLite -> carrinho visual
           -> CANCELAR COMPRA: Spring -> Mercado Pago -> reconciliação
           -> falha definitiva: erro vermelho/retry
           -> APPROVED: sucesso verde
-              -> WhatsApp/e-mail: POST /comprovante em worker
+              -> WhatsApp: POST /comprovante em worker
               -> FINALIZAR: reset local
 ```
 
@@ -46,14 +46,47 @@ remaining <= 0
   -> interações bloqueadas
   -> MainWindow processa a geração ativa
       -> sem tentativa/IDs remotos: reset_compra -> boas-vindas
+      -> só cartId de cliente vinculado, sem tentativa em voo: reset_compra -> boas-vindas
       -> request Point ainda executando: aguarda callback delimitado
-      -> cartId/orderId existente: PagamentoScreen reconcilia
+      -> orderId existente ou cartId com tentativa em voo: PagamentoScreen reconcilia
           -> APPROVED: sucesso
           -> falha definitiva: reset -> boas-vindas
           -> intermediário/incerto: RECONCILIATION_PENDING
 ```
 
+## Inatividade na lista e na confirmação
+
+Além do teto, `InactivityMonitor` (`ui/inactivity.py`) mede o tempo sem toque e sem leitura do leitor enquanto a lista de produtos ou a confirmação do pedido estão na tela. Após 90 s aparece "Ainda está aí?" com contagem de 20 s e `CONTINUAR`; qualquer toque, tecla do leitor ou `readProduct()` zera a contagem e fecha o aviso. Sem resposta, `MainWindow.encerrar_compra_por_inatividade()` chama `CompraSession.expire_for_inactivity()`, que emite o mesmo `expired(generation)` do teto:
+
+```text
+inatividade sem resposta
+  -> sessão iniciada: expire_for_inactivity() -> mesmo fluxo da expiração global acima
+      (cobrança em andamento nunca é resetada: PagamentoScreen reconcilia)
+  -> lista vazia, sem sessão: reset_compra -> boas-vindas
+  -> tentativa restaurada sem sessão: PagamentoScreen.mostrar_reconciliacao_pendente
+```
+
+Um `QMessageBox` aberto é fechado antes, para não ficar sobre a tela do próximo cliente; se ele interrompia `iniciar_pagamento_confirmado`, a cobrança não é iniciada para uma compra já encerrada. Teto e inatividade são idempotentes entre si: o primeiro que encerrar vence.
+
+Os tempos ficam no topo de `models/purchase_session.py`: teto 600 s, relógio visível nos últimos 60 s (crítico em 30 s), aviso após 90 s, contagem de 20 s, pagamento aprovado 45 s e pagamento pelo aplicativo 300 s (sempre limitado pelo teto). Os intervalos internos do Point continuam em `payment.py`.
+
 O reset central limpa o carrinho, IDs, flags, timers visuais e tokens da tentativa. Scanner, `FINALIZAR` e `CONFIRMAR E PAGAR` ficam bloqueados desde a expiração. Uma nova entrada na tela de compra permite um novo scan, que cria outra `generation`, reinicia o deadline completo e não aceita callbacks da tentativa anterior.
+
+## Vínculo do cliente
+
+O cliente identificado por QR vale para uma única compra. O vínculo autoritativo é `Carrinho.user` no backend; a Order copia o usuário, então histórico e fidelidade não dependem do Terminal depois do pagamento.
+
+| Como a compra termina | Cliente |
+|---|---|
+| `FINALIZAR` ou tempo da tela de sucesso | desvinculado |
+| `CANCELAR`, pagamento cancelado ou sessão expirada | desvinculado |
+| último item removido | desvinculado, com o aviso "Cliente desvinculado" pedindo um novo QR |
+| reinício do app ou do equipamento | desvinculado |
+| recusa ou falha, com `TENTAR NOVAMENTE` | mantido com os mesmos itens: mesma compra e mesmo carrinho; itens alterados criam carrinho novo e desvinculam o cliente, com aviso |
+
+`CompraSession` passar para `IDLE` limpa o cliente em `TerminalScreen`, para qualquer caminho de encerramento. A geração da sessão é guardada ao iniciar o vínculo: resposta de uma compra encerrada, ou que chegue com pagamento em voo, é descartada sem aviso e não altera o `cart_id`.
+
+Depois de reiniciar, os itens não existem mais. Se um pagamento recuperado falhar, voltar à compra encerra a sessão e leva às boas-vindas.
 
 ## UX
 

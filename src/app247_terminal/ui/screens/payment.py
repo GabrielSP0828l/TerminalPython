@@ -18,9 +18,10 @@ from app247_terminal.services.purchase_api import (
     PointCheckoutWorker,
     PointResumeWorker,
 )
-from app247_terminal.ui.styles.animated_svg import AnimatedSvgWidget
+from app247_terminal.ui import texts
+from app247_terminal.ui.brand import BrandLoader, shake
 from app247_terminal.ui.styles.theme import Theme
-from app247_terminal.ui.styles.tokens import Colors, Spacing
+from app247_terminal.ui.styles.tokens import Spacing
 from app247_terminal.ui.screens.payment_state import PaymentStateWidget
 from app247_terminal.ui.screens.session_timer import SessionTimerLabel
 from app247_terminal.services import shutdown_budget
@@ -37,14 +38,7 @@ class PagamentoScreen(QWidget):
     FAILURE_RETURN_MS = 8000
     FINAL_RECONCILIATION_GRACE_MS = 30000
     MAX_RECONCILIATION_FAILURES = 3
-    FAILURE_MESSAGES = {
-        "REJECTED": "Pagamento recusado",
-        "FAILED": "Não foi possível concluir o pagamento",
-        "CANCELED": "Pagamento cancelado",
-        "CANCELLED": "Pagamento cancelado",
-        "EXPIRED": "O tempo para pagamento terminou",
-        "REFUNDED": "Pagamento estornado",
-    }
+    FAILURE_MESSAGES = texts.PAYMENT_FAILURE_REASONS
 
     def _terminal_id(self):
         provider = getattr(self.parent, "current_terminal_id", None)
@@ -57,6 +51,8 @@ class PagamentoScreen(QWidget):
         super().__init__(parent)
         self.parent = parent
         self.current_attempt = None
+        self.charge_payload = None
+        self.charge_cart_id = None
         self.point_worker = None
         self.status_worker = None
         self.resume_worker = None
@@ -108,9 +104,7 @@ class PagamentoScreen(QWidget):
         root.addLayout(top)
         root.addStretch(1)
 
-        self.loading_spinner = AnimatedSvgWidget(
-            "tube-spinner.svg", Colors.INFO, page
-        )
+        self.loading_spinner = BrandLoader(page)
         self.loading_spinner.setFixedSize(128, 128)
         root.addWidget(self.loading_spinner, 0, Qt.AlignHCenter)
 
@@ -129,7 +123,7 @@ class PagamentoScreen(QWidget):
         self.instructions.setObjectName("paymentInstructions")
         self.instructions.setAlignment(Qt.AlignCenter)
         self.instructions.setWordWrap(True)
-        self.btn_voltar = QPushButton("TENTAR NOVAMENTE")
+        self.btn_voltar = QPushButton(texts.PAYMENT_RETRY)
         self.btn_voltar.setProperty("variant", "primary")
         self.btn_voltar.setProperty("primaryAction", True)
         self.btn_voltar.clicked.connect(self._loading_action)
@@ -146,23 +140,21 @@ class PagamentoScreen(QWidget):
         page = PaymentStateWidget(
             "attention",
             "alert.svg",
-            "FINALIZE NA MAQUININHA",
-            "Pressione o botão verde e escolha a forma de pagamento.",
+            texts.PAYMENT_MACHINE_TITLE,
+            texts.PAYMENT_MACHINE_MESSAGE,
             parent=self,
         )
         self.attention_session_timer = SessionTimerLabel(
             self.parent.compra_session, page
         )
         page.set_timer_widget(self.attention_session_timer)
-        self.attention_support = QLabel(
-            "Se cancelar Débito, Crédito ou outra opção, pressione o botão "
-            "verde novamente para escolher outra."
-        )
+        self.attention_support = QLabel(texts.PAYMENT_PENDING_SUPPORT)
+        self.attention_support.hide()
         self.attention_support.setObjectName("paymentStateSupporting")
         self.attention_support.setAlignment(Qt.AlignCenter)
         self.attention_support.setWordWrap(True)
         page.content_layout.addWidget(self.attention_support)
-        self.cancel_payment_button = QPushButton("CANCELAR COMPRA")
+        self.cancel_payment_button = QPushButton(texts.PAYMENT_CANCEL)
         self.cancel_payment_button.setProperty("variant", "stateDanger")
         self.cancel_payment_button.clicked.connect(self._cancel_payment)
         page.action_layout.addWidget(self.cancel_payment_button)
@@ -172,8 +164,8 @@ class PagamentoScreen(QWidget):
         page = PaymentStateWidget(
             "error",
             "error.svg",
-            "PAGAMENTO NÃO APROVADO",
-            "Não foi possível concluir o pagamento",
+            texts.PAYMENT_ERROR_TITLE,
+            "",
             parent=self,
         )
         self.error_reason = page.message
@@ -181,12 +173,12 @@ class PagamentoScreen(QWidget):
             self.parent.compra_session, page
         )
         page.set_timer_widget(self.error_session_timer)
-        self.error_support = QLabel("Os produtos continuam na sua compra.")
+        self.error_support = QLabel(texts.PAYMENT_ERROR_SUPPORT)
         self.error_support.setObjectName("paymentStateSupporting")
         self.error_support.setAlignment(Qt.AlignCenter)
         self.error_support.setWordWrap(True)
         page.content_layout.addWidget(self.error_support)
-        self.error_retry = QPushButton("TENTAR NOVAMENTE")
+        self.error_retry = QPushButton(texts.PAYMENT_RETRY)
         self.error_retry.setProperty("variant", "statePrimary")
         self.error_retry.setProperty("primaryAction", True)
         self.error_retry.clicked.connect(self._voltar_lista)
@@ -194,6 +186,7 @@ class PagamentoScreen(QWidget):
         return page
 
     def iniciar_pagamento(self, cart_payload, total_text):
+        reopen_cart = self.parent.compra_session.prepare_cart_for_charge(cart_payload)
         try:
             attempt = self.parent.compra_session.begin_payment()
         except Exception:
@@ -203,22 +196,21 @@ class PagamentoScreen(QWidget):
             logger.warning("[PAYMENT-UI] worker não iniciado: tentativa já ativa")
             return False
         self.current_attempt = attempt
+        self.charge_payload = cart_payload
+        self.charge_cart_id = None
         self.timeout_pending = False
         self.timeout_abandoned = False
         self.reconciliation_failures = 0
         self.recovered_amount = None
         self.total_final.setText(total_text)
-        self._show_loading(
-            "ENVIANDO PAGAMENTO",
-            "Enviando pagamento...",
-            "Aguarde só um momento.",
-        )
+        self._show_loading(texts.PAYMENT_SENDING_TITLE)
         logger.info("[PAYMENT-UI] cobrança sendo criada")
         self.parent.setCurrentWidget(self)
 
         self.point_worker = PointCheckoutWorker(
             cart_payload,
             existing_cart_id=self.parent.compra_session.cart_id,
+            reopen_cart=reopen_cart,
             cart_checkpoint=lambda cart_id, token=attempt:
             self.parent.compra_session.persist_cart_checkpoint(token, cart_id),
             parent=self,
@@ -249,13 +241,14 @@ class PagamentoScreen(QWidget):
         if attempt != self.current_attempt:
             return
         cart_id = data.get("cartId")
+        self.charge_cart_id = str(cart_id)
         self.parent.compra_session.set_remote_ids(cart_id=cart_id)
         logger.info(
             "[PAYMENT] checkpoint local origin=TERMINAL_REQUEST cartId=%s localAttemptId=%s",
             cart_id, attempt,
         )
 
-    def _show_loading(self, title, message, instructions=""):
+    def _show_loading(self, title, message="", instructions=""):
         self.failure_return_timer.stop()
         self.attention_recheck_timer.stop()
         self.title.setText(title)
@@ -264,6 +257,9 @@ class PagamentoScreen(QWidget):
         self.loading.style().unpolish(self.loading)
         self.loading.style().polish(self.loading)
         self.instructions.setText(instructions)
+        # Linha sem texto não ocupa espaço: sobra só título e indicador.
+        self.loading.setVisible(bool(message))
+        self.instructions.setVisible(bool(instructions))
         self.loading_spinner.show()
         self.btn_voltar.hide()
         self.btn_voltar.setEnabled(False)
@@ -275,26 +271,21 @@ class PagamentoScreen(QWidget):
         self.failure_return_timer.stop()
         cancelling = self.parent.compra_session.cancellation_requested
         if cancelling:
-            self.attention_page.title.setText("CANCELANDO COMPRA")
-            self.attention_page.message.setText(
-                "Estamos confirmando o encerramento da cobrança."
-            )
-            self.attention_support.setText(
-                "Se a maquininha ainda mostrar a cobrança, cancele a operação nela. "
-                "O terminal continuará verificando o resultado."
-            )
-            self.cancel_payment_button.setText("CANCELAMENTO SOLICITADO")
+            self.attention_page.title.setText(texts.PAYMENT_CANCELLING_TITLE)
+            self.attention_page.message.setText(texts.PAYMENT_CANCELLING_MESSAGE)
+            self.attention_support.setText(texts.PAYMENT_CANCELLING_SUPPORT)
+            self.attention_support.show()
+            self.cancel_payment_button.setText(texts.PAYMENT_CANCEL_REQUESTED)
             self.cancel_payment_button.setEnabled(False)
         else:
-            self.attention_page.title.setText("PAGAMENTO AINDA NÃO CONCLUÍDO" if warning else "FINALIZE NA MAQUININHA")
-            self.attention_page.message.setText(
-                "Pressione o botão verde e escolha a forma de pagamento."
+            self.attention_page.title.setText(
+                texts.PAYMENT_PENDING_TITLE if warning
+                else texts.PAYMENT_MACHINE_TITLE
             )
-            self.attention_support.setText(
-                "Se cancelar Débito, Crédito ou outra opção, pressione o botão "
-                "verde novamente para escolher outra."
-            )
-            self.cancel_payment_button.setText("CANCELAR COMPRA")
+            self.attention_page.message.setText(texts.PAYMENT_MACHINE_MESSAGE)
+            self.attention_support.setText(texts.PAYMENT_PENDING_SUPPORT)
+            self.attention_support.setVisible(bool(warning))
+            self.cancel_payment_button.setText(texts.PAYMENT_CANCEL)
             self.cancel_payment_button.setEnabled(True)
         self.pages.setCurrentWidget(self.attention_page)
         if not self.attention_recheck_timer.isActive():
@@ -367,6 +358,9 @@ class PagamentoScreen(QWidget):
             )
             self.mostrar_reconciliacao_pendente(origin="PAYMENT_ALREADY_ACTIVE")
             return
+        if stage == "payment_not_configured":
+            self._payment_unavailable("PAYMENT_START_REFUSED")
+            return
         if stage == "price_changed":
             self.parent.terminal.aplicar_precos_atualizados(context)
             self.parent.terminal.solicitar_sync_produtos("PRICE_CHANGED")
@@ -381,9 +375,9 @@ class PagamentoScreen(QWidget):
                 return
             self.parent.compra_session.mark_waiting()
             self._show_loading(
-                "CONFIRMANDO PAGAMENTO",
-                "Verificando se a cobrança foi enviada...",
-                "A conexão oscilou. Não tente pagar novamente enquanto confirmamos o estado.",
+                texts.PAYMENT_CONFIRMING_TITLE,
+                texts.PAYMENT_CHECK_SENT,
+                texts.PAYMENT_CHECK_SENT_HINT,
             )
             self.poll_timer.start(self.POLL_INTERVAL_MS)
             self._retomar_inicio_point()
@@ -497,9 +491,9 @@ class PagamentoScreen(QWidget):
             self._show_attention()
         else:
             self._show_loading(
-                "VERIFICANDO PAGAMENTO",
-                "Conexão restaurada. Confirmando o envio da cobrança...",
-                "Não tente pagar novamente enquanto consultamos o servidor.",
+                texts.PAYMENT_VERIFYING_TITLE,
+                texts.PAYMENT_RECONNECTED,
+                texts.PAYMENT_RECONNECTED_HINT,
             )
         if session.order_id:
             self.reconciliar_estado()
@@ -539,17 +533,16 @@ class PagamentoScreen(QWidget):
         self.operation_timer.stop()
         self.failure_return_timer.stop()
         self.attention_recheck_timer.stop()
-        self.title.setText("AGUARDANDO PAGAMENTO")
-        self.loading.setText("Estamos verificando a cobrança atual.")
+        self.title.setText(texts.PAYMENT_WAITING_TITLE)
+        self.loading.setText(texts.PAYMENT_WAITING)
+        self.loading.show()
         self.loading.setProperty("state", "loading")
         self.loading.style().unpolish(self.loading)
         self.loading.style().polish(self.loading)
-        self.instructions.setText(
-            "Verifique se a maquininha está ligada e conectada. "
-            "Não inicie outro pagamento."
-        )
+        self.instructions.setText(texts.PAYMENT_WAITING_HINT)
+        self.instructions.show()
         self.loading_spinner.show()
-        self.btn_voltar.setText("VERIFICAR NOVAMENTE")
+        self.btn_voltar.setText(texts.PAYMENT_CHECK_AGAIN)
         self.btn_voltar.show()
         self.btn_voltar.setEnabled(True)
         self.pages.setCurrentWidget(self.loading_page)
@@ -608,7 +601,7 @@ class PagamentoScreen(QWidget):
             return
         if not session.order_id:
             session.clear_unresolved_after_authoritative_absence()
-            self.parar_espera()
+            self.parent.reset_compra(outcome="cancelled")
             self.parent.setCurrentWidget(self.parent.welcome)
 
     def _active_recovery_failed(self, expected_attempt, origin, message):
@@ -656,6 +649,9 @@ class PagamentoScreen(QWidget):
         if attempt != self.current_attempt:
             return
         if cart_id != self.parent.compra_session.cart_id:
+            return
+        if context and context.get("stage") == "payment_not_configured":
+            self._payment_unavailable("PAYMENT_RESUME_REFUSED")
             return
         if context and context.get("orderId"):
             recovery = {
@@ -743,9 +739,11 @@ class PagamentoScreen(QWidget):
         point_request_running = bool(
             self.point_worker is not None and self.point_worker.isRunning()
         )
+        # O cart pode existir só para vincular o cliente. Sem tentativa em voo não há
+        # cobrança a verificar, e a descoberta nunca encerraria essa sessão expirada.
         if (
             not session.order_id
-            and not session.cart_id
+            and (not session.cart_id or not session.payment_in_flight)
             and not point_request_running
         ):
             self._finish_expired_session()
@@ -757,9 +755,9 @@ class PagamentoScreen(QWidget):
             self._show_attention(warning=True)
         else:
             self._show_loading(
-                "CONFIRMANDO PAGAMENTO",
-                "Verificando se a cobrança foi criada...",
-                "O tempo terminou. Não inicie outra compra.",
+                texts.PAYMENT_CONFIRMING_TITLE,
+                texts.PAYMENT_CHECK_CREATED,
+                texts.PAYMENT_CHECK_CREATED_HINT,
             )
         self.final_recovery_timer.start(self.FINAL_RECONCILIATION_GRACE_MS)
         self.poll_timer.start(self.POLL_INTERVAL_MS)
@@ -770,20 +768,26 @@ class PagamentoScreen(QWidget):
 
     def _show_definitive_failure(self, status):
         normalized = str(status or "FAILED").upper()
-        self.error_reason.setText(
-            self.FAILURE_MESSAGES.get(normalized, self.FAILURE_MESSAGES["FAILED"])
-        )
+        reason = self.FAILURE_MESSAGES.get(normalized, self.FAILURE_MESSAGES["FAILED"])
+        self.error_reason.setText(reason)
+        self.error_reason.setVisible(bool(reason))
         self.error_retry.setEnabled(True)
         self.pages.setCurrentWidget(self.error_page)
-        self.parent.compra_session.prepare_retry()
+        shake(self.error_page.icon)
+        session = self.parent.compra_session
+        # Estorno não aceita nova tentativa, e cobrança adotada é de outro carrinho.
+        reopenable = (normalized != "REFUNDED" and self.charge_payload is not None
+                      and self.charge_cart_id == session.cart_id)
+        session.prepare_retry()
+        session.lock_cart_after_failure(self.charge_payload if reopenable else None)
         self.failure_return_timer.start(self.FAILURE_RETURN_MS)
 
     def _safe_failure(self, message):
         """Falha operacional antes de um resultado financeiro definitivo."""
         self._show_loading(
-            "PAGAMENTO NÃO CONCLUÍDO",
+            texts.PAYMENT_NOT_CONCLUDED_TITLE,
             message,
-            "Os produtos continuam na lista da compra.",
+            texts.PAYMENT_NOT_CONCLUDED_HINT,
         )
         self.loading_spinner.hide()
         self.loading.setProperty("state", "error")
@@ -791,14 +795,37 @@ class PagamentoScreen(QWidget):
         self.loading.style().polish(self.loading)
         self.operation_timer.stop()
         self.btn_voltar.show()
-        self.btn_voltar.setText("VOLTAR À COMPRA")
+        self.btn_voltar.setText(texts.PAYMENT_BACK_TO_CART)
         self.btn_voltar.setEnabled(True)
         self.parent.compra_session.prepare_retry()
 
+    def _payment_unavailable(self, origin):
+        """Recusa definitiva do backend: nenhuma cobrança existe para reconciliar."""
+        logger.warning(
+            "[PAYMENT-UI] pagamento indisponível no Terminal origin=%s cartId=%s",
+            origin, self.parent.compra_session.cart_id,
+        )
+        self.poll_timer.stop()
+        marcar = getattr(self.parent, "marcar_pagamento_indisponivel", None)
+        if marcar is not None:
+            marcar(origin)
+        self._safe_failure(texts.PAYMENT_UNAVAILABLE)
+        if self.parent.compra_session.started_at is None:
+            # Tentativa retomada após reinício: não há itens para voltar.
+            self._voltar_lista()
+
     def _voltar_lista(self):
-        if not self.parent.compra_session.payment_in_flight:
-            self.failure_return_timer.stop()
-            self.parent.setCurrentWidget(self.parent.terminal)
+        session = self.parent.compra_session
+        if session.payment_in_flight:
+            return
+        self.failure_return_timer.stop()
+        if session.started_at is None:
+            # Pagamento recuperado após reiniciar: os itens não existem mais, e
+            # manter o carrinho levaria o cliente dele para a próxima compra.
+            self.parent.reset_compra(outcome="cancelled")
+            self.parent.setCurrentWidget(self.parent.welcome)
+            return
+        self.parent.setCurrentWidget(self.parent.terminal)
 
     def _attention_timeout(self):
         if not self.parent.compra_session.payment_in_flight:
@@ -815,9 +842,9 @@ class PagamentoScreen(QWidget):
         if self.timeout_pending and not session.order_id and not session.cart_id:
             if self.point_worker is not None and self.point_worker.isRunning():
                 self._show_loading(
-                    "CONFIRMANDO PAGAMENTO",
-                    "Aguardando a conclusão segura da operação...",
-                    "Não inicie outra compra enquanto verificamos se houve cobrança.",
+                    texts.PAYMENT_CONFIRMING_TITLE,
+                    texts.PAYMENT_SAFE_CONCLUSION,
+                    texts.PAYMENT_SAFE_CONCLUSION_HINT,
                 )
                 return
             self._finish_expired_session()

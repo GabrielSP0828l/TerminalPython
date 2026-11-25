@@ -1,5 +1,6 @@
 from PyQt5.QtCore import Qt, QTimer
 from PyQt5.QtWidgets import (
+    QBoxLayout,
     QFrame,
     QHBoxLayout,
     QLabel,
@@ -13,9 +14,11 @@ from PyQt5.QtWidgets import (
 )
 
 from app247_terminal.services.wifi_service import WifiService, WifiWorker
-from app247_terminal.ui.styles.animated_svg import AnimatedSvgWidget
+from app247_terminal.ui import texts
+from app247_terminal.ui.brand import BrandLoader
+from app247_terminal.ui.responsive import follow_layout_profile
 from app247_terminal.ui.styles.theme import Theme
-from app247_terminal.ui.styles.tokens import Colors, Spacing
+from app247_terminal.ui.styles.tokens import Spacing
 from app247_terminal.ui.screens.keyboard import VirtualKeyboard
 from app247_terminal.services import shutdown_budget
 
@@ -46,6 +49,7 @@ class WifiScreen(QWidget):
         self.feedback_page = self._build_feedback_page()
         for page in (self.main_page, self.password_page, self.feedback_page):
             self.pages.addWidget(page)
+        follow_layout_profile(self._apply_compact)
 
     def _build_main_page(self):
         page = QWidget(self)
@@ -68,11 +72,14 @@ class WifiScreen(QWidget):
         status_card.setObjectName("wifiStatusCard")
         status_layout = QHBoxLayout(status_card)
         status_layout.setContentsMargins(Spacing.LG, Spacing.MD, Spacing.LG, Spacing.MD)
+        self.status_layout = status_layout
         current = QVBoxLayout()
-        self.current_state = QLabel("Verificando Wi-Fi...")
+        self.current_state = QLabel(texts.WIFI_CHECKING)
         self.current_state.setObjectName("wifiCurrentSsid")
+        self.current_state.setWordWrap(True)
         self.current_details = QLabel()
         self.current_details.setObjectName("wifiCurrentDetails")
+        self.current_details.setWordWrap(True)
         current.addWidget(self.current_state)
         current.addWidget(self.current_details)
         self.disconnect_button = QPushButton("DESCONECTAR")
@@ -96,7 +103,7 @@ class WifiScreen(QWidget):
         self.network_layout.setContentsMargins(0, 0, Spacing.SM, 0)
         self.network_layout.setSpacing(Spacing.SM)
         self.network_scroll.setWidget(self.network_container)
-        self.empty_networks = QLabel("Atualizando redes...")
+        self.empty_networks = QLabel()
         self.empty_networks.setProperty("role", "pageSubtitle")
         self.empty_networks.setAlignment(Qt.AlignCenter)
         self.network_layout.addWidget(self.empty_networks)
@@ -160,7 +167,7 @@ class WifiScreen(QWidget):
         root.setContentsMargins(Spacing.XL, Spacing.XL, Spacing.XL, Spacing.XL)
         root.setSpacing(Spacing.LG)
         root.addStretch(1)
-        self.feedback_spinner = AnimatedSvgWidget("tube-spinner.svg", Colors.INFO, page)
+        self.feedback_spinner = BrandLoader(page)
         self.feedback_spinner.setFixedSize(112, 112)
         self.feedback_title = QLabel()
         self.feedback_title.setProperty("role", "pageTitle")
@@ -189,6 +196,17 @@ class WifiScreen(QWidget):
         root.addLayout(self.feedback_actions)
         return page
 
+    def _apply_compact(self, compact):
+        """Em pé (600 px) o botão do status desce para baixo do SSID/IP.
+
+        Lado a lado, SSID + DESCONECTAR passam de 600 px no display real;
+        a janela fullscreen cresce para o mínimo do layout e não volta a
+        encolher, cortando as demais telas (BUG-062).
+        """
+        self.status_layout.setDirection(
+            QBoxLayout.TopToBottom if compact else QBoxLayout.LeftToRight
+        )
+
     def show_page(self):
         self._page_active = True
         self.show_main()
@@ -205,9 +223,10 @@ class WifiScreen(QWidget):
             return
         self.pages.setCurrentWidget(self.main_page)
         self.refresh_button.setEnabled(False)
-        self.current_state.setText("Verificando Wi-Fi...")
-        self.current_details.setText("Buscando redes disponíveis")
-        self._set_network_message("Atualizando redes...")
+        # Um único status por vez: enquanto verifica, a lista fica vazia.
+        self.current_state.setText(texts.WIFI_CHECKING)
+        self.current_details.setText("")
+        self._clear_networks()
         self._start_worker("snapshot", {}, self._snapshot_ready, self._snapshot_failed)
 
     def _snapshot_ready(self, snapshot):
@@ -293,7 +312,7 @@ class WifiScreen(QWidget):
         self.password_input.clear()
 
     def _connect(self, network, password):
-        self._show_loading("CONECTANDO AO WI-FI...", network.ssid, "Aguarde a confirmação da rede.")
+        self._show_loading(texts.WIFI_CONNECTING_TITLE, network.ssid, "")
         self._retry_action = (network, None)
         self._start_worker(
             "connect", {"network": network, "password": password},
@@ -346,7 +365,7 @@ class WifiScreen(QWidget):
             )
         if not self._confirm_action("Desconectar do Wi-Fi", message, "DESCONECTAR"):
             return
-        self._show_loading("DESCONECTANDO WI-FI...", "", "Aguarde alguns instantes.")
+        self._show_loading(texts.WIFI_DISCONNECTING_TITLE, "", "")
         self._retry_action = "refresh"
         self._start_worker("disconnect", {}, self._disconnect_ready, self._generic_failed)
 
@@ -358,7 +377,7 @@ class WifiScreen(QWidget):
     def enable_wifi(self):
         if self._worker_running():
             return
-        self._show_loading("ATIVANDO WI-FI...", "", "Aguarde alguns instantes.")
+        self._show_loading(texts.WIFI_ENABLING_TITLE, "", "")
         self._retry_action = "refresh"
         self._start_worker("enable_wifi", {}, self._enable_ready, self._generic_failed)
 

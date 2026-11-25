@@ -1,9 +1,19 @@
 from dataclasses import dataclass
 from enum import Enum
+import re
 import time
 
 
 CUSTOMER_LINK_PREFIX = "app247://customer-link/"
+APP_QR_SCHEME = "app247"
+# Leitores HID configurados com outro layout de teclado (US x ABNT2) trocam
+# ":" e "/" por outros símbolos (ex.: "app247Ç;;customer-link;..."). Letras,
+# dígitos, "-" e "_" saem iguais, então o QR é reconhecido pela estrutura e os
+# separadores podem ser qualquer não alfanumérico.
+_CUSTOMER_LINK_PATTERN = re.compile(
+    r"app247[^A-Za-z0-9]{0,4}customer-link[^A-Za-z0-9]{0,2}([A-Za-z0-9_-]{43})",
+    re.IGNORECASE,
+)
 
 
 class ScanType(Enum):
@@ -31,15 +41,10 @@ class ScannerRouter:
         value = str(raw or "").strip()
         if not value:
             return ScanResult(ScanType.UNKNOWN, "")
-        if value.startswith(CUSTOMER_LINK_PREFIX):
-            opaque = value[len(CUSTOMER_LINK_PREFIX):]
-            if len(opaque) == 43 and all(
-                character.isalnum() or character in "-_" for character in opaque
-            ):
-                result = ScanResult(ScanType.CUSTOMER_LINK_TOKEN, opaque)
-            else:
-                result = ScanResult(ScanType.UNKNOWN, value)
-        elif "://" in value:
+        customer_link = _CUSTOMER_LINK_PATTERN.fullmatch(value)
+        if customer_link:
+            result = ScanResult(ScanType.CUSTOMER_LINK_TOKEN, customer_link.group(1))
+        elif value.lower().startswith(APP_QR_SCHEME) or "://" in value:
             result = ScanResult(ScanType.UNKNOWN, value)
         else:
             result = ScanResult(ScanType.PRODUCT_BARCODE, value)

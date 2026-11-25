@@ -91,6 +91,28 @@ class SafeShutdownTest(unittest.TestCase):
         window._parar_servicos.assert_called_once()
         app.quit.assert_called_once()
 
+    def test_external_signal_is_recorded_but_admin_shutdown_is_not(self):
+        session = SimpleNamespace(payment_in_flight=False, order_id=None)
+        window = SimpleNamespace(
+            _shutdown_started=False,
+            _shutdown_signal=None,
+            compra_session=session,
+            encerrar_terminal=MagicMock(),
+        )
+        MainWindow.encerrar_por_sinal(window, "SIGTERM")
+        self.assertEqual("SIGTERM", MainWindow.shutdown_signal.fget(window))
+        window.encerrar_terminal.assert_called_once()
+
+        # Sinal chegando depois do "Fechar Terminal" não muda o motivo.
+        admin = SimpleNamespace(
+            _shutdown_started=True,
+            _shutdown_signal=None,
+            compra_session=session,
+            encerrar_terminal=MagicMock(),
+        )
+        MainWindow.encerrar_por_sinal(admin, "SIGTERM")
+        self.assertIsNone(MainWindow.shutdown_signal.fget(admin))
+
 
 if __name__ == "__main__":
     unittest.main()

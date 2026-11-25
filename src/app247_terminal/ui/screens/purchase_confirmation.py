@@ -1,6 +1,6 @@
 import logging
 
-from PyQt5.QtCore import Qt
+from PyQt5.QtCore import QRect, Qt, QTimer
 from PyQt5.QtWidgets import (
     QFrame,
     QHBoxLayout,
@@ -11,6 +11,7 @@ from PyQt5.QtWidgets import (
     QWidget,
 )
 
+from app247_terminal.ui.inactivity import InactivityPrompt
 from app247_terminal.ui.styles.theme import Theme
 from app247_terminal.ui.styles.tokens import Spacing, TouchSize
 from app247_terminal.ui.screens.session_timer import SessionTimerLabel
@@ -32,6 +33,7 @@ class ConfirmacaoCompraScreen(QWidget):
         self.setStyleSheet(Theme.purchase_confirmation_stylesheet())
         self._checkout_interactions_enabled = True
         self._confirm_in_progress = False
+        self._name_labels = []
 
         root = QVBoxLayout(self)
         root.setContentsMargins(Spacing.LG, Spacing.LG, Spacing.LG, Spacing.LG)
@@ -99,6 +101,9 @@ class ConfirmacaoCompraScreen(QWidget):
         root.addWidget(self.card, 1)
         root.addWidget(total_card)
         root.addLayout(actions)
+        self.session_timer.follow_orientation(title_row, root, 1)
+        # Sobre o resumo: título (relógio), total e ações ficam livres.
+        self.inactivity_prompt = InactivityPrompt(self.card, self)
 
     @property
     def carrinho(self):
@@ -127,6 +132,7 @@ class ConfirmacaoCompraScreen(QWidget):
         quantity = self.carrinho.quantidade_total_itens()
         suffix = "item" if quantity == 1 else "itens"
         self.item_count.setText(f"{quantity} {suffix}")
+        self._name_labels = []
         for cart_item in self.carrinho.listar_itens():
             row = QFrame()
             row.setProperty("role", "information")
@@ -137,14 +143,15 @@ class ConfirmacaoCompraScreen(QWidget):
             name = QLabel(str(cart_item.produto.nome))
             name.setProperty("role", "confirmationProductName")
             name.setWordWrap(True)
+            self._name_labels.append(name)
             quantity = QLabel(f"Qtd: {cart_item.quantidade}")
             quantity.setProperty("role", "confirmationProductQuantity")
             if cart_item.produto.em_promocao:
                 original = cart_item.produto.preco_original * cart_item.quantidade
                 details.addWidget(QLabel(
-                    f"De {format_brl(original)} · PROMOÇÃO".replace(".", ",")
+                    f"De {format_brl(original)} · PROMOÇÃO"
                 ))
-            price = QLabel(format_brl(cart_item.subtotal()).replace(".", ","))
+            price = QLabel(format_brl(cart_item.subtotal()))
             price.setProperty("role", "confirmationProductPrice")
             price.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
             details.addWidget(name)
@@ -152,7 +159,32 @@ class ConfirmacaoCompraScreen(QWidget):
             layout.addLayout(details, 3)
             layout.addWidget(price, 1)
             self.items_layout.addWidget(row)
-        self.total.setText(self.carrinho.total_formatado().replace(".", ","))
+        self.total.setText(self.carrinho.total_formatado())
+        self._fit_items_height()
+
+    def _fit_items_height(self):
+        """Dá a cada nome a altura que a quebra em linhas realmente pede.
+
+        Dentro do QScrollArea a altura vem do sizeHint, que ignora a largura
+        real do label; nomes de três linhas ficavam espremidos e cortados.
+        """
+        self.items_layout.activate()
+        for name in self._name_labels:
+            if name.width() > 0:
+                bounds = name.fontMetrics().boundingRect(
+                    QRect(0, 0, name.width(), 10000),
+                    Qt.TextWordWrap | Qt.AlignLeft, name.text(),
+                )
+                name.setMinimumHeight(bounds.height())
+
+    def resizeEvent(self, event):
+        super().resizeEvent(event)
+        self._fit_items_height()
+
+    def showEvent(self, event):
+        super().showEvent(event)
+        # As larguras finais só existem depois do primeiro ciclo de layout.
+        QTimer.singleShot(0, self._fit_items_height)
 
     def voltar(self):
         if not self._checkout_interactions_enabled:

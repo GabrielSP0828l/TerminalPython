@@ -68,12 +68,6 @@ class ConfiguracaoScreen(QWidget):
         title.setAlignment(Qt.AlignCenter)
         self.menu_title = title
 
-        subtitle = QLabel(
-            "Área local de manutenção. As configurações do backend e do Mercado Pago não são alteradas aqui."
-        )
-        subtitle.setProperty("role", "pageSubtitle")
-        subtitle.setAlignment(Qt.AlignCenter)
-        subtitle.setWordWrap(True)
 
         self.wifi_button = QPushButton("CONFIGURAR WI-FI")
         self.wifi_button.setProperty("variant", "primary")
@@ -85,7 +79,6 @@ class ConfiguracaoScreen(QWidget):
 
         self.reset_button = QPushButton("RESTAURAR PADRÕES DE FÁBRICA")
         self.reset_button.setProperty("variant", "danger")
-        self.reset_button.setProperty("primaryAction", True)
         self.reset_button.clicked.connect(self.confirmar_reset)
 
         self.close_terminal_button = QPushButton("FECHAR TERMINAL")
@@ -97,7 +90,6 @@ class ConfiguracaoScreen(QWidget):
         self.back_button.clicked.connect(self.voltar)
 
         layout.addWidget(title)
-        layout.addWidget(subtitle)
         layout.addSpacing(Spacing.SM)
         layout.addWidget(self.wifi_button)
         layout.addWidget(self.display_button)

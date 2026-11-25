@@ -47,7 +47,7 @@ class Carrinho:
     def total(self):
 
         return sum((
-            item.produto.preco * item.quantidade
+            item.subtotal()
             for item in self.items
         ), Decimal("0"))
 
@@ -131,7 +131,7 @@ class Carrinho:
         texto = "\n=== CARRINHO ===\n"
 
         for item in self.items:
-            subtotal = item.produto.preco * item.quantidade
+            subtotal = item.subtotal()
 
             texto += (
                 f"{item.produto.nome} "

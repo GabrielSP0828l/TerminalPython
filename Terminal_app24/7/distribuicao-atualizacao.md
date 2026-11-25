@@ -119,6 +119,12 @@ manual das instalações 1.0.0/1.0.1 (`App247 Terminal.desktop`, que chamava o
 launcher fora da unit) é movido para `~/.local/share/app247/legacy-desktop/`,
 evitando dois atalhos; outros arquivos da área de trabalho não são tocados.
 
+No Raspberry Pi OS o pcmanfm pergunta "Executar / Executar no Terminal" para
+todo `.desktop` da área de trabalho. O instalador grava `quick_exec=1` em
+`~/.config/libfm/libfm.conf` do usuário gráfico (preservando as outras chaves;
+`APP247_DESKTOP_QUICK_EXEC=false` desativa) para o atalho abrir com um toque.
+Vale no próximo login ou após `pcmanfm --reconfigure` (BUG-057).
+
 Rollback do `--activate`: antes de gravar qualquer arquivo fora de `releases/`,
 o instalador guarda um snapshot temporário de launcher, unit, link de enable,
 política de Wi-Fi, ícone, atalhos e autostart. Se algo falhar depois da troca de
@@ -128,7 +134,8 @@ existiam) junto com o symlink, e a unit anterior é recarregada antes do restart
 `systemctl --user stop`, reboot e `poweroff` enviam `SIGTERM`: o Terminal faz o
 mesmo encerramento cooperativo do painel administrativo dentro de
 `APP247_SHUTDOWN_BUDGET_SECONDS` (padrão 20 s, abaixo de `TimeoutStopSec=30`) e
-sai com código 0, sem reinício pelo `Restart=on-failure` (BUG-047).
+sai com `128+N` (143 para `SIGTERM`), que `SuccessExitStatus` trata como
+sucesso. Parada explícita pelo systemd nunca reinicia (BUG-047, BUG-063).
 
 No `--activate`, o instalador resolve o usuário gráfico por override,
 `SUDO_USER` ou uma única sessão local Wayland/X11 ativa no `loginctl`. A unit
@@ -146,8 +153,72 @@ exceção: pertence ao usuário gráfico, grupo `app247`, modo `0600`, e o runti
 recusa UID diferente ou qualquer leitura de grupo/outros. Assim SQLite,
 identidade, sync e orientação são compartilhados sem tornar segredos públicos.
 
-A unit usa `Restart=on-failure`, limite de cinco partidas por minuto e ignora
-somente erro de orientação no `ExecStartPre`. O fechamento pelo painel chama
-`QApplication.quit()` após parar workers, timers, socket, heartbeat, sync,
-telemetria e monitores; `main` retorna `0` para esse caminho intencional. Crash
-ou saída não-zero continuam reiniciáveis.
+A unit usa `Restart=always` com `RestartPreventExitStatus=0`, limite de cinco
+partidas por minuto, e ignora somente erro de orientação no `ExecStartPre`.
+**Só o painel administrativo fecha o Terminal de vez:** "Fechar Terminal" (e a
+restauração local/remota) chama `QApplication.quit()` após parar workers,
+timers, socket, heartbeat, sync, telemetria e monitores, e `main` retorna `0`,
+o único código que não reabre. Sinal vindo de fora do systemd (`pkill`,
+Ctrl+C, `SIGHUP` de fim de sessão) sai com `128+N` e o systemd reabre em 3 s;
+crash ou qualquer outra saída também reabrem. A janela ignora `closeEvent` sem
+autorização (Alt+F4, fechar pela barra de tarefas) e a tecla Esc (BUG-063).
+
+No labwc, o instalador grava em `~/.config/labwc/rc.xml` do usuário gráfico
+uma regra (bloco `app247:kiosk-rule`, substituído a cada instalação) que tira a
+barra de título e a entrada na barra de tarefas das janelas `app_id
+app247-terminal`, inclusive dos avisos. Assim o toque não alcança o botão de
+minimizar (BUG-064). `APP247_LABWC_KIOSK_RULE=false` desliga a regra.
+
+## Release 1.0.8
+
+Preparada em 25 de novembro de 2026 sobre a 1.0.7, para levar ao campo o
+registro do tamanho da janela (BUG-066): linhas `[WINDOW]` no log a cada
+mudança de tamanho, de estado ou da tela, e warning se a janela do kiosk
+continuar diferente da tela. Sem outras mudanças de comportamento, de
+instalação ou de dados. A 1.0.7 já instalada impede reinstalar com a mesma
+versão (`install.sh` recusa release divergente), por isso a nova versão.
+
+Passos iguais aos da 1.0.7, com `1.0.8`. Validação de campo pendente: BUG-066
+(conferir as linhas `[WINDOW]` em `/var/lib/app247/logs/terminal.log`), além
+das pendências da 1.0.7.
+
+## Release 1.0.7
+
+Preparada em 25 de novembro de 2026 sobre `v1.0.6`. É a primeira release em
+que o pacote instalado no campo deve sair de uma tag: a 1.0.6 do Raspberry foi
+um build local feito sobre `f94afa9`, diferente da tag `v1.0.6` (`a38bba1`).
+
+Mudanças desde `v1.0.6`:
+
+- identidade visual 24/7, textos enxutos, card do carrinho, aviso de
+  inatividade e leitura do QR na tela inicial (`f94afa9`);
+- card de status do Wi-Fi empilha em retrato e não alarga a janela (BUG-062);
+- só o painel administrativo fecha o Terminal de vez; `pkill`, Ctrl+C e
+  `SIGHUP` saem com `128+N` e o systemd reabre (BUG-063);
+- janelas sem barra do labwc, sem minimizar no quiosque (BUG-064);
+- ping/pong no socket de pagamento detecta conexão meio-aberta (BUG-049);
+- log rotativo em `/var/lib/app247/logs/terminal.log` (BUG-050);
+- Terminal sem maquininha não fica mais preso em "Confirmando pagamento";
+  o pagamento é recusado antes de criar carrinho, e uma tentativa já presa é
+  liberada sozinha depois da atualização (BUG-065).
+
+Na instalação, BUG-063 e BUG-064 dependem do `install.sh` desta versão: ele
+reinstala a unit e grava a regra do labwc. O diretório de logs é criado pelo
+próprio app. Nenhuma migração de SQLite ou de `terminal.json`.
+
+Passos, numa máquina ARM com a mesma arquitetura do Terminal (o host amd64 não
+gera o pacote do Raspberry):
+
+1. checkout do commit `chore(release): versão 1.0.7`;
+2. `scripts/build.sh`;
+3. `APP247_UPDATE_PRIVATE_KEY=<chave> scripts/package-release.sh 1.0.7`;
+4. `scripts/verify-release.sh` com o `.tar.gz`, o manifesto e o `.sig`;
+5. no Terminal: `install.sh` e depois `install.sh --activate`; relogar se o
+   instalador avisar mudança de grupo;
+6. criar a tag anotada `v1.0.7` nesse commit com o SHA-256 do pacote na
+   mensagem, como na `v1.0.3`.
+
+Validação de campo pendente desta versão: BUG-049, BUG-050, BUG-063, BUG-064
+e BUG-065.
+Build de verificação amd64 em 25/11/2026: `--version` retorna `1.0.7`, a GUI
+sobe offscreen e grava o log persistente até o encerramento por `SIGTERM`.

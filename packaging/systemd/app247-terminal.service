@@ -12,7 +12,12 @@ Type=simple
 # Falha de orientação é não fatal; o aplicativo usa a orientação atual.
 ExecStartPre=-/usr/local/bin/app247-terminal-launcher --apply-display
 ExecStart=/usr/local/bin/app247-terminal-launcher
-Restart=on-failure
+# Só o painel administrativo fecha o Terminal: ele sai com 0, que não reinicia.
+# Sinal externo (pkill, Ctrl+C, SIGHUP) sai com 128+N e reabre; crash também.
+# `systemctl stop` nunca reinicia e os códigos de sinal contam como sucesso.
+Restart=always
+RestartPreventExitStatus=0
+SuccessExitStatus=129 130 143
 RestartSec=3
 TimeoutStopSec=30
 UMask=0007

@@ -1,6 +1,8 @@
 from PyQt5.QtCore import Qt
 from PyQt5.QtWidgets import QFrame, QLabel, QPushButton, QVBoxLayout, QWidget
 
+from app247_terminal.ui import texts
+from app247_terminal.ui.brand import BrandLoader
 from app247_terminal.ui.styles.theme import Theme
 from app247_terminal.ui.styles.tokens import Spacing
 
@@ -27,11 +29,11 @@ class OfflineOverlay(QWidget):
         icon = QLabel("!")
         icon.setObjectName("offlineIcon")
         icon.setAlignment(Qt.AlignCenter)
-        self.label = QLabel("SEM CONEXÃO COM O SERVIDOR")
+        self.label = QLabel(texts.OFFLINE_TITLE)
         self.label.setProperty("role", "pageTitle")
         self.label.setAlignment(Qt.AlignCenter)
         self.label.setWordWrap(True)
-        self.sub = QLabel("Tentando reconectar...")
+        self.sub = QLabel(texts.OFFLINE_RETRYING)
         self.sub.setProperty("role", "pageSubtitle")
         self.sub.setAlignment(Qt.AlignCenter)
         self.sub.setWordWrap(True)
@@ -45,7 +47,10 @@ class OfflineOverlay(QWidget):
 
         layout.addWidget(icon)
         layout.addWidget(self.label)
+        loader = BrandLoader(card)
+        loader.setFixedSize(64, 64)
         layout.addWidget(self.sub)
+        layout.addWidget(loader, 0, Qt.AlignHCenter)
         layout.addWidget(self.configure_network_button)
         root.addWidget(card)
 

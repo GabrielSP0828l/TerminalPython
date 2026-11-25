@@ -13,7 +13,6 @@ from app247_terminal.config.settings import (
 )
 from app247_terminal.models.terminal import Terminal
 from app247_terminal.services.terminal_auth import terminal_auth_headers
-from app247_terminal.services.backend_client import terminal_access_state
 from app247_terminal.services import shutdown_budget
 
 
@@ -21,6 +20,7 @@ logger = logging.getLogger(__name__)
 
 
 class TerminalSocket:
+    AUTH_RETRY_SECONDS = 60
 
     def __init__(
         self,
@@ -31,6 +31,7 @@ class TerminalSocket:
         ack_timeout_seconds=HEARTBEAT_ACK_TIMEOUT_SECONDS,
         websocket_factory=websocket.WebSocket,
         credential_store=None,
+        auth_retry_seconds=AUTH_RETRY_SECONDS,
     ):
         self.ws_url = (ws_url or "").rstrip("/")
         self.terminal_path = terminal_path
@@ -39,6 +40,7 @@ class TerminalSocket:
         self.ack_timeout_seconds = ack_timeout_seconds
         self.websocket_factory = websocket_factory
         self.credential_store = credential_store
+        self.auth_retry_seconds = auth_retry_seconds
         self.ws = None
         self._thread = None
         self._stop_event = threading.Event()
@@ -115,13 +117,15 @@ class TerminalSocket:
             except Exception as error:
                 if not self._stop_event.is_set():
                     if self._is_auth_failure(error):
+                        # O handshake não traz código do backend: quem bloqueia a
+                        # operação é o HTTP. Aqui só se reduz o ritmo de tentativas.
                         self.connection_state = "AUTH_REQUIRED"
-                        terminal_access_state.set("AUTH_REQUIRED")
                         logger.error(
-                            "[HEARTBEAT] credencial individual recusada; "
-                            "reprovisionamento administrativo necessario"
+                            "[HEARTBEAT] handshake recusado com 401; "
+                            "nova tentativa em %ss", self.auth_retry_seconds
                         )
-                        return
+                        self._stop_event.wait(self.auth_retry_seconds)
+                        continue
                     self.connection_state = "RECONNECTING"
                     logger.warning("[HEARTBEAT] Backend indisponível: %s", error)
                     self._stop_event.wait(self.retry_seconds)

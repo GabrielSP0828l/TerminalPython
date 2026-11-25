@@ -8,14 +8,16 @@ from PyQt5.QtWidgets import (
     QStackedLayout, QVBoxLayout, QWidget
 )
 
+from app247_terminal.models.purchase_session import POST_PURCHASE_TIMEOUT_SECONDS
 from app247_terminal.models.terminal import Terminal
 from app247_terminal.ui.responsive import follow_layout_profile
 from app247_terminal.services.purchase_api import PurchaseApi, PurchaseApiError, ReceiptSendWorker
-from app247_terminal.ui.styles.svg_icons import ColoredSvgLabel
+from app247_terminal.ui import texts
+from app247_terminal.ui.brand import AnimatedCheck
 from app247_terminal.ui.styles.theme import Theme
 from app247_terminal.ui.styles.tokens import Colors, Spacing
 from app247_terminal.models.money import format_brl
-from app247_terminal.ui.screens.keyboard import EmailKeyboard, NumericKeyboard
+from app247_terminal.ui.screens.keyboard import NumericKeyboard
 from app247_terminal.services import shutdown_budget
 
 
@@ -25,7 +27,7 @@ logger = logging.getLogger(__name__)
 class ConfirmacaoScreen(QWidget):
     """Resultado aprovado; mantém a compra até o cliente tocar em Finalizar."""
 
-    POST_PURCHASE_TIMEOUT_SECONDS = 120
+    POST_PURCHASE_TIMEOUT_SECONDS = POST_PURCHASE_TIMEOUT_SECONDS
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -61,12 +63,11 @@ class ConfirmacaoScreen(QWidget):
         top.addStretch(1)
         self.post_timeout_label = QLabel()
         self.post_timeout_label.setProperty("role", "sessionTimer")
-        top.addWidget(self.post_timeout_label)
+        # Alinhado, o contador fica do tamanho do texto em vez de esticar.
+        top.addWidget(self.post_timeout_label, 0, Qt.AlignRight | Qt.AlignTop)
         root.addLayout(top)
 
-        self.lbl_icon = ColoredSvgLabel(
-            "checked.svg", Colors.PAYMENT_STATE_FOREGROUND, "✓", page
-        )
+        self.lbl_icon = AnimatedCheck(Colors.PAYMENT_STATE_FOREGROUND, page)
         self.lbl_icon.setObjectName("paymentStateIcon")
         self.lbl_icon.setMinimumSize(88, 88)
         self.lbl_icon.setMaximumSize(112, 112)
@@ -98,10 +99,6 @@ class ConfirmacaoScreen(QWidget):
         self.btn_cpf.setToolTip(
             "Aguardando contrato do backend para associar CPF à compra"
         )
-        self.btn_email = self._button(
-            "ENVIAR POR E-MAIL", "stateSecondary"
-        )
-        self.btn_email.clicked.connect(lambda: self._open_receipt_input("EMAIL"))
         self.btn_whatsapp = self._button(
             "ENVIAR POR WHATSAPP", "stateSecondary"
         )
@@ -114,21 +111,21 @@ class ConfirmacaoScreen(QWidget):
         return page
 
     def _apply_compact(self, compact):
-        """Grade 2×2 em paisagem; coluna única no display em pé (600 px)."""
+        """Duas linhas em paisagem; coluna única no display em pé (600 px)."""
         if compact:
             positions = (
-                (self.btn_finalizar, 0, 0), (self.btn_whatsapp, 1, 0),
-                (self.btn_email, 2, 0), (self.btn_cpf, 3, 0),
+                (self.btn_finalizar, 0, 0, 1), (self.btn_whatsapp, 1, 0, 1),
+                (self.btn_cpf, 2, 0, 1),
             )
         else:
             positions = (
-                (self.btn_finalizar, 0, 0), (self.btn_cpf, 0, 1),
-                (self.btn_whatsapp, 1, 0), (self.btn_email, 1, 1),
+                (self.btn_finalizar, 0, 0, 1), (self.btn_cpf, 0, 1, 1),
+                (self.btn_whatsapp, 1, 0, 2),
             )
-        for button, _row, _column in positions:
+        for button, _row, _column, _span in positions:
             self.success_actions.removeWidget(button)
-        for button, row, column in positions:
-            self.success_actions.addWidget(button, row, column)
+        for button, row, column, span in positions:
+            self.success_actions.addWidget(button, row, column, 1, span)
 
     def _build_input_page(self):
         page = QWidget(self)
@@ -141,6 +138,7 @@ class ConfirmacaoScreen(QWidget):
         self.input_title = QLabel()
         self.input_title.setObjectName("postPaymentNoticeTitle")
         self.input_title.setAlignment(Qt.AlignCenter)
+        self.input_title.setWordWrap(True)
         root.addWidget(self.input_title)
 
         container = QFrame(page)
@@ -155,6 +153,12 @@ class ConfirmacaoScreen(QWidget):
         self.input_error.setObjectName("receiptInputError")
         self.input_error.setAlignment(Qt.AlignCenter)
         self.input_error.setWordWrap(True)
+        # Rótulo fixo: com o texto centralizado o Qt esconde o placeholder
+        # enquanto o campo tem foco, e aqui ele tem foco o tempo todo.
+        self.input_label = QLabel(texts.RECEIPT_PHONE_LABEL, container)
+        self.input_label.setObjectName("receiptInputLabel")
+        self.input_label.setAlignment(Qt.AlignCenter)
+        container_layout.addWidget(self.input_label)
         container_layout.addWidget(self.destination_input)
         container_layout.addWidget(self.input_error)
         root.addWidget(container)
@@ -162,13 +166,9 @@ class ConfirmacaoScreen(QWidget):
         self.keyboard_container = QWidget(page)
         self.keyboard_pages = QStackedLayout(self.keyboard_container)
         self.numeric_keyboard = NumericKeyboard(self.keyboard_container)
-        self.email_keyboard = EmailKeyboard(self.keyboard_container)
         self.numeric_keyboard.set_target(self.destination_input)
-        self.email_keyboard.set_target(self.destination_input)
         self.numeric_keyboard.key_pressed.connect(self._format_phone_input)
-        self.email_keyboard.key_pressed.connect(self._clear_input_error)
         self.keyboard_pages.addWidget(self.numeric_keyboard)
-        self.keyboard_pages.addWidget(self.email_keyboard)
         root.addWidget(self.keyboard_container, 1)
 
         actions = QHBoxLayout()
@@ -193,7 +193,7 @@ class ConfirmacaoScreen(QWidget):
         top.addStretch(1)
         self.notice_timeout_label = QLabel()
         self.notice_timeout_label.setProperty("role", "sessionTimer")
-        top.addWidget(self.notice_timeout_label)
+        top.addWidget(self.notice_timeout_label, 0, Qt.AlignRight | Qt.AlignTop)
         root.addLayout(top)
         root.addStretch(2)
         self.notice_title = QLabel()
@@ -223,14 +223,14 @@ class ConfirmacaoScreen(QWidget):
         total = "R$ 0,00"
         carrinho = None
         if recovered_amount is not None:
-            total = format_brl(Decimal(str(recovered_amount))).replace(".", ",")
+            total = format_brl(Decimal(str(recovered_amount)))
         else:
             terminal = getattr(self.parent_app, "terminal", None)
             carrinho = getattr(terminal, "carrinho", None)
         if recovered_amount is None and carrinho is not None:
             candidate = carrinho.total_formatado()
             if isinstance(candidate, str):
-                total = candidate.replace(".", ",")
+                total = candidate
         self.lbl_total.setText(total)
         session = getattr(self.parent_app, "compra_session", None)
         self.post_purchase_order_id = getattr(session, "order_id", None)
@@ -239,10 +239,10 @@ class ConfirmacaoScreen(QWidget):
             and getattr(session, "state", None) in {"APPROVED", "SUCCESS"}
         )
         self.btn_whatsapp.setEnabled(approved)
-        self.btn_email.setEnabled(approved)
         self.btn_finalizar.setEnabled(approved)
         self.receipt_send_in_progress = False
         self.pages.setCurrentWidget(self.success_page)
+        self.lbl_icon.play()
         self.btn_finalizar.setFocus()
         if approved:
             self._start_post_timeout()
@@ -258,6 +258,7 @@ class ConfirmacaoScreen(QWidget):
     def _show_notice(self, title, message):
         self.notice_title.setText(title)
         self.notice_message.setText(message)
+        self.notice_message.setVisible(bool(message))
         self.pages.setCurrentWidget(self.notice_page)
 
     def _open_receipt_input(self, channel):
@@ -268,18 +269,11 @@ class ConfirmacaoScreen(QWidget):
         self.receipt_channel = channel
         self.destination_input.clear()
         self._clear_input_error()
-        if channel == "WHATSAPP":
-            self.input_title.setText("ENVIAR COMPROVANTE POR WHATSAPP")
-            self.destination_input.setPlaceholderText("(75) 99999-9999")
-            self.destination_input.setMaxLength(19)
-            self.keyboard_pages.setCurrentWidget(self.numeric_keyboard)
-            self.numeric_keyboard.set_target(self.destination_input)
-        else:
-            self.input_title.setText("ENVIAR COMPROVANTE POR E-MAIL")
-            self.destination_input.setPlaceholderText("cliente@email.com")
-            self.destination_input.setMaxLength(160)
-            self.keyboard_pages.setCurrentWidget(self.email_keyboard)
-            self.email_keyboard.set_target(self.destination_input)
+        self.input_title.setText(texts.RECEIPT_INPUT_TITLE)
+        self.destination_input.setPlaceholderText(texts.RECEIPT_PHONE_PLACEHOLDER)
+        self.destination_input.setMaxLength(19)
+        self.keyboard_pages.setCurrentWidget(self.numeric_keyboard)
+        self.numeric_keyboard.set_target(self.destination_input)
         logger.info(
             "[RECEIPT-UI] %s solicitado orderId=%s",
             channel.lower(), self.post_purchase_order_id,
@@ -363,10 +357,7 @@ class ConfirmacaoScreen(QWidget):
             self.post_purchase_order_id, channel,
         )
         self._reset_send_controls()
-        self._show_notice(
-            "COMPROVANTE ENVIADO",
-            "Comprovante enviado com sucesso. O pagamento continua aprovado.",
-        )
+        self._show_notice(texts.RECEIPT_SENT_TITLE, "")
         self._start_post_timeout()
 
     def _receipt_failed(self, message, reason):
@@ -377,8 +368,8 @@ class ConfirmacaoScreen(QWidget):
         )
         self._reset_send_controls()
         self._show_notice(
-            "ENVIO NÃO CONCLUÍDO",
-            message + " O pagamento continua aprovado.",
+            texts.RECEIPT_FAILED_TITLE,
+            message + texts.RECEIPT_FAILED_SUFFIX,
         )
         self._start_post_timeout()
 
@@ -404,9 +395,6 @@ class ConfirmacaoScreen(QWidget):
     @staticmethod
     def _mask_destination(destination):
         value = str(destination)
-        if "@" in value:
-            _, domain = value.split("@", 1)
-            return f"***@{domain}"
         return "*" * max(0, len(value) - 4) + value[-4:]
 
     def finalizar_e_voltar(self):
@@ -436,7 +424,7 @@ class ConfirmacaoScreen(QWidget):
             return
         remaining = max(0, int(self._post_deadline - time.monotonic() + 0.999))
         minutes, seconds = divmod(remaining, 60)
-        text = f"Finalizando em {minutes:02}:{seconds:02}"
+        text = texts.POST_PAYMENT_COUNTDOWN.format(minutes=minutes, seconds=seconds)
         self.post_timeout_label.setText(text)
         self.notice_timeout_label.setText(text)
         if remaining == 0 and not self.receipt_send_in_progress \

@@ -88,6 +88,7 @@ RESET_MARKER_PATH = DATA_DIR / "factory-reset.pending"
 RESET_COMPLETION_MARKER_PATH = DATA_DIR / "factory-reset-completion.pending"
 RESET_BACKUP_DIR = DATA_DIR / "reset-backups"
 RESET_STAGING_DIR = DATA_DIR / "reset-staging"
+LEGACY_LAYOUT_MARKER_PATH = DATA_DIR / "legacy-layout.migrated"
 
 TERMINAL_ADMIN_PASSWORD = _env(
     "APP247_TERMINAL_ADMIN_PASSWORD", "TERMINAL_ADMIN_PASSWORD"
@@ -107,6 +108,11 @@ def _float_setting(name: str, legacy: str, default: float, minimum: float) -> fl
     except (TypeError, ValueError):
         return default
 
+
+# Log rotativo persistente (BUG-050): o journald do equipamento é volátil.
+LOG_DIR = Path(_env("APP247_LOG_DIR", default=str(DATA_DIR / "logs"))).expanduser()
+LOG_MAX_BYTES = _int_setting("APP247_LOG_MAX_BYTES", None, 5 * 1024 * 1024, 64 * 1024)
+LOG_BACKUP_COUNT = _int_setting("APP247_LOG_BACKUP_COUNT", None, 4, 1)
 
 PRODUCT_SYNC_INTERVAL_SECONDS = _int_setting(
     "APP247_PRODUCT_SYNC_INTERVAL_SECONDS", "PRODUCT_SYNC_INTERVAL_SECONDS", 300, 60

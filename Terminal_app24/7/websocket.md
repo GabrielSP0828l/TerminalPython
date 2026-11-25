@@ -25,7 +25,7 @@ O Python só registra sucesso após validar tipo, UUID e presença de `lastPing`
 
 ## Pagamentos
 
-`PaymentListener(QThread)` conecta em `{WS_URL}/payment-socket/{terminalId}`. O socket possui timeout de leitura, fechamento cooperativo e reconexão a cada cinco segundos. Sinais chegam à UI por queued connection.
+`PaymentListener(QThread)` conecta em `{WS_URL}/payment-socket/{terminalId}`. O socket possui timeout de leitura, fechamento cooperativo e reconexão a cada cinco segundos. Sem nenhum frame por 20 s o terminal envia `ping`; sem resposta em 15 s considera a conexão meio-aberta e reconecta (BUG-049). Qualquer frame recebido, inclusive `pong` e `CLOSE`, é tratado em `PaymentListener._handle_frame`. Sinais chegam à UI por queued connection.
 
 O backend publica `PaymentEvent` pós-commit. Ao conectar ou reconectar, `PagamentoScreen` mostra “Verificando pagamento” e consulta `GET /order/{orderId}/status?terminalId=...` quando conhece a Order; sem ela, usa `GET /pagamento/terminal/{terminalId}/ativo`. Essa descoberta ocorre mesmo sem estado em memória, cobrindo evento perdido e versões anteriores do cliente. Durante a espera existe polling HTTP de 10 segundos, reduzido para 30 segundos após falhas repetidas. Eventos e respostas só afetam a UI quando tentativa/`orderId` correspondem à compra ativa; apenas `APPROVED` libera sucesso.
 

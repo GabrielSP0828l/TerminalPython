@@ -1,20 +1,34 @@
-from PyQt5.QtCore import Qt
+import logging
+import time
+
+from PyQt5.QtCore import Qt, QTimer
 from PyQt5.QtGui import QPixmap
 from PyQt5.QtWidgets import QFrame, QLabel, QPushButton, QVBoxLayout, QWidget
 
+from app247_terminal.models.purchase_session import APP_PAYMENT_TIMEOUT_SECONDS
 from app247_terminal.services.purchase_api import AppCheckoutWorker
 from app247_terminal.ui.styles.theme import Theme
 from app247_terminal.ui.styles.tokens import Spacing
 from app247_terminal.services import shutdown_budget
 
 
+logger = logging.getLogger(__name__)
+
+
 class AppPaymentScreen(QWidget):
     """Fluxo legado preservado, mas sem entrada na tela principal da compra."""
 
-    def __init__(self, parent):
+    SCREEN_TIMEOUT_SECONDS = APP_PAYMENT_TIMEOUT_SECONDS
+
+    def __init__(self, parent, clock=None):
         super().__init__(parent)
         self.parent = parent
         self.checkout_worker = None
+        self._clock = clock or time.monotonic
+        self._screen_deadline = None
+        self.screen_timer = QTimer(self)
+        self.screen_timer.setInterval(1000)
+        self.screen_timer.timeout.connect(self._tick_screen_timeout)
         self.setProperty("role", "page")
         self.setObjectName("appPaymentScreen")
         self.setStyleSheet(Theme.app_payment_stylesheet())
@@ -37,7 +51,7 @@ class AppPaymentScreen(QWidget):
         self.total_label = QLabel("R$ 0,00")
         self.total_label.setObjectName("appPaymentTotal")
         self.total_label.setAlignment(Qt.AlignCenter)
-        self.timer_label = QLabel("15:00")
+        self.timer_label = QLabel()
         self.timer_label.setObjectName("appPaymentTimer")
         self.timer_label.setAlignment(Qt.AlignCenter)
 
@@ -67,6 +81,7 @@ class AppPaymentScreen(QWidget):
         root.addWidget(self.card, 1)
 
         self.parent.compra_session.remaining_changed.connect(self.atualizar_contador)
+        self.atualizar_contador(self.parent.compra_session.remaining_seconds())
 
     def iniciar_pagamento(self, valor):
         self.total_label.setText(valor)
@@ -75,6 +90,8 @@ class AppPaymentScreen(QWidget):
         self.qr_label.clear()
         self.status.setText("Preparando checkout...")
         self.status.setProperty("state", "loading")
+        self._screen_deadline = self._clock() + self.SCREEN_TIMEOUT_SECONDS
+        self.screen_timer.start()
         self.atualizar_contador(self.parent.compra_session.remaining_seconds())
         if self.checkout_worker and self.checkout_worker.isRunning():
             return
@@ -108,14 +125,42 @@ class AppPaymentScreen(QWidget):
         self.loading.setText("Não foi possível gerar o pagamento no aplicativo.")
         self.status.setText("O carrinho foi preservado. Tente novamente.")
 
+    def remaining_seconds(self, session_remaining=None):
+        """O menor entre o limite desta tela e o teto da compra."""
+        if session_remaining is None:
+            session_remaining = self.parent.compra_session.remaining_seconds()
+        remaining = max(0, int(session_remaining))
+        if self._screen_deadline is not None:
+            screen_remaining = int(self._screen_deadline - self._clock() + 0.999)
+            remaining = min(remaining, max(0, screen_remaining))
+        return remaining
+
     def atualizar_contador(self, remaining_seconds):
-        minutos, segundos = divmod(max(0, remaining_seconds), 60)
+        minutos, segundos = divmod(self.remaining_seconds(remaining_seconds), 60)
         self.timer_label.setText(f"{minutos:02}:{segundos:02}")
 
+    def _tick_screen_timeout(self):
+        session_remaining = self.parent.compra_session.remaining_seconds()
+        self.atualizar_contador(session_remaining)
+        if self._screen_deadline is None or session_remaining <= 0:
+            # O teto já encerra a compra pelo próprio sinal.
+            return
+        if self.remaining_seconds(session_remaining) > 0:
+            return
+        logger.warning("[APP-PAYMENT] tempo da tela esgotado")
+        self._stop_screen_timeout()
+        self.parent.encerrar_compra_por_inatividade()
+
+    def _stop_screen_timeout(self):
+        self.screen_timer.stop()
+        self._screen_deadline = None
+
     def cancelar_pagamento(self):
+        self._stop_screen_timeout()
         self.parent.setCurrentWidget(self.parent.terminal)
 
     def parar_espera(self):
+        self._stop_screen_timeout()
         self.qr_label.clear()
         if self.checkout_worker is not None and self.checkout_worker.isRunning():
             self.checkout_worker.requestInterruption()

@@ -1,5 +1,4 @@
 import logging
-import re
 
 import requests
 from PyQt5.QtCore import QThread, pyqtSignal
@@ -35,11 +34,12 @@ class PurchaseApi:
     DOMAIN_MESSAGES = {
         "ACTIVE_PAYMENT_ATTEMPT_EXISTS": "Existe um pagamento em andamento.",
         "PAYMENT_ALREADY_ACTIVE": "Existe um pagamento em andamento.",
-        "ORDER_PRICE_NOT_FINALIZED": "O valor da compra ainda nao foi finalizado.",
-        "PURCHASE_NOT_FOUND": "Compra nao encontrada.",
-        "COUPON_MINIMUM_NOT_REACHED": "O valor minimo do cupom nao foi atingido.",
+        "ORDER_PRICE_NOT_FINALIZED": "O valor da compra ainda não foi finalizado.",
+        "PURCHASE_NOT_FOUND": "Compra não encontrada.",
+        "COUPON_MINIMUM_NOT_REACHED": "O valor mínimo do cupom não foi atingido.",
         "TERMINAL_UNAUTHORIZED": "Terminal precisa ser reprovisionado.",
         "TERMINAL_DISABLED": "Terminal desativado pelo administrador.",
+        "MERCADO_PAGO_NOT_CONFIGURED": "Pagamento indisponível neste Terminal.",
     }
 
     def __init__(
@@ -97,21 +97,28 @@ class PurchaseApi:
                     "Existe um pagamento em andamento. Verificando o status.",
                     "payment_active", True, payload,
                 ) from error
+            if error.status == 409 and error.code == "MERCADO_PAGO_NOT_CONFIGURED":
+                # O backend recusa antes de criar cobrança: resultado definitivo,
+                # nunca "talvez enviado". Ambíguo prenderia a tela em reconciliação.
+                raise PurchaseApiError(
+                    "Pagamento indisponível neste Terminal.",
+                    "payment_not_configured", False, payload,
+                ) from error
             if error.status == 409 and error.code == "ORDER_PRICE_NOT_FINALIZED":
                 raise PurchaseApiError(
-                    "O valor da compra ainda nao foi finalizado pelo servidor.",
+                    "O valor da compra ainda não foi finalizado pelo servidor.",
                     "price_not_finalized", False, payload,
                 ) from error
-            if error.authentication_failed:
+            if error.device_unauthorized:
                 raise PurchaseApiError(
                     "Terminal precisa ser reprovisionado pelo administrador.",
                     "device_auth", ambiguous, {
-                        "status": 401, "code": error.code or "TERMINAL_UNAUTHORIZED",
+                        "status": 401, "code": error.code,
                     },
                 ) from error
-            if error.forbidden:
+            if error.device_forbidden:
                 raise PurchaseApiError(
-                    "Terminal sem permissao para esta operacao.",
+                    "Terminal sem permissão para esta operação.",
                     "device_forbidden", ambiguous, {
                         "status": 403, "code": error.code,
                     },
@@ -154,8 +161,13 @@ class PurchaseApi:
             raise PurchaseApiError("Carrinho sem identificador", "cart")
         return str(cart_id)
 
-    def start_point(self, cart_payload, on_cart_created=None, existing_cart_id=None):
-        cart_id = self.ensure_cart(cart_payload, existing_cart_id)
+    def start_point(self, cart_payload, on_cart_created=None, existing_cart_id=None,
+                    reopen_cart=False):
+        if reopen_cart:
+            self.terminal_id = str(cart_payload.get("terminalId") or "") or self.terminal_id
+            cart_id = existing_cart_id
+        else:
+            cart_id = self.ensure_cart(cart_payload, existing_cart_id)
         if on_cart_created is not None:
             on_cart_created(str(cart_id))
 
@@ -190,10 +202,6 @@ class PurchaseApi:
             raise PurchaseApiError("Resposta inválida ao identificar cliente", "customer_link")
         result["cartId"] = resolved_cart_id
         return result
-
-    def get_cart(self, cart_id):
-        result = self._request_json("GET", f"/carrinho/{cart_id}", "cart_recovery")
-        return result if isinstance(result, dict) else None
 
     def get_order(self, order_id, terminal_id):
         return self._request_json(
@@ -234,13 +242,6 @@ class PurchaseApi:
                     "Digite um número de WhatsApp válido.", "receipt_validation"
                 )
             return digits
-        if normalized_channel == "EMAIL":
-            email = candidate.lower()
-            if not re.match(r"^[^@\s]+@[^@\s]+\.[^@\s]+$", email):
-                raise PurchaseApiError(
-                    "Digite um e-mail válido.", "receipt_validation"
-                )
-            return email
         raise PurchaseApiError(
             "Canal de comprovante inválido.", "receipt_validation"
         )
@@ -311,12 +312,13 @@ class PointCheckoutWorker(QThread):
     timed_out = pyqtSignal(str, str, bool, dict)
 
     def __init__(self, payload, api_factory=PurchaseApi,
-                 existing_cart_id=None,
+                 existing_cart_id=None, reopen_cart=False,
                  cart_checkpoint=None, parent=None):
         super().__init__(parent)
         self.payload = payload
         self.api_factory = api_factory
         self.existing_cart_id = existing_cart_id
+        self.reopen_cart = reopen_cart
         self.cart_checkpoint = cart_checkpoint
         self.outcome_emitted = False
 
@@ -324,7 +326,12 @@ class PointCheckoutWorker(QThread):
         logger.info("[PAYMENT-UI] worker iniciado")
         try:
             api = self.api_factory()
-            if self.existing_cart_id:
+            if self.reopen_cart:
+                result = api.start_point(
+                    self.payload, self._checkpoint_cart, self.existing_cart_id,
+                    reopen_cart=True,
+                )
+            elif self.existing_cart_id:
                 result = api.start_point(
                     self.payload, self._checkpoint_cart, self.existing_cart_id
                 )
@@ -397,27 +404,6 @@ class CustomerLinkWorker(QThread):
             self.token = None
 
 
-class CustomerLinkRecoveryWorker(QThread):
-    succeeded = pyqtSignal(dict)
-    failed = pyqtSignal()
-
-    def __init__(self, cart_id, api_factory=PurchaseApi, parent=None):
-        super().__init__(parent)
-        self.cart_id = cart_id
-        self.api_factory = api_factory
-
-    def run(self):
-        try:
-            result = self.api_factory().get_cart(self.cart_id)
-            if result and result.get("customerLinked") and not self.isInterruptionRequested():
-                self.succeeded.emit(result)
-            elif not self.isInterruptionRequested():
-                self.failed.emit()
-        except Exception:
-            if not self.isInterruptionRequested():
-                self.failed.emit()
-
-
 class OrderStatusWorker(QThread):
     succeeded = pyqtSignal(dict)
     failed = pyqtSignal(str)
@@ -463,7 +449,7 @@ class PointResumeWorker(QThread):
                 self.succeeded.emit(result)
         except PurchaseApiError as error:
             if not self.isInterruptionRequested():
-                self.failed.emit(str(error), error.context)
+                self.failed.emit(str(error), {**error.context, "stage": error.stage})
         except Exception:
             logger.exception("[PAYMENT-WORKER] retomada exception não prevista")
             if not self.isInterruptionRequested():

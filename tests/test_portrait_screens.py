@@ -140,11 +140,22 @@ class PortraitScreensTest(unittest.TestCase):
         layout_profile.force(True)
         self.assertGreaterEqual(teclado.keyboard._wrap_row_layout.indexOf(wrap_keys[0]), 0)
         self.assertEqual(QBoxLayout.TopToBottom, cart.footer_layout.direction())
-        self.assertEqual((3, 0), confirmacao.success_actions.getItemPosition(
+        self.assertEqual((2, 0), confirmacao.success_actions.getItemPosition(
             confirmacao.success_actions.indexOf(confirmacao.btn_cpf))[:2])
 
         teclado.keyboard._set_symbol_mode(True)
         self.assertEqual(">", wrap_keys[1].text())
+
+    def test_wifi_status_card_stacks_in_portrait(self):
+        # BUG-062: no display real, SSID + DESCONECTAR lado a lado passavam de
+        # 600 px e alargavam a janela (o offscreen mede fontes menores).
+        settings = ConfiguracaoScreen(ParentStub())
+        wifi = settings.wifi_screen
+        self.assertEqual(QBoxLayout.TopToBottom, wifi.status_layout.direction())
+        self.assertTrue(wifi.current_state.wordWrap())
+        self.assertTrue(wifi.current_details.wordWrap())
+        layout_profile.force(False)
+        self.assertEqual(QBoxLayout.LeftToRight, wifi.status_layout.direction())
 
     def test_admin_actions_side_by_side_only_in_landscape(self):
         admin = AdminAuthScreen(ParentStub(), configured_password="teste")

@@ -1,3 +1,9 @@
+def _rgba(color, alpha):
+    """Versão translúcida de uma cor ``#RRGGBB`` para QSS (alpha de 0 a 255)."""
+    red, green, blue = (int(color[index:index + 2], 16) for index in (1, 3, 5))
+    return f"rgba({red}, {green}, {blue}, {alpha})"
+
+
 class Colors:
     BACKGROUND_PRIMARY = "#08111F"
     BACKGROUND_SECONDARY = "#03111F"
@@ -25,6 +31,21 @@ class Colors:
     ERROR = "#FF4D4D"
     ERROR_HOVER = "#F85149"
     INFO = SECONDARY
+    # Preço "de" riscado: cinza-azulado com contraste 5,2:1 sobre SURFACE_ELEVATED.
+    PRICE_ORIGINAL = TEXT_DISABLED
+
+    # Cores medidas no logotipo oficial (assets/images/logo.png): mediana dos
+    # pixels azuis do "24" e dos arcos e dos laranja do "7" e da seta. O
+    # laranja é destaque de marca e de feedback; não substitui os estados
+    # semânticos acima.
+    BRAND_BLUE = "#0073D5"
+    BRAND_BLUE_DARK = "#0A5FC4"
+    BRAND_ORANGE = "#FF8402"
+    BRAND_ORANGE_LIGHT = "#FFB21C"
+    BRAND_ORANGE_PRESSED = "#E0650A"
+    # Card do carrinho: borda azul discreta e pílula da quantidade.
+    CARD_BORDER_BRAND = _rgba(BRAND_BLUE, 70)
+    QUANTITY_PILL = _rgba(BRAND_BLUE, 64)
 
     # Fundos semânticos de estado. Foram escolhidos para manter contraste AA
     # com texto/ícones brancos em uma tela inteira, não apenas em detalhes.
@@ -62,6 +83,8 @@ class FontSize:
     BUTTON = 22
     PRODUCT_NAME = 26
     PRODUCT_PRICE = 34
+    # Piso do preço do card quando o valor não cabe em PRODUCT_PRICE.
+    PRODUCT_PRICE_MIN = 22
     PRODUCT_QUANTITY = 22
     TOTAL_LABEL = 28
     CART_TOTAL_VALUE = 46
@@ -96,6 +119,9 @@ class TouchSize:
     SECONDARY_BUTTON = 60
     PRIMARY_BUTTON = 72
     ICON = 32
+    # Contorno do botão de remover; a área de toque continua em MINIMUM.
+    REMOVE_VISUAL = 44
+    REMOVE_ICON = 24
 
 
 class Radius:
@@ -104,3 +130,15 @@ class Radius:
     BUTTON = 12
     CARD = 18
     MODAL = 24
+
+
+class Motion:
+    """Durações (ms) das animações; a curva padrão é QEasingCurve.OutCubic."""
+
+    FAST = 150
+    BASE = 250
+    SLOW = 400
+    LOADER_TURN = 1600
+    LOGO_PULSE = 2400
+    # Borda laranja do card recém-bipado, até sumir.
+    CARD_HIGHLIGHT = 600

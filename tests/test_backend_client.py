@@ -60,6 +60,31 @@ class BackendClientTest(unittest.TestCase):
                     self.assertTrue(getattr(raised.exception, attribute))
                     self.assertEqual("TERMINAL_TEST", raised.exception.code)
 
+    def test_only_confirmed_device_codes_block_the_terminal(self):
+        cases = (
+            (401, "TERMINAL_AUTH_INVALID", "AUTH_REQUIRED"),
+            (401, "AUTH_REQUIRED", "AUTH_REQUIRED"),
+            (403, "TERMINAL_NOT_OPERATIONAL", "FORBIDDEN"),
+            (403, "TERMINAL_IDENTITY_MISMATCH", "FORBIDDEN"),
+            (401, None, "OPERATIONAL"),
+            (403, None, "OPERATIONAL"),
+            (403, "CUSTOMER_LINK_TENANT_MISMATCH", "OPERATIONAL"),
+            (403, "COUPON_OWNER_MISMATCH", "OPERATIONAL"),
+            (403, "CART_NOT_OWNED_BY_TERMINAL", "OPERATIONAL"),
+            (503, "TERMINAL_AUTH_UNAVAILABLE", "OPERATIONAL"),
+        )
+        with tempfile.TemporaryDirectory() as directory:
+            for status, code, expected in cases:
+                with self.subTest(status=status, code=code):
+                    terminal_access_state.set("OPERATIONAL")
+                    payload = {"code": code} if code else {}
+                    client, _ = self.client(
+                        Path(directory), Response(status, payload)
+                    )
+                    with self.assertRaises(BackendHttpError):
+                        client.request("POST", "/terminal/customer-link/consume")
+                    self.assertEqual(expected, terminal_access_state.get())
+
     def test_public_activation_does_not_send_device_credential(self):
         session = Session(Response(200))
         client = BackendClient("http://backend", session)

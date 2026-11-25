@@ -9,9 +9,9 @@ from PyQt5.QtWidgets import (
 )
 
 from app247_terminal.services.display_service import DisplayService, DisplayWorker
-from app247_terminal.ui.styles.animated_svg import AnimatedSvgWidget
+from app247_terminal.ui.brand import BrandLoader
 from app247_terminal.ui.styles.theme import Theme
-from app247_terminal.ui.styles.tokens import Colors, Spacing
+from app247_terminal.ui.styles.tokens import Spacing
 from app247_terminal.services import shutdown_budget
 
 
@@ -33,9 +33,6 @@ class DisplayScreen(QWidget):
         title = QLabel("ORIENTAÇÃO DA TELA")
         title.setProperty("role", "pageTitle")
         title.setAlignment(Qt.AlignCenter)
-        subtitle = QLabel("Escolha como o display físico deve ser exibido.")
-        subtitle.setProperty("role", "pageSubtitle")
-        subtitle.setAlignment(Qt.AlignCenter)
 
         card = QFrame(self)
         card.setObjectName("displayStatusCard")
@@ -54,7 +51,7 @@ class DisplayScreen(QWidget):
         card_layout.addWidget(self.current_orientation)
         card_layout.addWidget(self.output_details)
 
-        self.spinner = AnimatedSvgWidget("tube-spinner.svg", Colors.INFO, self)
+        self.spinner = BrandLoader(self)
         self.spinner.setFixedSize(72, 72)
         self.spinner.hide()
         self.message = QLabel()
@@ -74,7 +71,6 @@ class DisplayScreen(QWidget):
         back.clicked.connect(self.leave)
 
         root.addWidget(title)
-        root.addWidget(subtitle)
         root.addWidget(card)
         root.addWidget(self.spinner, 0, Qt.AlignHCenter)
         root.addWidget(self.message)

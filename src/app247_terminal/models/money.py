@@ -27,4 +27,8 @@ def charged(value):
 
 
 def format_brl(value):
-    return f"R$ {charged(value):.2f}".replace(".", ",")
+    """Real brasileiro para exibição: ``R$ 1.299,90`` (ponto no milhar)."""
+    amount = charged(value)
+    sign = "-" if amount < 0 else ""
+    text = f"{abs(amount):,.2f}".replace(",", "_").replace(".", ",").replace("_", ".")
+    return f"{sign}R$ {text}"

@@ -90,7 +90,7 @@ BUG-045 e BUG-046 se reforçam: o hardware sofre desligamentos sujos e o softwar
 
 ## Divergências de documentação
 
-- 21 entradas antigas de [[auditoria-bugs]] (BUG-001 a BUG-005, 009 a 014, 016, 018 a 021, 023 a 027) não têm linha de **Status**. O código indica que várias foram resolvidas (ex.: BUG-002 pela correlação de orderId, BUG-011 por timeouts, BUG-019/023 pela remoção do `PixScreen`, BUG-026 pelo handshake autenticado). BUG-025 segue parcialmente aberto (BUG-052). Precisam de revisão formal.
+- 21 entradas antigas de [[auditoria-bugs]] (BUG-001 a BUG-005, 009 a 014, 016, 018 a 021, 023 a 027) não têm linha de **Status**. O código indica que várias foram resolvidas (ex.: BUG-002 pela correlação de orderId, BUG-011 por timeouts, BUG-019/023 pela remoção do `PixScreen`, BUG-026 pelo handshake autenticado). BUG-025 segue parcialmente aberto (BUG-052). Precisam de revisão formal. Os de severidade crítica (BUG-001, 002, 004, 005, 014 e 019) foram revisados em 17/10 e marcados como corrigidos, com testes de regressão adicionais em `tests/test_payment_flow.py`. Os demais (009 a 013, 016, 018, 023, 024, 026 e 027) foram revisados no mesmo dia e estão corrigidos; o total do carrinho passou a usar o subtotal do item (BUG-018). BUG-025 permanece aberto junto com BUG-052.
 - O contexto de continuidade citava versão 1.0.2 com build ARMHF: o repositório (`APP_VERSION = "1.0.1"`), `release/` (somente amd64) e o Raspberry (`releases/1.0.1`) não confirmam 1.0.2.
 - O registro anterior dizia `802-11-wireless.powersave = 2`; o perfil está `default`.
 

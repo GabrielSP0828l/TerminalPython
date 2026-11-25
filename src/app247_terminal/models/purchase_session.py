@@ -8,8 +8,29 @@ from PyQt5.QtCore import QObject, QTimer, Qt, pyqtSignal
 logger = logging.getLogger(__name__)
 
 
+# --- Tempos da compra (segundos) -------------------------------------------
+# Único lugar para ajustar os tempos vistos pelo cliente. Os intervalos internos
+# do pagamento Point (polling, reconciliação) ficam em payment.py, porque fazem
+# parte da lógica financeira e não da experiência de tela.
+
+# Teto absoluto da compra, contado desde o primeiro produto ou QR do cliente.
+SESSION_LIMIT_SECONDS = 10 * 60
+# O relógio do teto só aparece no fim, e fica crítico nos últimos segundos.
+SESSION_WARNING_SECONDS = 60
+SESSION_CRITICAL_SECONDS = 30
+# Lista de produtos e confirmação do pedido: sem toque e sem leitura por este
+# tempo, aparece "Ainda está aí?"...
+INACTIVITY_PROMPT_AFTER_SECONDS = 90
+# ...e, sem resposta nesta contagem, a compra encerra pelo mesmo caminho do teto.
+INACTIVITY_COUNTDOWN_SECONDS = 20
+# Pagamento aprovado: volta sozinho à tela inicial (pausa durante o comprovante).
+POST_PURCHASE_TIMEOUT_SECONDS = 45
+# Pagamento pelo aplicativo: limite da tela, sempre dentro do teto da compra.
+APP_PAYMENT_TIMEOUT_SECONDS = 5 * 60
+
+
 class CompraSession(QObject):
-    SESSION_LIMIT_SECONDS = 10 * 60
+    SESSION_LIMIT_SECONDS = SESSION_LIMIT_SECONDS
 
     remaining_changed = pyqtSignal(int)
     expired = pyqtSignal(str)
@@ -161,12 +182,50 @@ class CompraSession(QObject):
         if self.started_at is not None and self.remaining_seconds() > 0:
             self._set_state("CART_READY")
 
+    def lock_cart_after_failure(self, charged_payload):
+        """Cobrança encerrada fecha o carrinho no backend: ele só aceita nova tentativa."""
+        self.cart_locked = True
+        self.locked_cart_payload = charged_payload
+
+    def charge_changes_cart(self, cart_payload):
+        return self.cart_locked and (
+            not self.cart_id or cart_payload != self.locked_cart_payload
+        )
+
+    def prepare_cart_for_charge(self, cart_payload):
+        """Retorna True quando a cobrança deve reabrir o carrinho sem reescrevê-lo."""
+        if not self.cart_locked:
+            return False
+        if not self.charge_changes_cart(cart_payload):
+            return True
+        # Itens diferentes não cabem na Order congelada: a compra segue em carrinho novo.
+        self.cart_id = None
+        self.cart_locked = False
+        self.locked_cart_payload = None
+        return False
+
     def mark_timeout_check(self):
         if self.state in {"APPROVED", "SUCCESS", "IDLE", "TIMEOUT_CHECK"}:
             return False
         self._timer.stop()
         self.active = False
         self._set_state("TIMEOUT_CHECK")
+        return True
+
+    def expire_for_inactivity(self):
+        """Encerra a sessão abandonada pelo mesmo sinal do teto de 10 minutos.
+
+        Quem recebe ``expired`` decide entre reset e reconciliação; por isso uma
+        cobrança em andamento nunca é cancelada localmente por inatividade.
+        """
+        if self.started_at is None or self.state in {"APPROVED", "SUCCESS", "IDLE"}:
+            return False
+        if self._expired_emitted:
+            return False
+        self.mark_timeout_check()
+        self._expired_emitted = True
+        logger.warning("[CHECKOUT-SESSION] inatividade; encerrando como no teto")
+        self.expired.emit(self.generation or "")
         return True
 
     def mark_success(self):
@@ -205,6 +264,8 @@ class CompraSession(QObject):
         self.generation = None
         self.attempt_id = None
         self.cart_id = None
+        self.cart_locked = False
+        self.locked_cart_payload = None
         self.order_id = None
         self.payment_id = None
         self.payment_attempt_id = None
