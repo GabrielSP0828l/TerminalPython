@@ -169,6 +169,19 @@ barra de título e a entrada na barra de tarefas das janelas `app_id
 app247-terminal`, inclusive dos avisos. Assim o toque não alcança o botão de
 minimizar (BUG-064). `APP247_LABWC_KIOSK_RULE=false` desliga a regra.
 
+## Release 1.0.8
+
+Preparada em 25 de novembro de 2026 sobre a 1.0.7, para levar ao campo o
+registro do tamanho da janela (BUG-066): linhas `[WINDOW]` no log a cada
+mudança de tamanho, de estado ou da tela, e warning se a janela do kiosk
+continuar diferente da tela. Sem outras mudanças de comportamento, de
+instalação ou de dados. A 1.0.7 já instalada impede reinstalar com a mesma
+versão (`install.sh` recusa release divergente), por isso a nova versão.
+
+Passos iguais aos da 1.0.7, com `1.0.8`. Validação de campo pendente: BUG-066
+(conferir as linhas `[WINDOW]` em `/var/lib/app247/logs/terminal.log`), além
+das pendências da 1.0.7.
+
 ## Release 1.0.7
 
 Preparada em 25 de novembro de 2026 sobre `v1.0.6`. É a primeira release em
