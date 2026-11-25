@@ -87,6 +87,8 @@ class MainWindow(QMainWindow):
         self._lifecycle_worker = None
         self._factory_reset_pending = None
         self._last_access_probe = None
+        # None = ainda sem resposta do bootstrap; só False bloqueia o checkout.
+        self.payment_configured = None
         self.no_internet_popup = None
         self.is_offline = False
         self._operacao_iniciada = False
@@ -600,6 +602,15 @@ class MainWindow(QMainWindow):
         )
         self._check_terminal_lifecycle("WEBSOCKET_RESET_HINT")
 
+    def marcar_pagamento_indisponivel(self, origin):
+        """Recusa do backend vale até o próximo bootstrap dizer o contrário."""
+        if self.payment_configured is not False:
+            logging.getLogger(__name__).warning(
+                "[TERMINAL-PAYMENT] pagamento indisponível origin=%s", origin
+            )
+        self.payment_configured = False
+        self._check_terminal_lifecycle(origin)
+
     def _check_terminal_lifecycle(self, origin="BOOTSTRAP"):
         terminal = Terminal.load_or_none()
         if terminal is None or self._shutdown_started:
@@ -630,6 +641,13 @@ class MainWindow(QMainWindow):
             return
         state = response.get("state")
         if state in {"ACTIVE", "PAYMENT_NOT_CONFIGURED"}:
+            configured = state == "ACTIVE"
+            if configured != self.payment_configured:
+                logging.getLogger(__name__).info(
+                    "[TERMINAL-PAYMENT] pagamento configurado=%s origin=%s",
+                    configured, origin,
+                )
+            self.payment_configured = configured
             self._restore_device_access()
             return
         if state != "RESET_REQUIRED":

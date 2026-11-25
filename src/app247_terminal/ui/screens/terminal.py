@@ -654,6 +654,14 @@ class TerminalScreen(QWidget):
         if not self._checkout_interactions_enabled:
             logger.warning("[PAYMENT-UI] início recusado: interações bloqueadas")
             return False
+        if getattr(self.parent_app, "payment_configured", None) is False:
+            # Sem maquininha vinculada: não cria carrinho nem cobrança no backend.
+            logger.warning("[PAYMENT-UI] início recusado: pagamento não configurado")
+            self.mostrar_aviso(texts.PAYMENT_UNAVAILABLE_TITLE, texts.PAYMENT_UNAVAILABLE)
+            recheck = getattr(self.parent_app, "_check_terminal_lifecycle", None)
+            if recheck is not None:
+                recheck("CHECKOUT_BLOCKED")
+            return False
         if self.parent_app.stacked_widget.currentWidget() is not self.parent_app.confirmacao_compra:
             logger.warning("[PAYMENT-UI] início recusado: tela atual não é confirmação")
             return False

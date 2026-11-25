@@ -358,6 +358,9 @@ class PagamentoScreen(QWidget):
             )
             self.mostrar_reconciliacao_pendente(origin="PAYMENT_ALREADY_ACTIVE")
             return
+        if stage == "payment_not_configured":
+            self._payment_unavailable("PAYMENT_START_REFUSED")
+            return
         if stage == "price_changed":
             self.parent.terminal.aplicar_precos_atualizados(context)
             self.parent.terminal.solicitar_sync_produtos("PRICE_CHANGED")
@@ -647,6 +650,9 @@ class PagamentoScreen(QWidget):
             return
         if cart_id != self.parent.compra_session.cart_id:
             return
+        if context and context.get("stage") == "payment_not_configured":
+            self._payment_unavailable("PAYMENT_RESUME_REFUSED")
+            return
         if context and context.get("orderId"):
             recovery = {
                 "cartId": context.get("cartId") or cart_id,
@@ -792,6 +798,21 @@ class PagamentoScreen(QWidget):
         self.btn_voltar.setText(texts.PAYMENT_BACK_TO_CART)
         self.btn_voltar.setEnabled(True)
         self.parent.compra_session.prepare_retry()
+
+    def _payment_unavailable(self, origin):
+        """Recusa definitiva do backend: nenhuma cobrança existe para reconciliar."""
+        logger.warning(
+            "[PAYMENT-UI] pagamento indisponível no Terminal origin=%s cartId=%s",
+            origin, self.parent.compra_session.cart_id,
+        )
+        self.poll_timer.stop()
+        marcar = getattr(self.parent, "marcar_pagamento_indisponivel", None)
+        if marcar is not None:
+            marcar(origin)
+        self._safe_failure(texts.PAYMENT_UNAVAILABLE)
+        if self.parent.compra_session.started_at is None:
+            # Tentativa retomada após reinício: não há itens para voltar.
+            self._voltar_lista()
 
     def _voltar_lista(self):
         session = self.parent.compra_session

@@ -17,6 +17,7 @@ def host(**session):
         _restore_device_access=lambda: MainWindow._restore_device_access(window),
         _last_access_probe=None,
         _startup_recovery_error=None,
+        payment_configured=None,
         ACCESS_PROBE_INTERVAL_SECONDS=30,
         _check_terminal_lifecycle=MagicMock(),
         cadastro_terminal=SimpleNamespace(activation_timer=MagicMock()),

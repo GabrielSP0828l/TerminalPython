@@ -39,6 +39,7 @@ class PurchaseApi:
         "COUPON_MINIMUM_NOT_REACHED": "O valor mínimo do cupom não foi atingido.",
         "TERMINAL_UNAUTHORIZED": "Terminal precisa ser reprovisionado.",
         "TERMINAL_DISABLED": "Terminal desativado pelo administrador.",
+        "MERCADO_PAGO_NOT_CONFIGURED": "Pagamento indisponível neste Terminal.",
     }
 
     def __init__(
@@ -95,6 +96,13 @@ class PurchaseApi:
                 raise PurchaseApiError(
                     "Existe um pagamento em andamento. Verificando o status.",
                     "payment_active", True, payload,
+                ) from error
+            if error.status == 409 and error.code == "MERCADO_PAGO_NOT_CONFIGURED":
+                # O backend recusa antes de criar cobrança: resultado definitivo,
+                # nunca "talvez enviado". Ambíguo prenderia a tela em reconciliação.
+                raise PurchaseApiError(
+                    "Pagamento indisponível neste Terminal.",
+                    "payment_not_configured", False, payload,
                 ) from error
             if error.status == 409 and error.code == "ORDER_PRICE_NOT_FINALIZED":
                 raise PurchaseApiError(
@@ -441,7 +449,7 @@ class PointResumeWorker(QThread):
                 self.succeeded.emit(result)
         except PurchaseApiError as error:
             if not self.isInterruptionRequested():
-                self.failed.emit(str(error), error.context)
+                self.failed.emit(str(error), {**error.context, "stage": error.stage})
         except Exception:
             logger.exception("[PAYMENT-WORKER] retomada exception não prevista")
             if not self.isInterruptionRequested():

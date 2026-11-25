@@ -8,7 +8,9 @@ Voltar para [[00-index]]. Transporte em [[websocket]], persistência em
 `TerminalLifecycleApi` aceita somente resposta HTTP 200 com um dos estados
 `ACTIVE`, `PAYMENT_NOT_CONFIGURED`, `DISABLED`, `RESET_REQUIRED` ou
 `UNACTIVATED`. A consulta ocorre no startup, a cada conexão/reconexão do
-WebSocket e periodicamente. Timeout, equipamento offline, HTTP 5xx, JSON
+WebSocket e periodicamente. `PAYMENT_NOT_CONFIGURED` mantém o Terminal
+operando, mas bloqueia o início do pagamento antes de criar carrinho
+(`MainWindow.payment_configured`, BUG-065). Timeout, equipamento offline, HTTP 5xx, JSON
 inválido ou estado desconhecido retornam “sem decisão” e nunca iniciam reset.
 
 `TERMINAL_FACTORY_RESET_REQUIRED` no WebSocket é somente um aviso para antecipar

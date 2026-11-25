@@ -748,6 +748,21 @@ Com o app 1.0.6 instalado e operando, o terminal parou na noite de 24/11. No dia
 - **Correção:** `install.sh` grava em `~/.config/labwc/rc.xml` do usuário gráfico um bloco entre marcadores `app247:kiosk-rule` com `<windowRule identifier="app247-terminal" serverDecoration="no" skipTaskbar="yes" skipWindowSwitcher="yes"/>` e recarrega o labwc (`SIGHUP`). O bloco é recolocado a cada instalação, entra no `<windowRules>` existente se houver, preserva o resto (ex.: `<touch>`) e entra no snapshot de rollback. `main` fixa `setDesktopFileName("app247-terminal")` para o `app_id` casar com a regra. Sem barra, sem botão e sem entrada na barra de tarefas, não há mais como minimizar pelo toque. O Qt não desenha decoração própria quando o servidor recusa a dele (verificado).
 - **Testes:** `tests/test_service_startup.py` (`test_labwc_rule_*`: preserva o `touch`, é idempotente, entra no `<windowRules>` existente, cria o arquivo quando há labwc, não grava nada sem labwc).
 
+## BUG-065 — Terminal sem maquininha ficava preso em "Confirmando pagamento"
+
+**Status:** corrigido em 25 de novembro de 2026 (entra na 1.0.7); validação no Raspberry pendente. Sintoma relatado no campo em 25/11/2026 com um Terminal sem maquininha cadastrada; causa confirmada por código e teste, ainda não pelo log do equipamento (sem acesso SSH).
+
+- **Severidade:** alta (Terminal inutilizável até intervenção manual)
+- **Tipo:** confirmado por código e por reprodução em teste
+- **Causa:** o bootstrap responde `PAYMENT_NOT_CONFIGURED`, mas `MainWindow._handle_lifecycle_response` tratava esse estado igual a `ACTIVE` e a venda seguia. O `POST /pagamento/terminal/{cartId}` responde `409 MERCADO_PAGO_NOT_CONFIGURED` antes de criar cobrança, mas a chamada é feita com `ambiguous=True` e o 409 genérico mantinha a marca. `PagamentoScreen._point_failed` entrava em "CONFIRMANDO PAGAMENTO — Verificando se a cobrança foi enviada...". O polling não achava pagamento ativo, `_retomar_inicio_point` repetia o mesmo `POST` e recebia o mesmo 409 em `_resume_failed`. Depois de três falhas a tela ficava em pagamento pendente consultando a cada 30 s, sem fim. A tentativa fica em `active_payment` (MEL-017), então reiniciar o app voltava para a mesma tela.
+- **Correção:**
+  - `PurchaseApi` classifica `409 MERCADO_PAGO_NOT_CONFIGURED` como recusa definitiva (`stage=payment_not_configured`, `ambiguous=False`);
+  - `PointResumeWorker` passa o estágio no contexto da falha;
+  - `PagamentoScreen._payment_unavailable` (usado por `_point_failed` e `_resume_failed`) para o polling, libera a tentativa (apaga `active_payment`) e mostra "Pagamento indisponível". Com itens na tela, volta ao carrinho; numa tentativa retomada após reinício, volta à tela inicial;
+  - `MainWindow.payment_configured` segue o bootstrap (`ACTIVE` → `True`, `PAYMENT_NOT_CONFIGURED` → `False`; resposta inválida mantém o valor anterior; sem resposta ainda fica `None` e o backend decide). `TerminalScreen.iniciar_pagamento_confirmado` recusa o início com `False`, avisa o cliente e pede novo bootstrap (`CHECKOUT_BLOCKED`), sem criar carrinho nem cobrança. A recusa 409 também marca `False` e pede novo bootstrap; ao vincular a maquininha, o próximo bootstrap (no máximo 5 min, ou na próxima tentativa) libera a venda.
+- **Testes:** `tests/test_payment_not_configured.py` (12 casos, incluindo a cadeia completa do Terminal já preso: classificação do 409, tela sem loop, falha ambígua comum continua reconciliando, retomada recusada, tentativa restaurada após reinício volta à tela inicial e apaga `active_payment`, bloqueio antes do carrinho, estado desconhecido não bloqueia, bootstrap atualiza o estado). Contra o código antigo, os casos do defeito falham.
+- **Terminal já preso:** ao instalar a 1.0.7, a tentativa salva é restaurada, a descoberta não acha pagamento ativo, a retomada repete o `POST`, recebe o 409 e a tentativa é liberada sozinha: o Terminal volta à tela inicial e `active_payment` é apagado, sem intervenção manual. Coberto por `StuckTerminalAfterUpgradeTest` (cadeia desde `restore_pending_payment` até a tela inicial, com banco real em diretório temporário); falta confirmar no equipamento.
+
 ## BUG-031 — Heartbeat opaco, sem confirmação do backend
 
 **Status:** corrigido em 24 de agosto de 2026.

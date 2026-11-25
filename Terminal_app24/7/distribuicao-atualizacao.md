@@ -184,7 +184,10 @@ Mudanças desde `v1.0.6`:
   `SIGHUP` saem com `128+N` e o systemd reabre (BUG-063);
 - janelas sem barra do labwc, sem minimizar no quiosque (BUG-064);
 - ping/pong no socket de pagamento detecta conexão meio-aberta (BUG-049);
-- log rotativo em `/var/lib/app247/logs/terminal.log` (BUG-050).
+- log rotativo em `/var/lib/app247/logs/terminal.log` (BUG-050);
+- Terminal sem maquininha não fica mais preso em "Confirmando pagamento";
+  o pagamento é recusado antes de criar carrinho, e uma tentativa já presa é
+  liberada sozinha depois da atualização (BUG-065).
 
 Na instalação, BUG-063 e BUG-064 dependem do `install.sh` desta versão: ele
 reinstala a unit e grava a regra do labwc. O diretório de logs é criado pelo
@@ -202,6 +205,7 @@ gera o pacote do Raspberry):
 6. criar a tag anotada `v1.0.7` nesse commit com o SHA-256 do pacote na
    mensagem, como na `v1.0.3`.
 
-Validação de campo pendente desta versão: BUG-049, BUG-050, BUG-063 e BUG-064.
+Validação de campo pendente desta versão: BUG-049, BUG-050, BUG-063, BUG-064
+e BUG-065.
 Build de verificação amd64 em 25/11/2026: `--version` retorna `1.0.7`, a GUI
 sobe offscreen e grava o log persistente até o encerramento por `SIGTERM`.

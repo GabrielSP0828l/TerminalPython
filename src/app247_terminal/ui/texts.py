@@ -55,6 +55,12 @@ PAYMENT_CHECK_AGAIN = "VERIFICAR NOVAMENTE"
 PAYMENT_NOT_CONCLUDED_TITLE = "PAGAMENTO NÃO CONCLUÍDO"
 PAYMENT_NOT_CONCLUDED_HINT = "Os produtos continuam na lista da compra."
 PAYMENT_BACK_TO_CART = "VOLTAR À COMPRA"
+# Terminal sem maquininha vinculada no backend: recusa definitiva, sem cobrança.
+PAYMENT_UNAVAILABLE_TITLE = "Pagamento indisponível"
+PAYMENT_UNAVAILABLE = (
+    "Este Terminal ainda não está pronto para receber pagamentos. "
+    "Procure o responsável pelo mercado."
+)
 
 # --- Pagamento: maquininha ------------------------------------------------
 PAYMENT_MACHINE_TITLE = "Use a maquininha"
